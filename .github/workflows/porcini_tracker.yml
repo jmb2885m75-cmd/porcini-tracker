@@ -2,15 +2,15 @@ name: Porcini Intelligence Daily Engine
 
 on:
   schedule:
-    - cron: '0 6 * * *' # Executes daily at 06:00 UTC
-  workflow_dispatch:
-
-permissions:
-  contents: write
+    - cron: '0 8 * * *'  # Runs daily at 08:00 UTC
+  workflow_dispatch:     # Allows manual triggering from the GitHub Actions tab
 
 jobs:
   run-porcini-engine:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -26,10 +26,8 @@ jobs:
           pip install requests
 
       - name: Create config.json from GitHub Secrets
-        env:
-          CONFIG_JSON_CONTENT: ${{ secrets.CONFIG_JSON }}
         run: |
-          echo "$CONFIG_JSON_CONTENT" > config.json
+          echo '${{ secrets.CONFIG_JSON }}' > config.json
 
       - name: Execute Porcini Evaluation Engine
         run: |
@@ -39,5 +37,6 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.io"
+          touch alert_state.json
           git add porcini_db.json porcini_report.html alert_state.json
           git diff --quiet && git diff --staged --quiet || (git commit -m "🍄 Auto-update Porcini weather DB & report [skip ci]" && git push)

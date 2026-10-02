@@ -121,7 +121,9 @@ def lunar_phase_fraction(day: date) -> float:
 
 SCHEMA_VERSION = 3
 # Bump when the scoring rules change; forces every stored daily score to be recomputed.
-MODEL_VERSION = 4  # 4: field observations with no mushrooms cap that day's score
+# Score penalty applied 1..N days after a visit that found nothing (flush not started yet)
+NO_FIND_PENALTY = (25, 20, 15, 10, 5)
+MODEL_VERSION = 5  # 5: no-find observations also lower the following days (decaying penalty)
 ARCHIVE_LAG_DAYS = 5
 SOURCE_ARCHIVE = "archive"
 SOURCE_FORECAST = "forecast"
@@ -727,6 +729,10 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
             if delta_days == 0:
                 score = min(score, 20)
                 status = "🔎 No mushrooms found (field observation)"
+            elif 1 <= delta_days <= len(NO_FIND_PENALTY):
+                score -= NO_FIND_PENALTY[delta_days - 1]
+                if status == "🟡 Monitoring":
+                    status = "🔎 Recent empty visit lowers odds"
             continue
         if harvest.get("cap_stage") == "buttons_young" and 1 <= delta_days <= 4:
             score += 20

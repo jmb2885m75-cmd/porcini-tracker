@@ -2,32 +2,186 @@
 <html>
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Porcini Tracker Dashboard</title>
   <style>
     body { font-family: Arial, sans-serif; background: #111827; color: #e5e7eb; margin: 0; padding: 24px; }
     .wrap { max-width: 960px; margin: 0 auto; }
     h1 { color: #a7f3d0; }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
-    .card { background: #1f2937; border: 1px solid #374151; border-radius: 12px; padding: 18px; }
+    .card { background: #1f2937; border: 1px solid #374151; border-radius: 12px; padding: 18px; margin-bottom: 16px; }
     .score { font-size: 2rem; font-weight: bold; color: #a7f3d0; }
     .name { font-size: 1.1rem; margin-top: 6px; font-weight: bold; }
     .meta { color: #cbd5e1; margin-top: 8px; }
+    .badge { display: inline-block; background: #065f46; border-radius: 999px; padding: 2px 10px; font-size: .85rem; }
+    .go { background: #065f46; } .nogo { background: #7f1d1d; }
     .alert { background: #111827; border: 1px solid #374151; border-radius: 8px; padding: 12px; white-space: pre-wrap; }
+    .note { color: #fbbf24; font-size: .9rem; }
+    #chartbox { position: relative; }
+    svg { width: 100%; height: auto; background: #111827; border-radius: 8px; }
+    #tip { position: absolute; display: none; pointer-events: none; background: #030712; border: 1px solid #4b5563; border-radius: 8px; padding: 8px 10px; font-size: .85rem; max-width: 280px; z-index: 5; }
+    table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid #374151; }
+    tr.row { cursor: pointer; } tr.row:hover { background: #374151; }
+    input, select, button { background: #111827; color: #e5e7eb; border: 1px solid #4b5563; border-radius: 6px; padding: 6px; margin: 2px; }
+    button { cursor: pointer; }
+    .pin { cursor: pointer; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>🍄 Porcini Tracker Dashboard</h1>
-    <div class="grid"><div class='card'><div class='score'>0%</div><div class='name'>East Berlin Pine & Oak Ridge</div><div class='meta'>Best day: N/A | Status: Monitoring</div><div class='meta'>Moisture: 0.00 m³/m³</div></div><div class='card'><div class='score'>0%</div><div class='name'>Oak & Beech Spot</div><div class='meta'>Best day: N/A | Status: Monitoring</div><div class='meta'>Moisture: 0.00 m³/m³</div></div></div>
+    <div class="meta"><span class="badge">Daily run</span> Generated 2026-10-02 20:11 UTC</div>
+    <div class="grid"><div class='card'><div class='score'>0%</div><div class='name'>East Berlin Pine &amp; Oak Ridge</div><div class='meta'>Best day: N/A | Status: Monitoring</div><div class='meta'>Moisture: 0.00 m³/m³</div></div><div class='card'><div class='score'>0%</div><div class='name'>Oak &amp; Beech Spot</div><div class='meta'>Best day: N/A | Status: Monitoring</div><div class='meta'>Moisture: 0.00 m³/m³</div></div></div>
     <h2>📨 Alert Preview</h2>
     <div class="card">
-      <div class="meta">This message will be sent with this run.</div>
+      <div class="meta">Preview only: no alert is triggered by this run.</div>
       <pre class="alert">🍄 Weekend Porcini Forecast (Ranked):
 1. East Berlin Pine &amp; Oak Ridge - 0% (N/A) | Monitoring
+2. Oak &amp; Beech Spot - 0% (N/A) | Monitoring
 
 🌐 Dashboard: https://jmb2885m75-cmd.github.io/porcini-tracker/</pre>
       <div class="meta">Fields sent per ranked spot (top 3): rank, location name, best weekend score (%), best day, status. The final line is the dashboard link.</div>
     </div>
+    <h2>📈 Daily Score History &amp; Harvest Pins</h2>
+    <div class="card">
+      <select id="loc"></select>
+      <select id="range"></select>
+      <div id="chartbox"><svg id="chart" viewBox="0 0 900 320"></svg><div id="tip"></div></div>
+      <div class="meta">Hover for details. Click a harvest pin (circle) or a table row to pin it below. Dashed line = alert threshold.</div>
+      <div id="pins" class="meta"></div>
+      <div id="backtest" class="meta"></div>
+    </div>
+    <h2>🔎 Observation Browser</h2>
+    <div class="card">
+      <input id="q" placeholder="Filter by date (e.g. 2025-09)" />
+      <select id="src"><option value="">all sources</option><option>archive</option><option>forecast</option></select>
+      <table><thead><tr><th>Date</th><th>Score</th><th>Tmax</th><th>Rain mm</th><th>Wind</th><th>Soil °C</th><th>RH %</th><th>Src</th></tr></thead><tbody id="rows"></tbody></table>
+      <button id="prev">&laquo; Prev</button><button id="next">Next &raquo;</button> <span id="pageinfo" class="meta"></span>
+    </div>
+    <h2>📝 Log Field Observation</h2>
+    <div class="card">
+      <form id="logform">
+        <input type="date" id="ldate" required />
+        <select id="ltier"><option>small</option><option>medium</option><option>large</option></select>
+        <select id="lstage"><option>buttons_young</option><option>prime</option><option>old_overripe</option></select>
+        <input type="number" id="lweight" placeholder="weight g" min="0" />
+        <input id="lnotes" placeholder="notes" />
+        <button type="submit">Submit via GitHub issue</button>
+      </form>
+      <div class="note">Submitting opens a pre-filled GitHub issue (sign-in required). Only issues from the repository owner or collaborators are accepted: a workflow then appends the harvest to <code>harvest_log.json</code>, rescores and republishes this page, usually within a few minutes. Until then it is only an unsynced draft in this browser's localStorage (blue pin); the source of truth is the repository file. Red pins are synced harvests.</div>
+      <button id="export">Export drafts (JSON)</button><button id="clearlogs">Clear drafts</button>
+      <pre id="exported" class="alert" style="display:none"></pre>
+    </div>
   </div>
+  <script id="porcini-data" type="application/json">{"mode": "default", "threshold": 65, "repo": "jmb2885m75-cmd/porcini-tracker", "locations": [{"name": "East Berlin Pine & Oak Ridge", "scores": [], "records": [], "harvests": [{"date": "2025-09-27", "cap_stage": "prime", "yield_tier": "large", "notes": "", "origin": "config"}, {"date": "2026-09-15", "yield_tier": "large", "cap_stage": "prime", "weight_g": 450, "notes": "Massive flush after heavy autumn rain.", "origin": "config"}, {"date": "2026-10-02", "cap_stage": "prime", "yield_tier": "large", "notes": "", "origin": "config"}], "backtest": {"threshold": 65, "evaluated_harvests": 0, "hits": 0, "hit_rate": null, "mean_score_on_harvest_days": null, "mean_score_in_season": null}}, {"name": "Oak & Beech Spot", "scores": [], "records": [], "harvests": [], "backtest": {"threshold": 65, "evaluated_harvests": 0, "hits": 0, "hit_rate": null, "mean_score_on_harvest_days": null, "mean_score_in_season": null}}]}</script>
+  <script>
+  (function () {
+    var D = JSON.parse(document.getElementById('porcini-data').textContent);
+    var LOG_KEY = 'porcini_logs_v1', PAGE = 15;
+    function $(id) { return document.getElementById(id); }
+    function loadLogs() { try { return JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); } catch (e) { return []; } }
+    function saveLogs(l) { try { localStorage.setItem(LOG_KEY, JSON.stringify(l)); } catch (e) { alert('Could not save: storage unavailable'); } }
+    var NS = 'http://www.w3.org/2000/svg';
+    function el(name, attrs, text) { var e = document.createElementNS(NS, name); for (var k in attrs) e.setAttribute(k, attrs[k]); if (text) e.textContent = text; return e; }
+    var loc = D.locations[0], pinned = [], page = 0;
+    if (!loc) { $('chart').replaceWith(document.createTextNode('No locations configured.')); return; }
+    D.locations.forEach(function (l, i) { var o = document.createElement('option'); o.value = i; o.textContent = l.name; $('loc').appendChild(o); });
+    function years() { var s = {}; loc.scores.forEach(function (r) { s[r[0].slice(0, 4)] = 1; }); return Object.keys(s).sort(); }
+    function fillRange() {
+      var cur = $('range').value; $('range').innerHTML = '';
+      ['all', '365'].concat(years()).forEach(function (v) { var o = document.createElement('option'); o.value = v; o.textContent = v === 'all' ? 'All years' : v === '365' ? 'Last 365 days' : v; $('range').appendChild(o); });
+      if (cur) $('range').value = cur;
+    }
+    function inRange(d) { var r = $('range').value || 'all'; if (r === 'all') return true; if (r === '365') return Date.parse(d) >= Date.now() - 365 * 864e5; return d.slice(0, 4) === r; }
+    function harvestsFor() {
+      var h = (loc.harvests || []).map(function (x) { return Object.assign({}, x, { origin: x.origin === 'log' ? 'harvest_log.json' : 'config' }); });
+      loadLogs().filter(function (x) { return x.location === loc.name; }).forEach(function (x) { h.push(Object.assign({ origin: 'draft (unsynced)' }, x)); });
+      return h;
+    }
+    function recMap() { var m = {}; loc.records.forEach(function (r) { m[r[0]] = r; }); return m; }
+    function scoreMap() { var m = {}; loc.scores.forEach(function (r) { m[r[0]] = r; }); return m; }
+    function describe(date, extra) {
+      var rm = recMap()[date], sm = scoreMap()[date], out = [date];
+      if (sm) { out.push('Score: ' + sm[1] + '% - ' + sm[2]); if (sm[3]) out.push(sm[3]); }
+      if (rm) out.push('Tmax ' + rm[1] + '°C, rain ' + rm[3] + ' mm, wind ' + rm[4] + ' km/h, RH ' + rm[6] + '% (' + rm[8] + ')');
+      (extra || []).forEach(function (h) { out.push('🍄 ' + h.origin + ': ' + (h.yield_tier || '?') + ' / ' + (h.cap_stage || '?') + (h.weight_g ? ' / ' + h.weight_g + ' g' : '') + (h.notes ? ' - ' + h.notes : '')); });
+      return out;
+    }
+    function setLines(node, lines) { node.textContent = ''; lines.forEach(function (t, i) { var d = document.createElement('div'); d.textContent = t; if (i === 0) d.style.fontWeight = 'bold'; node.appendChild(d); }); }
+    function renderPins() {
+      var box = $('pins'); box.textContent = '';
+      pinned.forEach(function (p, i) { var d = document.createElement('div'); d.textContent = '📌 ' + describe(p.date, p.h).join(' | ') + ' (click to unpin)'; d.style.cursor = 'pointer'; d.onclick = function () { pinned.splice(i, 1); renderPins(); }; box.appendChild(d); });
+    }
+    function pin(date) { var hs = harvestsFor().filter(function (h) { return h.date === date; }); if (!pinned.some(function (p) { return p.date === date; })) pinned.push({ date: date, h: hs }); renderPins(); }
+    function draw() {
+      var svg = $('chart'), tip = $('tip'); svg.textContent = '';
+      var pts = loc.scores.filter(function (r) { return inRange(r[0]); });
+      if (!pts.length) { svg.appendChild(el('text', { x: 20, y: 40, fill: '#cbd5e1' }, 'No data in range')); return; }
+      var W = 900, H = 320, L = 36, R = 10, T = 10, B = 24;
+      var t0 = Date.parse(pts[0][0]), t1 = Date.parse(pts[pts.length - 1][0]);
+      function x(t) { return L + (W - L - R) * ((t - t0) / Math.max(1, t1 - t0)); }
+      function y(v) { return T + (H - T - B) * (1 - v / 100); }
+      [0, 25, 50, 75, 100].forEach(function (v) { svg.appendChild(el('line', { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: '#374151' })); svg.appendChild(el('text', { x: 4, y: y(v) + 4, fill: '#9ca3af', 'font-size': 11 }, String(v))); });
+      svg.appendChild(el('line', { x1: L, x2: W - R, y1: y(D.threshold), y2: y(D.threshold), stroke: '#f59e0b', 'stroke-dasharray': '5 4' }));
+      svg.appendChild(el('text', { x: L, y: H - 6, fill: '#9ca3af', 'font-size': 11 }, pts[0][0]));
+      svg.appendChild(el('text', { x: W - R, y: H - 6, fill: '#9ca3af', 'font-size': 11, 'text-anchor': 'end' }, pts[pts.length - 1][0]));
+      svg.appendChild(el('polyline', { points: pts.map(function (r) { return x(Date.parse(r[0])) + ',' + y(r[1]); }).join(' '), fill: 'none', stroke: '#34d399', 'stroke-width': 1.5 }));
+      var sm = scoreMap(), cursor = el('line', { y1: T, y2: H - B, stroke: '#6b7280', visibility: 'hidden' });
+      svg.appendChild(cursor);
+      harvestsFor().forEach(function (h) {
+        var t = Date.parse(h.date); if (isNaN(t) || t < t0 || t > t1) return;
+        var c = el('circle', { cx: x(t), cy: y(sm[h.date] ? sm[h.date][1] : 0), r: 6, fill: h.origin === 'draft (unsynced)' ? '#60a5fa' : '#f87171', stroke: '#fff', class: 'pin' });
+        c.addEventListener('click', function () { pin(h.date); });
+        svg.appendChild(c);
+      });
+      var overlay = el('rect', { x: L, y: T, width: W - L - R, height: H - T - B, fill: 'transparent' });
+      overlay.addEventListener('mousemove', function (ev) {
+        var box = svg.getBoundingClientRect(), px = (ev.clientX - box.left) * (W / box.width), t = t0 + (px - L) / (W - L - R) * (t1 - t0), best = pts[0], bd = Infinity;
+        pts.forEach(function (r) { var dd = Math.abs(Date.parse(r[0]) - t); if (dd < bd) { bd = dd; best = r; } });
+        var hs = harvestsFor().filter(function (h) { return h.date === best[0]; });
+        setLines(tip, describe(best[0], hs)); tip.style.display = 'block';
+        tip.style.left = Math.min(ev.clientX - box.left + 12, box.width - 290) + 'px'; tip.style.top = (ev.clientY - box.top + 12) + 'px';
+        cursor.setAttribute('x1', x(Date.parse(best[0]))); cursor.setAttribute('x2', x(Date.parse(best[0]))); cursor.setAttribute('visibility', 'visible');
+      });
+      overlay.addEventListener('mouseleave', function () { tip.style.display = 'none'; cursor.setAttribute('visibility', 'hidden'); });
+      overlay.addEventListener('click', function (ev) { var lines = tip.firstChild; if (lines) pin(lines.textContent); });
+      svg.appendChild(overlay);
+    }
+    function rows() {
+      var q = $('q').value.trim(), s = $('src').value, sm = scoreMap();
+      var list = loc.records.filter(function (r) { return inRange(r[0]) && (!q || r[0].indexOf(q) === 0) && (!s || r[8] === s); }).reverse();
+      var pages = Math.max(1, Math.ceil(list.length / PAGE)); page = Math.min(page, pages - 1);
+      var body = $('rows'); body.textContent = '';
+      list.slice(page * PAGE, page * PAGE + PAGE).forEach(function (r) {
+        var tr = document.createElement('tr'); tr.className = 'row';
+        [r[0], sm[r[0]] ? sm[r[0]][1] : '', r[1], r[3], r[4], r[5], r[6], r[8]].forEach(function (v) { var td = document.createElement('td'); td.textContent = v == null ? '' : v; tr.appendChild(td); });
+        tr.onclick = function () { pin(r[0]); };
+        body.appendChild(tr);
+      });
+      $('pageinfo').textContent = 'Page ' + (page + 1) + ' / ' + pages + ' (' + list.length + ' days)';
+    }
+    function backtest() {
+      var b = loc.backtest || {};
+      $('backtest').textContent = b.evaluated_harvests ? 'Backtest: ' + b.hits + '/' + b.evaluated_harvests + ' medium/large harvests fell on days scoring >= ' + b.threshold + ' (mean score on harvest days ' + b.mean_score_on_harvest_days + ' vs in-season mean ' + b.mean_score_in_season + '). Small sample; indicative only.' : 'Backtest: no medium/large harvests with a stored score yet.';
+    }
+    function refresh() { fillRange(); draw(); rows(); backtest(); }
+    $('loc').onchange = function () { loc = D.locations[+this.value]; pinned = []; page = 0; renderPins(); refresh(); };
+    $('range').onchange = function () { page = 0; draw(); rows(); };
+    $('q').oninput = $('src').onchange = function () { page = 0; rows(); };
+    $('prev').onclick = function () { page = Math.max(0, page - 1); rows(); };
+    $('next').onclick = function () { page++; rows(); };
+    $('logform').onsubmit = function (e) {
+      e.preventDefault(); var logs = loadLogs();
+      var entry = { location: loc.name, date: $('ldate').value, yield_tier: $('ltier').value, cap_stage: $('lstage').value, weight_g: +$('lweight').value || undefined, notes: $('lnotes').value };
+      logs.push(entry); saveLogs(logs); this.reset(); draw();
+      var q = new URLSearchParams({ template: 'harvest.yml', title: 'Harvest: ' + entry.location + ' ' + entry.date, labels: 'harvest', location: entry.location, date: entry.date, yield_tier: entry.yield_tier, cap_stage: entry.cap_stage, weight_g: entry.weight_g || '', notes: entry.notes });
+      window.open('https://github.com/' + D.repo + '/issues/new?' + q.toString(), '_blank', 'noopener');
+    };
+    $('export').onclick = function () { var pre = $('exported'); pre.style.display = 'block'; pre.textContent = JSON.stringify(loadLogs(), null, 2); };
+    $('clearlogs').onclick = function () { if (confirm('Delete all drafts stored in this browser?')) { saveLogs([]); draw(); } };
+    refresh();
+  })();
+  </script>
 </body>
 </html>

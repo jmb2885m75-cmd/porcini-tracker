@@ -14015,7 +14015,7 @@
           "source": "forecast"
         }
       },
-      "scores_signature": "3:78d7c9a708c1",
+      "scores_signature": "4:78d7c9a708c1",
       "backtest": {
         "threshold": 65,
         "evaluated_harvests": 0,
@@ -20955,8 +20955,8 @@
   },
   "schema_version": 3,
   "meta": {
-    "last_run_utc": "2026-10-02T21:08:04Z",
+    "last_run_utc": "2026-10-02T21:24:33Z",
     "last_run_mode": "default",
-    "model_version": 3
+    "model_version": 4
   }
 }

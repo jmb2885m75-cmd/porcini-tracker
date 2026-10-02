@@ -3,9 +3,10 @@ name: Auto-Update Porcini Report
 on:
   push:
     paths:
-      - 'config.json'
+      - 'porcini.py'
       - 'porcini_db.json'
       - 'harvest_log.json'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -32,6 +33,8 @@ jobs:
           pip install requests
 
       - name: Run Porcini Engine
+        env:
+          CONFIG_JSON: ${{ secrets.CONFIG_JSON }}
         run: |
           python porcini.py
 
@@ -41,7 +44,6 @@ jobs:
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           touch alert_state.json
           git add porcini_db.json harvest_log.json index.html porcini_report.html alert_state.json
-          # Only the staged files above are committed (config.json holds secrets and is never added).
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else

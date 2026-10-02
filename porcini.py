@@ -58,9 +58,15 @@ def save_json(path: Path, payload: Any) -> None:
 
 
 def load_config() -> Dict[str, Any]:
-    cfg = load_json(CONFIG_PATH)
+    config_json = os.environ.get("CONFIG_JSON")
+    if config_json:
+        cfg = json.loads(config_json)
+        if not isinstance(cfg, dict):
+            raise ValueError("CONFIG_JSON must contain a JSON object")
+    else:
+        cfg = load_json(CONFIG_PATH)
     if not cfg:
-        raise FileNotFoundError(f"Missing {CONFIG_PATH}")
+        raise FileNotFoundError(f"Set CONFIG_JSON or provide a local {CONFIG_PATH}")
     return cfg
 
 
@@ -1211,14 +1217,8 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]],
     )
 
 
-def resolve_dashboard_url(cfg: Dict[str, Any]) -> str:
-    configured = cfg.get("FTP_SETTINGS", {}).get("dashboard_url") or cfg.get("DATABASE_SETTINGS", {}).get("dashboard_url") or ""
-    if configured and "yourdomain.com" not in configured:
-        return configured
-    endpoint = cfg.get("DATABASE_SETTINGS", {}).get("endpoint_url") or ""
-    if endpoint:
-        return endpoint.rsplit("/", 1)[0] + "/"
-    return configured or "https://example.invalid/porcini_report.html"
+def resolve_dashboard_url() -> str:
+    return "https://jmb2885m75-cmd.github.io/porcini-tracker/"
 
 
 def inject_alert_into_index(alert_message: str, alert_will_send: bool) -> None:
@@ -1279,7 +1279,7 @@ def main() -> int:
 
     threshold = int(cfg.get("ALERT_THRESHOLD", 65))
     friday_policy = resolve_friday_policy(cfg)
-    dashboard_url = resolve_dashboard_url(cfg)
+    dashboard_url = resolve_dashboard_url()
 
     try:
         harvest_log = load_harvest_log()

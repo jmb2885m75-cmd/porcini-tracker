@@ -36,11 +36,11 @@ jobs:
         env:
           CONFIG_JSON: ${{ secrets.CONFIG_JSON }}
         run: |
-          if [ -n "$CONFIG_JSON" ]; then
-            printf '%s' "$CONFIG_JSON" > config.json
-          else
-            echo "CONFIG_JSON secret not set; using the config.json committed in the repo (no alerts will be delivered without notification credentials)"
+          if [ -z "$CONFIG_JSON" ]; then
+            echo "::error::CONFIG_JSON secret is not set. Create it under Settings > Secrets and variables > Actions (see INSTALL.md)."
+            exit 1
           fi
+          printf '%s' "$CONFIG_JSON" > config.json
 
       - name: Execute Porcini Evaluation Engine
         run: |

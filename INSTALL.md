@@ -34,15 +34,16 @@ repository, optionally sends an alert, and writes `porcini_report.html`.
 ```
 
 Pushover uses `api_token` + `user_key`; Twilio uses `account_sid`, `auth_token`, `from_number`, `to_number`.
-If `CONFIG_JSON` is unset the workflow falls back to the committed `config.json` (no alerts get delivered).
-The workflow never commits `config.json`.
+`config.json` is no longer tracked (it is in `.gitignore`). Workflows require the `CONFIG_JSON` secret and fail with a clear
+error if it is missing. For local runs, create your own untracked `config.json` from the same template as the secret.
+The workflows never commit `config.json`.
 
 ## 3. Workflow verification
 
 Two workflows live in `.github/workflows/`:
 
 - `porcini_tracker.yml` – the scheduled engine. Cron (UTC): daily 08:00 (default mode), Thursday 18:00 (weekend outlook), Friday 06:00 (final go/no-go). Needs `contents: write`, set in the file.
-- `update_report.yml` – re-runs the engine when `config.json` or `porcini_db.json` is pushed.
+- `update_report.yml` – re-runs the engine (using the `CONFIG_JSON` secret) when `porcini_db.json` or `harvest_log.json` is pushed.
 
 Both share one concurrency group, commit only `porcini_db.json`, `index.html`, `porcini_report.html`, `alert_state.json`, and rebase before pushing.
 

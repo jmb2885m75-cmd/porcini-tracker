@@ -1,0 +1,38 @@
+name: Auto-Update Porcini Report
+
+on:
+  push:
+    paths:
+      - 'config.json'
+      - 'porcini_db.json'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install requests
+
+      - name: Run Porcini Engine
+        run: |
+          python porcini.py --build-only
+
+      - name: Commit and push updated report
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add porcini_report.html porcini_db.json
+          git commit -m "Auto-update porcini report after harvest log [skip ci]" || exit 0
+          git push

@@ -7,7 +7,7 @@ import datetime
 # --- CONFIGURATION & PATHS ---
 CONFIG_FILE = "config.json"
 DB_FILE = "porcini_db.json"
-OUTPUT_HTML = "index.html"  # Wichtig für GitHub Pages im Root-Verzeichnis
+OUTPUT_HTML = "index.html"
 
 def load_json(filename):
     if os.path.exists(filename):
@@ -69,7 +69,20 @@ def generate_html_report(config, db_data):
     locations = config.get("LOCATIONS", [])
     first_loc_name = locations[0].get("name") if locations else ""
     first_weather = db_data.get(first_loc_name, {})
-    dates = first_weather.get("time", [])
+    raw_dates = first_weather.get("time", [])
+    
+    # Datumsformatierung auf europäisch (DD.MM.YYYY) und Wochentage umstellen
+    formatted_dates = []
+    german_weekdays = {"Mon": "Mo", "Tue": "Di", "Wed": "Mi", "Thu": "Do", "Fri": "Fr", "Sat": "Sa", "Sun": "So"}
+    for d_str in raw_dates:
+        try:
+            dt = datetime.datetime.strptime(d_str, "%Y-%m-%d")
+            wd_en = dt.strftime("%a")
+            wd_de = german_weekdays.get(wd_en, wd_en)
+            formatted_dates.append(f"{wd_de}, {dt.strftime('%d.%m.%Y')}")
+        except:
+            formatted_dates.append(d_str)
+
     temps = first_weather.get("temperature_2m_max", [])
     rain = first_weather.get("precipitation_sum", [])
 
@@ -154,7 +167,7 @@ def generate_html_report(config, db_data):
         const weatherChart = new Chart(ctx, {{
             type: 'line',
             data: {{
-                labels: {json.dumps(dates)},
+                labels: {json.dumps(formatted_dates)},
                 datasets: [{{
                     label: 'Max Temperatur (°C)',
                     data: {json.dumps(temps)},
@@ -183,7 +196,7 @@ def generate_html_report(config, db_data):
         async function commitHarvestToGitHub() {{
             const statusEl = document.getElementById('apiStatus');
             
-            // Fester Repository-Pfad, um Fehler zu verhindern
+            // Fester Repository-Pfad
             const repo = "jmb2885m75-cmd/porcini-tracker";
             
             let token = localStorage.getItem('gh_token');

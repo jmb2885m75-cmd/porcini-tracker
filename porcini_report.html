@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Porcini Intelligence & Mycology Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #12181b;
+            --card-bg: #1e262c;
+            --accent-green: #2ecc71;
+            --accent-gold: #f1c40f;
+            --accent-orange: #e67e22;
+            --text-main: #ecf0f1;
+            --text-muted: #95a5a6;
+            --border-color: #2c3e50;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        h1 {
+            color: var(--accent-green);
+            margin-bottom: 5px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .score-gauge {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--accent-green);
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            background-color: rgba(46, 204, 113, 0.2);
+            color: var(--accent-green);
+            margin-top: 10px;
+        }
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🍄 Porcini Intelligence & Mycology Dashboard</h1>
+            <p>Automated Multi-Year Weather Archival & Probability Analysis</p>
+            <small>Last Generated: 2026-10-02 13:13:07 UTC</small>
+        </header>
+
+        <div class="grid">
+    
+            <div class="card">
+                <h2>Oak & Beech Spot</h2>
+                <p><strong>Coordinates:</strong> 52.52, 13.405 (50m)</p>
+                <div class="score-gauge">0%</div>
+                <div class="status-badge">NO DATA</div>
+                <p style="margin-top: 15px;"><strong>Quality Indicator:</strong> UNKNOWN</p>
+                <p><strong>Best Weekend Window:</strong> N/A (0%)</p>
+            </div>
+        
+        </div>
+
+        <div class="card">
+            <h2>📈 Multi-Year Backtest & Probability Timeline</h2>
+            <div class="chart-container">
+                <canvas id="porciniChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const rawLocations = [{"name": "Oak & Beech Spot", "latitude": 52.52, "longitude": 13.405, "elevation_m": 50, "tree_species": ["Oak", "Beech"], "tree_density": "open_deciduous", "aspect": "north", "soil_pH": "acidic", "past_harvests": [], "last_seen_fly_agaric": "", "evaluation": {"score": 0, "status": "NO DATA", "quality": "UNKNOWN", "best_weekend_score": 0, "best_weekend_day": "N/A", "daily_history": {}}}];
+        const firstLocEval = rawLocations[0].evaluation.daily_history;
+        const labels = Object.keys(firstLocEval).sort();
+        const scoreData = labels.map(d => firstLocEval[d].score);
+
+        const ctx = document.getElementById('porciniChart').getContext('2d');
+        const porciniChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Suitability Score (%)',
+                    data: scoreData,
+                    borderColor: '#2ecc71',
+                    backgroundColor: 'rgba(46, 204, 113, 0.1)',
+                    fill: true,
+                    tension: 0.2,
+                    pointRadius: 0,
+                    pointHoverRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, max: 100, grid: { color: '#2c3e50' } },
+                    x: { grid: { color: '#2c3e50' } }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
+    

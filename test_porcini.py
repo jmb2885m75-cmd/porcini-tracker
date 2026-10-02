@@ -8,7 +8,7 @@ import porcini as p
 
 def rec(d, source=p.SOURCE_ARCHIVE, **kw):
     base = {"date": d, "source": source, "precipitation_sum": 0.0, "temperature_2m_max": 12.0, "temperature_2m_min": 6.0,
-            "wind_speed_10m_max": 10.0, "soil_temperature_0_to_10cm": 13.0, "relative_humidity_2m_mean": 80.0,
+            "wind_speed_10m_max": 10.0, "soil_temperature_0_to_7cm_mean": 13.0, "relative_humidity_2m_mean": 80.0,
             "soil_moisture_0_to_7cm_mean": 0.3, "precip_peak_2h_mm": None}
     base.update(kw)
     return base
@@ -19,6 +19,20 @@ def series(start, days, **kw):
 
 
 class MergeTests(unittest.TestCase):
+    def test_open_meteo_soil_temperature_field_is_supported(self):
+        self.assertIn("soil_temperature_0_to_7cm_mean", p.DAILY_FIELDS)
+        self.assertNotIn("soil_temperature_0_to_10cm", p.DAILY_FIELDS)
+        payload = {"daily": {
+            "time": ["2025-09-01"],
+            "soil_temperature_0_to_7cm_mean": [13.5],
+        }}
+        self.assertEqual(p.parse_open_meteo_payload(payload, p.SOURCE_ARCHIVE)[0]["soil_temperature_0_to_7cm_mean"], 13.5)
+
+    def test_normalize_migrates_legacy_soil_temperature_key(self):
+        rows, _ = p.normalize_records([{"date": "2025-09-01", "temperature_2m_max": 12, "soil_temperature_0_to_10cm": 13}], date(2025, 9, 2))
+        self.assertEqual(rows[0]["soil_temperature_0_to_7cm_mean"], 13)
+        self.assertNotIn("soil_temperature_0_to_10cm", rows[0])
+
     def test_archive_replaces_forecast_and_keeps_forecast_only_dates(self):
         existing = [rec("2025-09-01", p.SOURCE_FORECAST, precipitation_sum=1), rec("2025-09-02", p.SOURCE_FORECAST)]
         merged = p.merge_records(existing, [rec("2025-09-01", precipitation_sum=9)])
@@ -186,6 +200,26 @@ class RunoffBackfillTests(unittest.TestCase):
         p.update_daily_scores(loc, records, store)
         store["pending_rescore"] = ["2025-09-02"]
         self.assertEqual(p.update_daily_scores(loc, records, store), 1)
+
+
+class WeatherFailureTests(unittest.TestCase):
+    def test_empty_fetch_does_not_replace_history_with_empty_data(self):
+        db = {"locations": {}}
+        with patch.object(p, "fetch_archive_day_range", return_value=[]), patch.object(p, "fetch_forecast_day_range", return_value=[]):
+            with self.assertRaisesRegex(RuntimeError, "refusing to save an empty forecast"):
+                p.ensure_location_history("A", db, 0, 0, 0, date(2025, 9, 20))
+        self.assertEqual(db["locations"], {})
+
+    def test_dashboard_restores_weather_overview_and_marks_missing_scores(self):
+        report = p.generate_dashboard_html(
+            {"ALERT_THRESHOLD": 65},
+            [{"name": "A", "best_score": 0, "best_day": "N/A", "status": "Weather data unavailable",
+              "quality": "", "soil_moisture": 0, "records": [], "scores": {}, "harvests": [], "backtest": {}}],
+        )
+        self.assertIn("Rain &amp; Temperature Overview", report)
+        self.assertIn("Weather overview unavailable: no weather records have been loaded.", report)
+        self.assertIn(">N/A</div>", report)
+        self.assertNotIn(">0%</div>", report)
 
 
 class LegacyMigrationTests(unittest.TestCase):

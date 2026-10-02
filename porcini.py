@@ -17,6 +17,8 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import requests
 
+from harvest import HarvestError, load_harvest_log, merge_harvests
+
 CONFIG_PATH = Path("config.json")
 DB_PATH = Path("porcini_db.json")
 ALERT_STATE_PATH = Path("alert_state.json")
@@ -1024,7 +1026,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
       <table><thead><tr><th>Date</th><th>Score</th><th>Tmax</th><th>Rain mm</th><th>Wind</th><th>Soil °C</th><th>RH %</th><th>Src</th></tr></thead><tbody id="rows"></tbody></table>
       <button id="prev">&laquo; Prev</button><button id="next">Next &raquo;</button> <span id="pageinfo" class="meta"></span>
     </div>
-    <h2>📝 Log Field Observation (this browser only)</h2>
+    <h2>📝 Log Field Observation</h2>
     <div class="card">
       <form id="logform">
         <input type="date" id="ldate" required />
@@ -1032,10 +1034,10 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
         <select id="lstage"><option>buttons_young</option><option>prime</option><option>old_overripe</option></select>
         <input type="number" id="lweight" placeholder="weight g" min="0" />
         <input id="lnotes" placeholder="notes" />
-        <button type="submit">Save log</button>
+        <button type="submit">Submit via GitHub issue</button>
       </form>
-      <div class="note">Limitation: there is no backend. Logs are kept in this browser's localStorage only; they are shown as pins but do NOT change scores or sync anywhere. To make them count, export them and add them to <code>past_harvests</code> in config.json; the next workflow run rescores.</div>
-      <button id="export">Export logs (JSON)</button><button id="clearlogs">Clear logs</button>
+      <div class="note">Submitting opens a pre-filled GitHub issue (sign-in required). Only issues from the repository owner or collaborators are accepted: a workflow then appends the harvest to <code>harvest_log.json</code>, rescores and republishes this page, usually within a few minutes. Until then it is only an unsynced draft in this browser's localStorage (blue pin); the source of truth is the repository file. Red pins are synced harvests.</div>
+      <button id="export">Export drafts (JSON)</button><button id="clearlogs">Clear drafts</button>
       <pre id="exported" class="alert" style="display:none"></pre>
     </div>
   </div>
@@ -1060,8 +1062,8 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     }
     function inRange(d) { var r = $('range').value || 'all'; if (r === 'all') return true; if (r === '365') return Date.parse(d) >= Date.now() - 365 * 864e5; return d.slice(0, 4) === r; }
     function harvestsFor() {
-      var h = (loc.harvests || []).map(function (x) { return Object.assign({ origin: 'config' }, x); });
-      loadLogs().filter(function (x) { return x.location === loc.name; }).forEach(function (x) { h.push(Object.assign({ origin: 'local log' }, x)); });
+      var h = (loc.harvests || []).map(function (x) { return Object.assign({}, x, { origin: x.origin === 'log' ? 'harvest_log.json' : 'config' }); });
+      loadLogs().filter(function (x) { return x.location === loc.name; }).forEach(function (x) { h.push(Object.assign({ origin: 'draft (unsynced)' }, x)); });
       return h;
     }
     function recMap() { var m = {}; loc.records.forEach(function (r) { m[r[0]] = r; }); return m; }
@@ -1096,7 +1098,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
       svg.appendChild(cursor);
       harvestsFor().forEach(function (h) {
         var t = Date.parse(h.date); if (isNaN(t) || t < t0 || t > t1) return;
-        var c = el('circle', { cx: x(t), cy: y(sm[h.date] ? sm[h.date][1] : 0), r: 6, fill: h.origin === 'config' ? '#f87171' : '#60a5fa', stroke: '#fff', class: 'pin' });
+        var c = el('circle', { cx: x(t), cy: y(sm[h.date] ? sm[h.date][1] : 0), r: 6, fill: h.origin === 'draft (unsynced)' ? '#60a5fa' : '#f87171', stroke: '#fff', class: 'pin' });
         c.addEventListener('click', function () { pin(h.date); });
         svg.appendChild(c);
       });
@@ -1138,11 +1140,13 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     $('next').onclick = function () { page++; rows(); };
     $('logform').onsubmit = function (e) {
       e.preventDefault(); var logs = loadLogs();
-      logs.push({ location: loc.name, date: $('ldate').value, yield_tier: $('ltier').value, cap_stage: $('lstage').value, weight_g: +$('lweight').value || undefined, notes: $('lnotes').value });
-      saveLogs(logs); this.reset(); draw();
+      var entry = { location: loc.name, date: $('ldate').value, yield_tier: $('ltier').value, cap_stage: $('lstage').value, weight_g: +$('lweight').value || undefined, notes: $('lnotes').value };
+      logs.push(entry); saveLogs(logs); this.reset(); draw();
+      var q = new URLSearchParams({ template: 'harvest.yml', title: 'Harvest: ' + entry.location + ' ' + entry.date, labels: 'harvest', location: entry.location, date: entry.date, yield_tier: entry.yield_tier, cap_stage: entry.cap_stage, weight_g: entry.weight_g || '', notes: entry.notes });
+      window.open('https://github.com/' + D.repo + '/issues/new?' + q.toString(), '_blank', 'noopener');
     };
     $('export').onclick = function () { var pre = $('exported'); pre.style.display = 'block'; pre.textContent = JSON.stringify(loadLogs(), null, 2); };
-    $('clearlogs').onclick = function () { if (confirm('Delete all logs stored in this browser?')) { saveLogs([]); draw(); } };
+    $('clearlogs').onclick = function () { if (confirm('Delete all drafts stored in this browser?')) { saveLogs([]); draw(); } };
     refresh();
   })();
   </script>
@@ -1167,11 +1171,12 @@ def dashboard_payload(cfg: Dict[str, Any], analysis: List[Dict[str, Any]], mode:
             "harvests": item.get("harvests", []),
             "backtest": item.get("backtest", {}),
         })
-    return {"mode": mode, "threshold": int(cfg.get("ALERT_THRESHOLD", 65)), "locations": locations}
+    repo = os.environ.get("GITHUB_REPOSITORY") or cfg.get("GITHUB_REPOSITORY") or "jmb2885m75-cmd/porcini-tracker"
+    return {"mode": mode, "threshold": int(cfg.get("ALERT_THRESHOLD", 65)), "repo": repo, "locations": locations}
 
 
 def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]], alert_message: str = "", alert_will_send: bool = False, mode: str = MODE_DEFAULT) -> str:
-    """Self-contained dashboard (inline CSS/JS/data, no CDN). Static hosting only: no backend sync."""
+    """Self-contained dashboard (inline CSS/JS/data, no CDN). Static hosting only; harvests come from harvest_log.json via the issue workflow."""
     threshold = int(cfg.get("ALERT_THRESHOLD", 65))
     cards = []
     for item in analysis:
@@ -1276,6 +1281,12 @@ def main() -> int:
     friday_policy = resolve_friday_policy(cfg)
     dashboard_url = resolve_dashboard_url(cfg)
 
+    try:
+        harvest_log = load_harvest_log()
+    except HarvestError as exc:
+        print(f"[WARN] {exc}; continuing with config past_harvests only")
+        harvest_log = {"harvests": []}
+
     analyses: List[Dict[str, Any]] = []
     alert_queue: List[Tuple[str, int, str, str]] = []
 
@@ -1284,10 +1295,10 @@ def main() -> int:
         latitude = float(location.get("latitude"))
         longitude = float(location.get("longitude"))
         elevation = int(location.get("elevation_m", 0))
-        harvests = location.get("past_harvests", [])
+        harvests = merge_harvests(location.get("past_harvests", []), harvest_log, name)
         records = ensure_location_history(name, db, latitude, longitude, elevation, today)
         loc_store = db["locations"][name]
-        update_daily_scores(location, records, loc_store)
+        update_daily_scores(dict(location, past_harvests=harvests), records, loc_store)
         loc_store["backtest"] = backtest_accuracy(loc_store["daily_scores"], harvests, threshold)
 
         best_score, best_day, status, quality = find_weekend_best(location, records, harvests, loc_store["daily_scores"], today)

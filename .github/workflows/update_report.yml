@@ -5,6 +5,7 @@ on:
     paths:
       - 'config.json'
       - 'porcini_db.json'
+      - 'harvest_log.json'
 
 permissions:
   contents: write
@@ -39,7 +40,7 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           touch alert_state.json
-          git add porcini_db.json index.html porcini_report.html alert_state.json
+          git add porcini_db.json harvest_log.json index.html porcini_report.html alert_state.json
           # Only the staged files above are committed (config.json holds secrets and is never added).
           if git diff --cached --quiet; then
             echo "No changes to commit"

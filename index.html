@@ -10,7 +10,7 @@
         .container { max-width: 950px; margin: auto; background: #161b22; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
         h1, h2 { color: #58a6ff; border-bottom: 1px solid #30363d; padding-bottom: 10px; }
         .card { background: #21262d; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #30363d; }
-        input, select, button { width: 100%; padding: 12px; margin-top: 8px; margin-bottom: 16px; background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 6px; }
+        input, select, textarea, button { width: 100%; padding: 12px; margin-top: 8px; margin-bottom: 16px; background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 6px; box-sizing: border-box; }
         button { background: #238636; color: white; font-weight: bold; cursor: pointer; border: none; }
         button:hover { background: #2ea043; }
         pre { background: #0d1117; padding: 15px; border-radius: 6px; overflow-x: auto; color: #8b949e; font-size: 0.9em; }
@@ -23,45 +23,49 @@
             <h1>🍄 Porcini Forecast Dashboard</h1>
             <div><span style="background: #238636; color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.85em;">🍄 Peak Season aktiv (Sept/Okt)</span></div>
         </div>
-        <p>Letztes Update: <b>02.10.2026 um 14:38 Uhr</b> | 🌕 <b>Aktuelle Mondphase:</b> Abnehmender Mond</p>
+        <p>Letztes Update: <b>02.10.2026 um 15:17 Uhr</b> | 🌕 <b>Mondphase:</b> Abnehmender Mond</p>
         
         <div class="card">
-            <h2>Standort-Analyse & Prognosen</h2>
+            <h2>Standort-Analyse & Flush-Prognosen</h2>
 
             <div style="margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px dashed #30363d;">
                 <h3>📍 Oak & Beech Spot</h3>
-                <p><b>Flush Wahrscheinlichkeit:</b> <span style="color: #58a6ff; font-size: 1.2em;">65%</span></p>
-                <p><b>Höhenlage:</b> 50m | <b>Boden-pH:</b> acidic | <b>Baumpartner:</b> Oak, Beech</p>
+                <p><b>Flush Wahrscheinlichkeit:</b> <span style="color: #238636; font-size: 1.3em; font-weight: bold;">85%</span> | <b>Status:</b> Wachstumsphase normal</p>
+                <p><b>Qualität:</b> ⚠️ HIGH MAGGOT RISK - Harvest early while small. | <b>Bodenfeuchte:</b> 0.25 m³/m³</p>
+                <p><small>Höhenlage: 50m | pH: acidic | Partner: Oak, Beech</small></p>
             </div>
 
         </div>
 
         <div class="card">
-            <h2>📈 Wachstums- & Wetterverlauf (Letzte Monate)</h2>
-            <canvas id="weatherChart" height="100"></canvas>
+            <h2>📈 Multi-Year Weather & Harvest Backtest Timeline</h2>
+            <canvas id="weatherChart" height="110"></canvas>
         </div>
 
         <div class="card">
-            <h2>🍄 Log Historical / Recent Find (Direkt via GitHub API)</h2>
+            <h2>🍄 Log Field Observation (Online Backend Sync)</h2>
             <label>Standort-Index (0 für den ersten Spot):</label>
             <input type="number" id="locIndex" value="0">
 
             <label>Date Found (YYYY-MM-DD):</label>
-            <input type="text" id="findDate" value="2026-10-02">
+            <input type="date" id="findDate" value="2026-10-02">
             
             <label>Cap Stage:</label>
             <select id="capStage">
-                <option value="buttons_young">Buttons / Young (Flush Boost +20)</option>
-                <option value="prime_open" selected>Prime Open Caps</option>
-                <option value="old_overripe">Old / Overripe (-25)</option>
+                <option value="buttons_young">🌱 Buttons / Young (Flush Boost +20)</option>
+                <option value="prime" selected>💎 Prime Open Caps</option>
+                <option value="old_overripe">🍂 Old / Overripe (-25)</option>
             </select>
 
             <label>Yield Tier:</label>
             <select id="yieldTier">
-                <option value="small">Small</option>
-                <option value="medium">Medium</option>
-                <option value="large" selected>Large (Full haul)</option>
+                <option value="small">Small (1-3 caps)</option>
+                <option value="medium">Medium (Basket)</option>
+                <option value="large" selected>Large (Massive Flush)</option>
             </select>
+
+            <label>Notes:</label>
+            <textarea id="findNotes" rows="2" placeholder="Zustand, Madenfreiheit, Begleitpilze..."></textarea>
 
             <button onclick="commitHarvestToGitHub()">Fund an GitHub senden & Action starten</button>
             <pre id="apiStatus">Bereit für API-Sync...</pre>
@@ -70,10 +74,11 @@
 
     <script>
         const ctx = document.getElementById('weatherChart').getContext('2d');
+        
         const weatherChart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: ["2026-06-01", "2026-06-02", "2026-06-03", "2026-06-04", "2026-06-05", "2026-06-06", "2026-06-07", "2026-06-08", "2026-06-09", "2026-06-10", "2026-06-11", "2026-06-12", "2026-06-13", "2026-06-14", "2026-06-15", "2026-06-16", "2026-06-17", "2026-06-18", "2026-06-19", "2026-06-20", "2026-06-21", "2026-06-22", "2026-06-23", "2026-06-24", "2026-06-25", "2026-06-26", "2026-06-27", "2026-06-28", "2026-06-29", "2026-06-30", "2026-07-01", "2026-07-02", "2026-07-03", "2026-07-04", "2026-07-05", "2026-07-06", "2026-07-07", "2026-07-08", "2026-07-09", "2026-07-10", "2026-07-11", "2026-07-12", "2026-07-13", "2026-07-14", "2026-07-15", "2026-07-16", "2026-07-17", "2026-07-18", "2026-07-19", "2026-07-20", "2026-07-21", "2026-07-22", "2026-07-23", "2026-07-24", "2026-07-25", "2026-07-26", "2026-07-27", "2026-07-28", "2026-07-29", "2026-07-30", "2026-07-31", "2026-08-01", "2026-08-02", "2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07", "2026-08-08", "2026-08-09", "2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14", "2026-08-15", "2026-08-16", "2026-08-17", "2026-08-18", "2026-08-19", "2026-08-20", "2026-08-21", "2026-08-22", "2026-08-23", "2026-08-24", "2026-08-25", "2026-08-26", "2026-08-27", "2026-08-28", "2026-08-29", "2026-08-30", "2026-08-31", "2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04", "2026-09-05", "2026-09-06", "2026-09-07", "2026-09-08", "2026-09-09", "2026-09-10", "2026-09-11", "2026-09-12", "2026-09-13", "2026-09-14", "2026-09-15", "2026-09-16", "2026-09-17", "2026-09-18", "2026-09-19", "2026-09-20", "2026-09-21", "2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25", "2026-09-26", "2026-09-27", "2026-09-28", "2026-09-29", "2026-09-30", "2026-10-01", "2026-10-02"],
+                labels: ["Mo, 01.06.2026", "Di, 02.06.2026", "Mi, 03.06.2026", "Do, 04.06.2026", "Fr, 05.06.2026", "Sa, 06.06.2026", "So, 07.06.2026", "Mo, 08.06.2026", "Di, 09.06.2026", "Mi, 10.06.2026", "Do, 11.06.2026", "Fr, 12.06.2026", "Sa, 13.06.2026", "So, 14.06.2026", "Mo, 15.06.2026", "Di, 16.06.2026", "Mi, 17.06.2026", "Do, 18.06.2026", "Fr, 19.06.2026", "Sa, 20.06.2026", "So, 21.06.2026", "Mo, 22.06.2026", "Di, 23.06.2026", "Mi, 24.06.2026", "Do, 25.06.2026", "Fr, 26.06.2026", "Sa, 27.06.2026", "So, 28.06.2026", "Mo, 29.06.2026", "Di, 30.06.2026", "Mi, 01.07.2026", "Do, 02.07.2026", "Fr, 03.07.2026", "Sa, 04.07.2026", "So, 05.07.2026", "Mo, 06.07.2026", "Di, 07.07.2026", "Mi, 08.07.2026", "Do, 09.07.2026", "Fr, 10.07.2026", "Sa, 11.07.2026", "So, 12.07.2026", "Mo, 13.07.2026", "Di, 14.07.2026", "Mi, 15.07.2026", "Do, 16.07.2026", "Fr, 17.07.2026", "Sa, 18.07.2026", "So, 19.07.2026", "Mo, 20.07.2026", "Di, 21.07.2026", "Mi, 22.07.2026", "Do, 23.07.2026", "Fr, 24.07.2026", "Sa, 25.07.2026", "So, 26.07.2026", "Mo, 27.07.2026", "Di, 28.07.2026", "Mi, 29.07.2026", "Do, 30.07.2026", "Fr, 31.07.2026", "Sa, 01.08.2026", "So, 02.08.2026", "Mo, 03.08.2026", "Di, 04.08.2026", "Mi, 05.08.2026", "Do, 06.08.2026", "Fr, 07.08.2026", "Sa, 08.08.2026", "So, 09.08.2026", "Mo, 10.08.2026", "Di, 11.08.2026", "Mi, 12.08.2026", "Do, 13.08.2026", "Fr, 14.08.2026", "Sa, 15.08.2026", "So, 16.08.2026", "Mo, 17.08.2026", "Di, 18.08.2026", "Mi, 19.08.2026", "Do, 20.08.2026", "Fr, 21.08.2026", "Sa, 22.08.2026", "So, 23.08.2026", "Mo, 24.08.2026", "Di, 25.08.2026", "Mi, 26.08.2026", "Do, 27.08.2026", "Fr, 28.08.2026", "Sa, 29.08.2026", "So, 30.08.2026", "Mo, 31.08.2026", "Di, 01.09.2026", "Mi, 02.09.2026", "Do, 03.09.2026", "Fr, 04.09.2026", "Sa, 05.09.2026", "So, 06.09.2026", "Mo, 07.09.2026", "Di, 08.09.2026", "Mi, 09.09.2026", "Do, 10.09.2026", "Fr, 11.09.2026", "Sa, 12.09.2026", "So, 13.09.2026", "Mo, 14.09.2026", "Di, 15.09.2026", "Mi, 16.09.2026", "Do, 17.09.2026", "Fr, 18.09.2026", "Sa, 19.09.2026", "So, 20.09.2026", "Mo, 21.09.2026", "Di, 22.09.2026", "Mi, 23.09.2026", "Do, 24.09.2026", "Fr, 25.09.2026", "Sa, 26.09.2026", "So, 27.09.2026", "Mo, 28.09.2026", "Di, 29.09.2026", "Mi, 30.09.2026", "Do, 01.10.2026", "Fr, 02.10.2026"],
                 datasets: [{
                     label: 'Max Temperatur (°C)',
                     data: [22.4, 27.2, 20.9, 24.1, 20.7, 24.1, 21.6, 25.1, 20.8, 19.8, 19.3, 18.9, 20.3, 17.0, 18.3, 20.5, 23.6, 28.0, 34.5, 30.8, 27.5, 26.0, 27.2, 31.7, 34.2, 34.9, 39.6, 39.8, 29.3, 30.8, 26.0, 28.0, 22.2, 19.7, 22.6, 19.1, 23.2, 21.8, 23.1, 27.3, 28.3, 31.0, 28.8, 24.8, 25.3, 29.5, 29.4, 24.1, 20.6, 18.5, 22.1, 19.9, 20.1, 20.7, 27.5, 26.5, 21.1, 22.1, 28.9, 37.9, 30.7, 21.8, 23.5, 27.9, 28.4, 30.5, 26.5, 20.4, 22.9, 31.3, 30.3, 21.6, 25.6, 28.6, 32.7, 36.1, 23.2, 20.6, 21.0, 20.5, 23.0, 24.4, 20.5, 18.7, 19.7, 23.4, 23.9, 27.4, 27.4, 25.5, 27.1, 24.1, 22.4, 21.4, 22.9, 25.4, 20.0, 18.7, 20.4, 26.7, 21.2, 18.1, 20.1, 21.7, 21.3, 18.8, 24.7, 20.1, 18.6, 19.7, 20.5, 21.5, 17.1, 19.0, 19.2, 15.6, 15.3, 21.0, 22.9, 24.6, 25.1, 23.2, 24.4, 19.1],
@@ -101,21 +106,16 @@
 
         async function commitHarvestToGitHub() {
             const statusEl = document.getElementById('apiStatus');
+            const repo = "jmb2885m75-cmd/porcini-tracker";
             
-            let repo = localStorage.getItem('gh_repo');
             let token = localStorage.getItem('gh_token');
-
-            if (!repo) {
-                repo = prompt("Bitte gib dein GitHub Repository ein (z. B. deinessername/porcini-dashboard):");
-                if (repo) localStorage.setItem('gh_repo', repo);
-            }
             if (!token) {
-                token = prompt("Bitte gib dein GitHub Personal Access Token (PAT mit repo-Rechten) ein:");
+                token = prompt("Bitte gib dein GitHub Personal Access Token (PAT) ein:");
                 if (token) localStorage.setItem('gh_token', token);
             }
 
-            if (!repo || !token) {
-                alert("Repository und Token werden benötigt!");
+            if (!token) {
+                alert("Token wird benötigt!");
                 return;
             }
 
@@ -123,23 +123,26 @@
 
             try {
                 const url = `https://api.github.com/repos/${repo}/contents/config.json`;
+                
                 const getRes = await fetch(url, {
-                    headers: { 'Authorization': `token ${token}`, 'Accept': 'vnd.github.v3+json' }
+                    headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'vnd.github.v3+json' }
                 });
-                if (!getRes.ok) throw new Error("Fehler beim Laden der config.json (Token oder Repo ungültig?)");
+                if (!getRes.ok) throw new Error("Fehler beim Laden der config.json (Token ungültig oder keine Lesebrechte?)");
                 
                 const fileData = await getRes.json();
                 
-                // Sauberer Fix: Entfernt alle Zeilenumbrüche ohne Regex-Fehleranfälligkeit
                 const base64Clean = fileData.content.replaceAll('\n', '').replaceAll('\r', '');
-                const jsonString = decodeURIComponent(escape(atob(base64Clean)));
+                const binString = atob(base64Clean);
+                const bytes = Uint8Array.from(binString, (m) => m.codePointAt(0));
+                const jsonString = new TextDecoder().decode(bytes);
                 const content = JSON.parse(jsonString);
 
                 const locIdx = parseInt(document.getElementById('locIndex').value) || 0;
                 const newHarvest = {
                     "date": document.getElementById('findDate').value,
                     "cap_stage": document.getElementById('capStage').value,
-                    "yield_tier": document.getElementById('yieldTier').value
+                    "yield_tier": document.getElementById('yieldTier').value,
+                    "notes": document.getElementById('findNotes').value
                 };
 
                 if (!content.LOCATIONS[locIdx].past_harvests) {
@@ -148,12 +151,14 @@
                 content.LOCATIONS[locIdx].past_harvests.push(newHarvest);
 
                 statusEl.innerText = "Speichere neuen Fund in config.json auf GitHub...";
-                const updatedContentBase64 = btoa(unescape(encodeURIComponent(JSON.stringify(content, null, 4))));
+                
+                const updatedBytes = new TextEncoder().encode(JSON.stringify(content, null, 4));
+                const updatedContentBase64 = btoa(String.fromCharCode(...updatedBytes));
 
                 const putRes = await fetch(url, {
                     method: 'PUT',
                     headers: {
-                        'Authorization': `token ${token}`,
+                        'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
@@ -166,7 +171,7 @@
                 if (!putRes.ok) throw new Error("Fehler beim Speichern auf GitHub.");
 
                 statusEl.innerText = "Erfolgreich gespeichert! GitHub Action gestartet.";
-                alert("Fund erfolgreich übertragen! Das Dashboard aktualisiert sich gleich.");
+                alert("Fund erfolgreich übertragen! Das Dashboard aktualisiert sich in wenigen Sekunden.");
             } catch (err) {
                 statusEl.innerText = "Fehler: " + err.message;
                 console.error(err);

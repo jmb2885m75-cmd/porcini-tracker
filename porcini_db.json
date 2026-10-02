@@ -9564,11 +9564,11 @@
           "date": "2026-10-07",
           "source": "forecast",
           "precipitation_sum": 0.0,
-          "temperature_2m_max": 20.1,
+          "temperature_2m_max": 21.6,
           "temperature_2m_min": 10.3,
           "wind_speed_10m_max": 5.1,
           "soil_temperature_0_to_7cm_mean": 13.2,
-          "relative_humidity_2m_mean": 79,
+          "relative_humidity_2m_mean": 77,
           "soil_moisture_0_to_7cm_mean": 0.215,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
@@ -14015,7 +14015,7 @@
           "source": "forecast"
         }
       },
-      "scores_signature": "4:78d7c9a708c1",
+      "scores_signature": "5:78d7c9a708c1",
       "backtest": {
         "threshold": 65,
         "evaluated_harvests": 0,
@@ -20955,8 +20955,8 @@
   },
   "schema_version": 3,
   "meta": {
-    "last_run_utc": "2026-10-02T21:25:42Z",
+    "last_run_utc": "2026-10-02T21:32:50Z",
     "last_run_mode": "default",
-    "model_version": 4
+    "model_version": 5
   }
 }

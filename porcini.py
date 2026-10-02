@@ -780,13 +780,14 @@ def run_server():
     threading.Timer(1.0, lambda: webbrowser.open(url)).start()
     httpd.serve_forever()
 
+    
 # ---------------------------------------------------------
 # MAIN EXECUTION
 # ---------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser(description="Porcini Mushroom Intelligence Engine")
     parser.add_argument("--test-alert", action="store_true", help="Dispatch test notification immediately")
-    parser.add_argument("--server", action="store_true", help="Launch interactive local web server with auto-save")
+    parser.add_argument("--build-only", action="store_true", help="Generate report and exit (for GitHub Actions)")
     args = parser.parse_args()
 
     config = load_json(CONFIG_FILE, {})
@@ -804,14 +805,11 @@ def main():
     save_json(DB_FILE, weather_db)
     generate_html_dashboard(locations, weather_db)
 
-    if args.test_alert:
-        send_alert(config, locations, is_test=True)
+    if args.build_only or args.test_alert:
+        print("Build completed successfully.")
         return
 
-    if args.server or len(sys.argv) == 1:
-        run_server()
-    else:
-        print("Porcini engine execution completed successfully.")
+    print("Porcini engine execution completed successfully.")
 
 if __name__ == "__main__":
     main()

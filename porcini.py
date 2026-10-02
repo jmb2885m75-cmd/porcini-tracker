@@ -1035,6 +1035,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     .note { color: #fcd34d; font-size: var(--small); }
     .toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-2); margin: 0 0 var(--space-2); }
     .toolbar label, .field { display: grid; gap: 3px; color: var(--muted); font-size: var(--small); }
+    .season-toggle[aria-pressed="true"] { background: var(--accent, #2e7d32); color: #fff; font-weight: 700; }
     .toolbar strong { align-self: center; }
     #chartbox { position: relative; }
     #chart { display: block; width: 100%; height: auto; background: var(--bg); border-radius: 8px; }
@@ -1099,7 +1100,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     </div>
     <h2>📈 Daily Score History &amp; Field Observations <button class="info-button" type="button" data-info="score" aria-label="How the forecast score is calculated" aria-haspopup="dialog" aria-controls="info-dialog">ⓘ</button></h2>
     <div class="card">
-      <div class="toolbar"><label for="range">Date range<select id="range"></select></label></div>
+      <div class="toolbar"><label for="range">Date range<select id="range"></select></label><button type="button" id="seasonOnly" class="season-toggle" aria-pressed="false" title="Show only Aug 15 – Dec 1">Season Only</button></div>
       <div id="chartbox"><svg id="chart" viewBox="0 0 900 320" role="img" aria-label="Daily favourability score with optional rain and temperature trends"></svg><div id="tip"></div></div>
       <div class="meta">Hover or tap for daily details. Dashed line marks the alert threshold.</div>
       <div class="legend" aria-label="Chart and timeline legend">
@@ -1218,7 +1219,8 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
       ['all', '365'].concat(years()).forEach(function (v) { var o = document.createElement('option'); o.value = v; o.textContent = v === 'all' ? 'All years' : v === '365' ? 'Last 365 days' : v; $('range').appendChild(o); });
       if (cur) $('range').value = cur;
     }
-    function inRange(d) { var r = $('range').value || 'all'; if (r === 'all') return true; if (r === '365') return Date.parse(d) >= Date.now() - 365 * 864e5; return d.slice(0, 4) === r; }
+    function inSeason(d) { var md = d.slice(5, 10); return md >= '08-15' && md <= '12-01'; }
+    function inRange(d) { if ($('seasonOnly').getAttribute('aria-pressed') === 'true' && !inSeason(d)) return false; var r = $('range').value || 'all'; if (r === 'all') return true; if (r === '365') return Date.parse(d) >= Date.now() - 365 * 864e5; return d.slice(0, 4) === r; }
     function harvestsFor() {
       var h = (loc.harvests || []).map(function (x) { return Object.assign({}, x, { origin: x.origin === 'log' ? 'harvest_log.json' : 'config' }); });
       loadLogs().filter(function (x) { return x.location === loc.name; }).forEach(function (x) { h.push(Object.assign({ origin: 'draft (unsynced)' }, x)); });
@@ -1415,6 +1417,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     }
     function refresh() { fillRange(); draw(); rows(); backtest(); weatherOverview(); renderTimeline(); }
     $('loc').onchange = function () { loc = D.locations[+this.value]; pinned = []; page = 0; selectedDate = initialDate(); renderPins(); refresh(); };
+    $('seasonOnly').onclick = function () { this.setAttribute('aria-pressed', this.getAttribute('aria-pressed') === 'true' ? 'false' : 'true'); page = 0; draw(); rows(); };
     $('range').onchange = function () { page = 0; draw(); rows(); };
     $('rain-toggle').onchange = $('temp-toggle').onchange = draw;
     $('q').oninput = $('src').onchange = function () { page = 0; rows(); };

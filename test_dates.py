@@ -121,10 +121,13 @@ class DashboardUiTests(unittest.TestCase):
         self.assertIn("day-prev", html)
         self.assertIn("🍄' : '❌'", html)
         self.assertIn("Fri. 02 Oct. 2026", html)
+        self.assertIn("class='meta best-day'", html)
         self.assertIn('id="rain-toggle"', html)
         self.assertIn('id="temp-toggle"', html)
         self.assertIn("weather-rain", html)
         self.assertIn("weather-temperature", html)
+        self.assertIn("Rain ' + rm[3] + ' mm", html)
+        self.assertIn("stroke-width': 1.7, opacity: .42", html)
         self.assertIn("The chart’s light rain and temperature lines add weather context", html)
         self.assertIn(":focus-visible", html)
 

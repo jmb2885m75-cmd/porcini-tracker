@@ -1028,6 +1028,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     .score { font-size: clamp(2.3rem, 6vw, 3rem); font-weight: 800; line-height: 1; color: var(--accent); }
     .name { font-size: 1.12rem; margin-top: var(--space-2); font-weight: 700; }
     .meta { color: var(--muted); margin-top: var(--space-2); font-size: var(--small); }
+    .best-day strong { color: var(--text); margin-left: .3rem; }
     .badge { display: inline-block; background: #065f46; border-radius: 999px; padding: 2px 10px; font-size: var(--small); }
     .go { background: #065f46; } .nogo { background: #7f1d1d; }
     .alert { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; white-space: pre-wrap; }
@@ -1483,7 +1484,7 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]],
         quality = f"<div class='meta'>{html.escape(item['quality'])}</div>" if item.get("quality") else ""
         cards.append(
             f"<div class='card'><div class='score'>{item['best_score'] if available else 'N/A'}{'%' if available else ''}</div><div class='name'>{html.escape(str(item['name']))}</div>{verdict}"
-            f"<div class='meta'>Best day: {html.escape(str(item['best_day']))} | Status: {html.escape(str(item['status']))}</div>{quality}"
+            f"<div class='meta best-day'>Best day<strong>{html.escape(str(item['best_day']))}</strong></div><div class='meta'>Status: {html.escape(str(item['status']))}</div>{quality}"
             f"<div class='meta'>Moisture: {item['soil_moisture']:.2f} m³/m³</div></div>"
         )
     alert_status = "This message will be sent with this run." if alert_will_send else "Preview only: no alert is triggered by this run."

@@ -1,4 +1,4 @@
-"""Central date handling: ISO yyyy-MM-dd for storage and 'Ddd. dd Mon. yyyy' for display.
+"""Central date handling: ISO yyyy-MM-dd for storage and 'Ddd. DD Mon. YYYY' for display.
 
 Dates are date-only values (no time zone), so no conversion can shift them by a day.
 """

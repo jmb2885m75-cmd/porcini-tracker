@@ -121,7 +121,7 @@ def lunar_phase_fraction(day: date) -> float:
 
 SCHEMA_VERSION = 3
 # Bump when the scoring rules change; forces every stored daily score to be recomputed.
-MODEL_VERSION = 3  # 3: runoff rule also applies to records backfilled from hourly data
+MODEL_VERSION = 4  # 4: field observations with no mushrooms cap that day's score
 ARCHIVE_LAG_DAYS = 5
 SOURCE_ARCHIVE = "archive"
 SOURCE_FORECAST = "forecast"
@@ -635,6 +635,10 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
     quality = ""
 
     d = parse_date(daily["date"])
+    no_find_today = any(
+        h.get("observation_type") == "no_mushrooms" and h.get("date") == d.isoformat()
+        for h in past_harvests
+    )
     if not month_day_window(d):
         return 0, "❌ Outside mushroom season", ""
 
@@ -664,7 +668,8 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
             score += 10
         status = "🔥 DROUGHT BROKEN - High potential for massive super-flush!"
     elif rainfall_120 < 100:
-        return 20, "TOO DRY - DROUGHT UNBROKEN", ""
+        status = "🔎 No mushrooms found (field observation)" if no_find_today else "TOO DRY - DROUGHT UNBROKEN"
+        return 20, status, ""
     elif rainfall_recent >= 20:
         score += 30
 
@@ -718,6 +723,11 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
         if not valid_date_string(harvest_date):
             continue
         delta_days = (d - parse_date(harvest_date)).days
+        if harvest.get("observation_type") == "no_mushrooms":
+            if delta_days == 0:
+                score = min(score, 20)
+                status = "🔎 No mushrooms found (field observation)"
+            continue
         if harvest.get("cap_stage") == "buttons_young" and 1 <= delta_days <= 4:
             score += 20
         elif harvest.get("cap_stage") == "old_overripe" and 1 <= delta_days <= 7:
@@ -1026,7 +1036,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
       <div id="weather-label" class="meta"></div>
       <table><thead><tr><th>Date</th><th>High °C</th><th>Low °C</th><th>Rain mm</th></tr></thead><tbody id="weather-rows"></tbody></table>
     </div>
-    <h2>📈 Daily Score History &amp; Harvest Pins</h2>
+    <h2>📈 Daily Score History &amp; Field Observations</h2>
     <div class="card">
       <select id="range"></select>
       <div id="chartbox"><svg id="chart" viewBox="0 0 900 320"></svg><div id="tip"></div></div>
@@ -1045,13 +1055,16 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     <div class="card">
       <form id="logform">
         <input type="date" id="ldate" required />
-        <select id="ltier"><option>small</option><option>medium</option><option>large</option></select>
-        <select id="lstage"><option>buttons_young</option><option>prime</option><option>old_overripe</option></select>
-        <input type="number" id="lweight" placeholder="weight g" min="0" />
+        <select id="lobservation"><option value="harvest">Found mushrooms</option><option value="no_mushrooms">Visited, found no mushrooms</option></select>
+        <span id="harvest-fields">
+          <select id="ltier"><option>small</option><option>medium</option><option>large</option></select>
+          <select id="lstage"><option>buttons_young</option><option>prime</option><option>old_overripe</option></select>
+          <input type="number" id="lweight" placeholder="weight g" min="0" />
+        </span>
         <input id="lnotes" placeholder="notes" />
         <button type="submit">Submit via GitHub issue</button>
       </form>
-      <div class="note">Submitting opens a pre-filled GitHub issue (sign-in required). Only issues from the repository owner or collaborators are accepted: a workflow then appends the harvest to <code>harvest_log.json</code>, rescores and republishes this page, usually within a few minutes. Until then it is only an unsynced draft in this browser's localStorage (blue pin); the source of truth is the repository file. Red pins are synced harvests.</div>
+      <div class="note">Submitting opens a pre-filled GitHub issue (sign-in required). Only issues from the repository owner or collaborators are accepted: a workflow then appends the observation to <code>harvest_log.json</code>, rescores and republishes this page, usually within a few minutes. A no-find observation caps that date's score at 20. Until synced it remains an unsynced draft in this browser's localStorage (blue pin); the source of truth is the repository file. Red pins are harvests; purple pins are no-find observations.</div>
       <button id="export">Export drafts (JSON)</button><button id="clearlogs">Clear drafts</button>
       <pre id="exported" class="alert" style="display:none"></pre>
     </div>
@@ -1103,7 +1116,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
       var rm = recMap()[date], sm = scoreMap()[date], out = [date];
       if (sm) { out.push('Score: ' + sm[1] + '% - ' + sm[2]); if (sm[3]) out.push(sm[3]); }
       if (rm) out.push('Tmax ' + rm[1] + '°C, rain ' + rm[3] + ' mm, wind ' + rm[4] + ' km/h, RH ' + rm[6] + '% (' + rm[8] + ')');
-      (extra || []).forEach(function (h) { out.push('🍄 ' + h.origin + ': ' + (h.yield_tier || '?') + ' / ' + (h.cap_stage || '?') + (h.weight_g ? ' / ' + h.weight_g + ' g' : '') + (h.notes ? ' - ' + h.notes : '')); });
+      (extra || []).forEach(function (h) { out.push((h.observation_type === 'no_mushrooms' ? '🔎 No mushrooms found' : '🍄 ' + (h.yield_tier || '?') + ' / ' + (h.cap_stage || '?')) + ' (' + h.origin + ')' + (h.weight_g ? ' / ' + h.weight_g + ' g' : '') + (h.notes ? ' - ' + h.notes : '')); });
       return out;
     }
     function setLines(node, lines) { node.textContent = ''; lines.forEach(function (t, i) { var d = document.createElement('div'); d.textContent = t; if (i === 0) d.style.fontWeight = 'bold'; node.appendChild(d); }); }
@@ -1129,7 +1142,8 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
       svg.appendChild(cursor);
       harvestsFor().forEach(function (h) {
         var t = Date.parse(h.date); if (isNaN(t) || t < t0 || t > t1) return;
-        var c = el('circle', { cx: x(t), cy: y(sm[h.date] ? sm[h.date][1] : 0), r: 6, fill: h.origin === 'draft (unsynced)' ? '#60a5fa' : '#f87171', stroke: '#fff', class: 'pin' });
+        var fill = h.observation_type === 'no_mushrooms' ? '#c084fc' : h.origin === 'draft (unsynced)' ? '#60a5fa' : '#f87171';
+        var c = el('circle', { cx: x(t), cy: y(sm[h.date] ? sm[h.date][1] : 0), r: 6, fill: fill, stroke: '#fff', class: 'pin' });
         c.addEventListener('click', function () { pin(h.date); });
         svg.appendChild(c);
       });
@@ -1169,11 +1183,19 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     $('q').oninput = $('src').onchange = function () { page = 0; rows(); };
     $('prev').onclick = function () { page = Math.max(0, page - 1); rows(); };
     $('next').onclick = function () { page++; rows(); };
+    function toggleHarvestFields() { $('harvest-fields').hidden = $('lobservation').value !== 'harvest'; }
+    $('lobservation').onchange = toggleHarvestFields;
+    toggleHarvestFields();
     $('logform').onsubmit = function (e) {
       e.preventDefault(); var logs = loadLogs();
-      var entry = { location: loc.name, date: $('ldate').value, yield_tier: $('ltier').value, cap_stage: $('lstage').value, weight_g: +$('lweight').value || undefined, notes: $('lnotes').value };
+      var entry = { location: loc.name, date: $('ldate').value, observation_type: $('lobservation').value, notes: $('lnotes').value };
+      if (entry.observation_type === 'harvest') {
+        entry.yield_tier = $('ltier').value; entry.cap_stage = $('lstage').value;
+        entry.weight_g = +$('lweight').value || undefined;
+      }
       logs.push(entry); saveLogs(logs); this.reset(); draw();
-      var q = new URLSearchParams({ template: 'harvest.yml', title: 'Harvest: ' + entry.location + ' ' + entry.date, labels: 'harvest', location: entry.location, date: entry.date, yield_tier: entry.yield_tier, cap_stage: entry.cap_stage, weight_g: entry.weight_g || '', notes: entry.notes });
+      toggleHarvestFields();
+      var q = new URLSearchParams({ template: 'harvest.yml', title: 'Observation: ' + entry.location + ' ' + entry.date, labels: 'harvest', location: entry.location, date: entry.date, observation_type: entry.observation_type, yield_tier: entry.yield_tier || '', cap_stage: entry.cap_stage || '', weight_g: entry.weight_g || '', notes: entry.notes });
       window.open('https://github.com/' + D.repo + '/issues/new?' + q.toString(), '_blank', 'noopener');
     };
     $('export').onclick = function () { var pre = $('exported'); pre.style.display = 'block'; pre.textContent = JSON.stringify(loadLogs(), null, 2); };

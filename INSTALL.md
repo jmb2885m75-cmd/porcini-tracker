@@ -9,7 +9,8 @@ and writes `porcini_report.html`. A separate GitHub issue workflow validates har
 - Keeps a multi-year weather archive per location in `porcini_db.json` (schema version 3) and a per-day score series.
 - Sends Telegram / Pushover / Twilio alerts (see below).
 - Generates `porcini_report.html`: a self-contained dashboard (no CDN) with a score chart, harvest pins, tooltips and an observation browser.
-- Harvest observations can be submitted as GitHub issues. The intake workflow validates submissions from the
+- Harvest and no-mushrooms-found observations can be submitted as GitHub issues. A no-find observation caps that
+  date's score at 20; it does not affect other dates. The intake workflow validates submissions from the
   repository owner or collaborators and stores them in `harvest_log.json`; browser drafts stay local until submitted.
   Existing harvests can also be configured in `past_harvests` in the private `CONFIG_JSON` secret.
 - `index.html` links to the generated report; GitHub Actions updates its alert preview.
@@ -22,6 +23,7 @@ and writes `porcini_report.html`. A separate GitHub issue workflow validates har
    Optional `FRIDAY_POLICY`: `thursday_alerted_only` (default; Friday confirmation only for spots alerted on Thursday) or
    `all_above_threshold` (Friday confirmation for every spot at or above `ALERT_THRESHOLD`).
    Harvest entries: `date`, `yield_tier` (small/medium/large), `cap_stage` (`buttons_young`, `prime`, `old_overripe`), optional `weight_g`, `notes`.
+   A no-find report is recorded as `observation_type: no_mushrooms` with just the location and date.
 
 ## 2. Secrets
 

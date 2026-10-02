@@ -119,6 +119,17 @@ class ConfigTests(unittest.TestCase):
 
 
 class ScoringTests(unittest.TestCase):
+    def test_no_mushrooms_observation_caps_score_on_observed_date_only(self):
+        recs = series(date(2025, 8, 20), 30, precipitation_sum=5.0)
+        hist = p.History(recs)
+        observed = date(2025, 9, 5)
+        no_find = [{"date": observed.isoformat(), "observation_type": "no_mushrooms"}]
+        score = p.calculate_score_for_day(LOC, hist.get(observed), hist, no_find)
+        self.assertLessEqual(score[0], 20)
+        self.assertIn("No mushrooms found", score[1])
+        next_day = p.calculate_score_for_day(LOC, hist.get(observed + timedelta(days=1)), hist, no_find)
+        self.assertGreater(next_day[0], score[0])
+
     def test_timing_bonus_and_penalty(self):
         # rain trigger 7-12 days before: Sat (+15) vs Mon (-20)
         start = date(2025, 9, 1)

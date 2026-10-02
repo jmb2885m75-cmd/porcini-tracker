@@ -15,6 +15,7 @@ HARVEST_LOG_PATH = Path("harvest_log.json")
 LOG_SCHEMA_VERSION = 1
 YIELD_TIERS = ("small", "medium", "large")
 CAP_STAGES = ("buttons_young", "prime", "old_overripe")
+OBSERVATION_TYPES = ("harvest", "no_mushrooms")
 TRUSTED_ASSOCIATIONS = ("OWNER", "MEMBER", "COLLABORATOR")
 MAX_NOTES_LEN = 300
 MAX_WEIGHT_G = 100000
@@ -23,6 +24,7 @@ MAX_WEIGHT_G = 100000
 FIELD_LABELS = {
     "location / spot": "location",
     "date": "date",
+    "observation type": "observation_type",
     "yield tier": "yield_tier",
     "cap stage": "cap_stage",
     "weight (g)": "weight_g",
@@ -80,15 +82,20 @@ def validate_harvest(raw: Dict[str, str], known_locations: Optional[Iterable[str
         raise HarvestError("date must be YYYY-MM-DD")
     if day > today:
         raise HarvestError("date is in the future")
-    tier = raw.get("yield_tier", "").strip().lower()
-    if tier not in YIELD_TIERS:
-        raise HarvestError(f"yield tier must be one of {', '.join(YIELD_TIERS)}")
-    stage = raw.get("cap_stage", "").strip().lower()
-    if stage not in CAP_STAGES:
-        raise HarvestError(f"cap stage must be one of {', '.join(CAP_STAGES)}")
-    record: Dict[str, Any] = {"location": location, "date": day.isoformat(), "yield_tier": tier, "cap_stage": stage}
+    observation_type = raw.get("observation_type", "").strip().lower() or "harvest"
+    if observation_type not in OBSERVATION_TYPES:
+        raise HarvestError(f"observation type must be one of {', '.join(OBSERVATION_TYPES)}")
+    record: Dict[str, Any] = {"location": location, "date": day.isoformat(), "observation_type": observation_type}
+    if observation_type == "harvest":
+        tier = raw.get("yield_tier", "").strip().lower()
+        if tier not in YIELD_TIERS:
+            raise HarvestError(f"yield tier must be one of {', '.join(YIELD_TIERS)}")
+        stage = raw.get("cap_stage", "").strip().lower()
+        if stage not in CAP_STAGES:
+            raise HarvestError(f"cap stage must be one of {', '.join(CAP_STAGES)}")
+        record.update({"yield_tier": tier, "cap_stage": stage})
     weight = raw.get("weight_g", "").strip()
-    if weight:
+    if weight and observation_type == "harvest":
         try:
             grams = float(weight)
         except ValueError:
@@ -141,7 +148,7 @@ def append_harvest(log: Dict[str, Any], record: Dict[str, Any], issue_number: Op
 
 
 def _key(h: Dict[str, Any]) -> Tuple[Any, ...]:
-    return (h.get("date"), h.get("yield_tier"), h.get("cap_stage"), h.get("weight_g"))
+    return (h.get("date"), h.get("observation_type", "harvest"), h.get("yield_tier"), h.get("cap_stage"), h.get("weight_g"))
 
 
 def merge_harvests(config_harvests: Optional[List[Dict[str, Any]]], log: Optional[Dict[str, Any]], location_name: str) -> List[Dict[str, Any]]:

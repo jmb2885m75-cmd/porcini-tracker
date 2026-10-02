@@ -14,6 +14,10 @@ East Berlin Pine & Oak Ridge
 
 2026-09-15
 
+### Observation type
+
+harvest
+
 ### Yield tier
 
 large
@@ -37,7 +41,22 @@ KNOWN = ["East Berlin Pine & Oak Ridge"]
 class ParseValidateTests(unittest.TestCase):
     def test_parse_and_validate(self):
         rec = h.validate_harvest(h.parse_issue_body(BODY), KNOWN, TODAY)
-        self.assertEqual(rec, {"location": KNOWN[0], "date": "2026-09-15", "yield_tier": "large", "cap_stage": "prime", "weight_g": 450})
+        self.assertEqual(rec, {"location": KNOWN[0], "date": "2026-09-15", "observation_type": "harvest", "yield_tier": "large", "cap_stage": "prime", "weight_g": 450})
+
+    def test_no_mushrooms_observation_needs_no_harvest_details(self):
+        raw = h.parse_issue_body(BODY)
+        raw["observation_type"] = "no_mushrooms"
+        raw["yield_tier"] = ""
+        raw["cap_stage"] = ""
+        raw["weight_g"] = ""
+        self.assertEqual(h.validate_harvest(raw, KNOWN, TODAY), {
+            "location": KNOWN[0], "date": "2026-09-15", "observation_type": "no_mushrooms",
+        })
+
+    def test_missing_observation_type_defaults_to_harvest(self):
+        raw = h.parse_issue_body(BODY)
+        raw.pop("observation_type")
+        self.assertEqual(h.validate_harvest(raw, KNOWN, TODAY)["observation_type"], "harvest")
 
     def test_location_case_insensitive_and_unknown_rejected(self):
         raw = h.parse_issue_body(BODY)

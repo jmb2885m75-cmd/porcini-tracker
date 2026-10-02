@@ -1,6 +1,6 @@
-name: Harvest observation
-description: Log a porcini harvest. Only issues from the repository owner or collaborators are ingested.
-title: "Harvest: "
+name: Mushroom observation
+description: Log a porcini harvest or a visit where no mushrooms were found. Only issues from the repository owner or collaborators are ingested.
+title: "Observation: "
 labels: ["harvest"]
 body:
   - type: input
@@ -18,19 +18,22 @@ body:
     validations:
       required: true
   - type: dropdown
+    id: observation_type
+    attributes:
+      label: Observation type
+      options: [harvest, no_mushrooms]
+    validations:
+      required: true
+  - type: dropdown
     id: yield_tier
     attributes:
       label: Yield tier
       options: [small, medium, large]
-    validations:
-      required: true
   - type: dropdown
     id: cap_stage
     attributes:
       label: Cap stage
       options: [buttons_young, prime, old_overripe]
-    validations:
-      required: true
   - type: input
     id: weight_g
     attributes:

@@ -69,7 +69,7 @@ jobs:
           OUTCOME: ${{ steps.ingest.outcome }}
         run: |
           if [ "$OUTCOME" = "success" ]; then
-            gh issue comment ${{ github.event.issue.number }} --repo "$GITHUB_REPOSITORY" --body "Harvest recorded in harvest_log.json; scores and dashboard updated."
+            gh issue comment ${{ github.event.issue.number }} --repo "$GITHUB_REPOSITORY" --body "Observation recorded in harvest_log.json; scores and dashboard updated."
             gh issue close ${{ github.event.issue.number }} --repo "$GITHUB_REPOSITORY"
           else
             gh issue comment ${{ github.event.issue.number }} --repo "$GITHUB_REPOSITORY" --body "Harvest was not recorded (validation or ingest failed). See the workflow log, fix the issue and open a new one."

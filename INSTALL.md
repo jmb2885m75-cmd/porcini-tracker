@@ -13,6 +13,10 @@ and writes `porcini_report.html`. A separate GitHub issue workflow validates har
   date's score at 20; it does not affect other dates. The intake workflow validates submissions from the
   repository owner or collaborators and stores them in `harvest_log.json`; browser drafts stay local until submitted.
   Existing harvests can also be configured in `past_harvests` in the private `CONFIG_JSON` secret.
+- **Dates:** stored and exchanged as ISO `yyyy-MM-dd` (database, `harvest_log.json`, issue payloads); every
+  user-facing date is displayed as `dd MMMM yyyy` (e.g. `02 October 2026`). Accepted input formats (issue form,
+  `past_harvests`): `yyyy-MM-dd`, `dd.MM.yyyy` and `dd MMMM yyyy` (English month names); they are normalised to ISO
+  and impossible dates are rejected. Dates are date-only (no time zone), so they never shift by a day. See `dates.py`.
 - `index.html` links to the generated report; GitHub Actions updates its alert preview.
 
 ## 1. Setup

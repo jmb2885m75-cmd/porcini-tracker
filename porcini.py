@@ -17,6 +17,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import requests
 
+from dates import format_display_date, parse_user_date
 from harvest import HarvestError, load_harvest_log, merge_harvests
 
 CONFIG_PATH = Path("config.json")
@@ -102,7 +103,7 @@ def iso_date(value: date) -> str:
 
 
 def parse_date(value: str) -> date:
-    return datetime.strptime(value, "%Y-%m-%d").date()
+    return parse_user_date(value)
 
 
 def month_day_window(dt: date) -> bool:
@@ -123,7 +124,7 @@ SCHEMA_VERSION = 3
 # Bump when the scoring rules change; forces every stored daily score to be recomputed.
 # Score penalty applied 1..N days after a visit that found nothing (flush not started yet)
 NO_FIND_PENALTY = (25, 20, 15, 10, 5)
-MODEL_VERSION = 5  # 5: no-find observations also lower the following days (decaying penalty)
+MODEL_VERSION = 6  # 6: same-day no-find cap is applied last (affinity bonus can no longer lift it); 5: no-find also lowers following days
 ARCHIVE_LAG_DAYS = 5
 SOURCE_ARCHIVE = "archive"
 SOURCE_FORECAST = "forecast"
@@ -638,7 +639,7 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
 
     d = parse_date(daily["date"])
     no_find_today = any(
-        h.get("observation_type") == "no_mushrooms" and h.get("date") == d.isoformat()
+        h.get("observation_type") == "no_mushrooms" and valid_date_string(h.get("date")) and parse_date(h["date"]) == d
         for h in past_harvests
     )
     if not month_day_window(d):
@@ -758,6 +759,8 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
         elif 8 <= avg_max <= 15:
             quality = "💎 PRIME QUALITY - Firm, bug-free caps expected."
 
+    if no_find_today:
+        score = min(score, 20)
     score = max(0, min(100, score))
     if not status or status == "🟡 Monitoring":
         status = "✅ Viable conditions" if score >= 65 else "⚠️ Watch closely"
@@ -841,7 +844,7 @@ def find_weekend_best(location: Dict[str, Any], records: List[Dict[str, Any]], h
     if not valid_days:
         return 0, "N/A", "", ""
     best_date, score, status, flag = max(valid_days, key=lambda item: item[1])
-    return score, best_date.strftime("%a %Y-%m-%d"), status, flag
+    return score, f"{best_date.strftime('%a')} {format_display_date(best_date)}", status, flag
 
 
 def detect_run_mode(now: Optional[datetime] = None) -> str:
@@ -1052,7 +1055,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     </div>
     <h2>🔎 Observation Browser</h2>
     <div class="card">
-      <input id="q" placeholder="Filter by date (e.g. 2025-09)" />
+      <input id="q" placeholder="Filter by date (e.g. 2025-09, ISO prefix)" />
       <select id="src"><option value="">all sources</option><option>archive</option><option>forecast</option></select>
       <table><thead><tr><th>Date</th><th>Score</th><th>Tmax</th><th>Rain mm</th><th>Wind</th><th>Soil °C</th><th>RH %</th><th>Src</th></tr></thead><tbody id="rows"></tbody></table>
       <button id="prev">&laquo; Prev</button><button id="next">Next &raquo;</button> <span id="pageinfo" class="meta"></span>
@@ -1083,6 +1086,8 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     function $(id) { return document.getElementById(id); }
     function loadLogs() { try { return JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); } catch (e) { return []; } }
     function saveLogs(l) { try { localStorage.setItem(LOG_KEY, JSON.stringify(l)); } catch (e) { alert('Could not save: storage unavailable'); } }
+    var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    function fmtDate(s) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); return m ? m[3] + ' ' + MONTHS[+m[2] - 1] + ' ' + m[1] : s; }
     var NS = 'http://www.w3.org/2000/svg';
     function el(name, attrs, text) { var e = document.createElementNS(NS, name); for (var k in attrs) e.setAttribute(k, attrs[k]); if (text) e.textContent = text; return e; }
     var loc = D.locations[0], pinned = [], page = 0;
@@ -1112,14 +1117,14 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
         var tr = document.createElement('tr');
         [r[0], r[1], r[2], r[3]].forEach(function (v, i) {
           var td = document.createElement('td');
-          td.textContent = v == null ? '—' : (i === 0 ? v : v + (i < 3 ? '°' : ''));
+          td.textContent = v == null ? '—' : (i === 0 ? fmtDate(v) : v + (i < 3 ? '°' : ''));
           tr.appendChild(td);
         });
         body.appendChild(tr);
       });
     }
     function describe(date, extra) {
-      var rm = recMap()[date], sm = scoreMap()[date], out = [date];
+      var rm = recMap()[date], sm = scoreMap()[date], out = [fmtDate(date)];
       if (sm) { out.push('Score: ' + sm[1] + '% - ' + sm[2]); if (sm[3]) out.push(sm[3]); }
       if (rm) out.push('Tmax ' + rm[1] + '°C, rain ' + rm[3] + ' mm, wind ' + rm[4] + ' km/h, RH ' + rm[6] + '% (' + rm[8] + ')');
       (extra || []).forEach(function (h) { out.push((h.observation_type === 'no_mushrooms' ? '🔎 No mushrooms found' : '🍄 ' + (h.yield_tier || '?') + ' / ' + (h.cap_stage || '?')) + ' (' + h.origin + ')' + (h.weight_g ? ' / ' + h.weight_g + ' g' : '') + (h.notes ? ' - ' + h.notes : '')); });
@@ -1158,12 +1163,12 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
         var box = svg.getBoundingClientRect(), px = (ev.clientX - box.left) * (W / box.width), t = t0 + (px - L) / (W - L - R) * (t1 - t0), best = pts[0], bd = Infinity;
         pts.forEach(function (r) { var dd = Math.abs(Date.parse(r[0]) - t); if (dd < bd) { bd = dd; best = r; } });
         var hs = harvestsFor().filter(function (h) { return h.date === best[0]; });
-        setLines(tip, describe(best[0], hs)); tip.style.display = 'block';
+        setLines(tip, describe(best[0], hs)); tip.dataset.date = best[0]; tip.style.display = 'block';
         tip.style.left = Math.min(ev.clientX - box.left + 12, box.width - 290) + 'px'; tip.style.top = (ev.clientY - box.top + 12) + 'px';
         cursor.setAttribute('x1', x(Date.parse(best[0]))); cursor.setAttribute('x2', x(Date.parse(best[0]))); cursor.setAttribute('visibility', 'visible');
       });
       overlay.addEventListener('mouseleave', function () { tip.style.display = 'none'; cursor.setAttribute('visibility', 'hidden'); });
-      overlay.addEventListener('click', function (ev) { var lines = tip.firstChild; if (lines) pin(lines.textContent); });
+      overlay.addEventListener('click', function (ev) { if (tip.dataset.date) pin(tip.dataset.date); });
       svg.appendChild(overlay);
     }
     function rows() {
@@ -1173,7 +1178,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
       var body = $('rows'); body.textContent = '';
       list.slice(page * PAGE, page * PAGE + PAGE).forEach(function (r) {
         var tr = document.createElement('tr'); tr.className = 'row';
-        [r[0], sm[r[0]] ? sm[r[0]][1] : '', r[1], r[3], r[4], r[5], r[6], r[8]].forEach(function (v) { var td = document.createElement('td'); td.textContent = v == null ? '' : v; tr.appendChild(td); });
+        [fmtDate(r[0]), sm[r[0]] ? sm[r[0]][1] : '', r[1], r[3], r[4], r[5], r[6], r[8]].forEach(function (v) { var td = document.createElement('td'); td.textContent = v == null ? '' : v; tr.appendChild(td); });
         tr.onclick = function () { pin(r[0]); };
         body.appendChild(tr);
       });
@@ -1201,7 +1206,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
       }
       logs.push(entry); saveLogs(logs); this.reset(); draw();
       toggleHarvestFields();
-      var q = new URLSearchParams({ template: 'harvest.yml', title: 'Observation: ' + entry.location + ' ' + entry.date, labels: 'harvest', location: entry.location, date: entry.date, observation_type: entry.observation_type, yield_tier: entry.yield_tier || '', cap_stage: entry.cap_stage || '', weight_g: entry.weight_g || '', notes: entry.notes });
+      var q = new URLSearchParams({ template: 'harvest.yml', title: 'Observation: ' + entry.location + ' ' + fmtDate(entry.date), labels: 'harvest', location: entry.location, date: entry.date, observation_type: entry.observation_type, yield_tier: entry.yield_tier || '', cap_stage: entry.cap_stage || '', weight_g: entry.weight_g || '', notes: entry.notes });
       window.open('https://github.com/' + D.repo + '/issues/new?' + q.toString(), '_blank', 'noopener');
     };
     $('export').onclick = function () { var pre = $('exported'); pre.style.display = 'block'; pre.textContent = JSON.stringify(loadLogs(), null, 2); };
@@ -1264,7 +1269,7 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]],
     return (
         DASHBOARD_TEMPLATE
         .replace("__MODE_LABEL__", html.escape(MODE_LABELS.get(mode, MODE_LABELS[MODE_DEFAULT])))
-        .replace("__GENERATED__", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"))
+        .replace("__GENERATED__", (lambda n: f"{format_display_date(n)} {n:%H:%M}")(datetime.now(timezone.utc)))
         .replace("__CARDS__", "".join(cards))
         .replace("__ALERT__", alert_section)
         .replace("__DATA__", data)

@@ -9566,7 +9566,7 @@
           "precipitation_sum": 0.0,
           "temperature_2m_max": 20.1,
           "temperature_2m_min": 10.3,
-          "wind_speed_10m_max": 4.7,
+          "wind_speed_10m_max": 5.1,
           "soil_temperature_0_to_7cm_mean": 13.2,
           "relative_humidity_2m_mean": 79,
           "soil_moisture_0_to_7cm_mean": 0.215,
@@ -20955,7 +20955,7 @@
   },
   "schema_version": 3,
   "meta": {
-    "last_run_utc": "2026-10-02T21:24:33Z",
+    "last_run_utc": "2026-10-02T21:25:42Z",
     "last_run_mode": "default",
     "model_version": 4
   }

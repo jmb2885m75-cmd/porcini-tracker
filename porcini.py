@@ -183,20 +183,17 @@ def generate_html_report(config, db_data):
         async function commitHarvestToGitHub() {{
             const statusEl = document.getElementById('apiStatus');
             
-            let repo = localStorage.getItem('gh_repo');
+            // Fester Repository-Pfad, um Fehler zu verhindern
+            const repo = "jmb2885m75-cmd/porcini-tracker";
+            
             let token = localStorage.getItem('gh_token');
-
-            if (!repo) {{
-                repo = prompt("Bitte gib dein GitHub Repository ein (z. B. deinessername/porcini-dashboard):");
-                if (repo) localStorage.setItem('gh_repo', repo);
-            }}
             if (!token) {{
                 token = prompt("Bitte gib dein GitHub Personal Access Token (PAT) ein:");
                 if (token) localStorage.setItem('gh_token', token);
             }}
 
-            if (!repo || !token) {{
-                alert("Repository und Token werden benötigt!");
+            if (!token) {{
+                alert("Token wird benötigt!");
                 return;
             }}
 
@@ -205,11 +202,10 @@ def generate_html_report(config, db_data):
             try {{
                 const url = `https://api.github.com/repos/${{repo}}/contents/config.json`;
                 
-                // WICHTIG: Fine-grained Tokens (github_pat_) verlangen 'Bearer' statt 'token'
                 const getRes = await fetch(url, {{
                     headers: {{ 'Authorization': `Bearer ${{token}}`, 'Accept': 'vnd.github.v3+json' }}
                 }});
-                if (!getRes.ok) throw new Error("Fehler beim Laden der config.json (Token oder Repo ungültig?)");
+                if (!getRes.ok) throw new Error("Fehler beim Laden der config.json (Token ungültig oder keine Lesebrechte?)");
                 
                 const fileData = await getRes.json();
                 

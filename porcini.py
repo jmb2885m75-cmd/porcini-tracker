@@ -19,6 +19,9 @@ CONFIG_PATH = Path("config.json")
 DB_PATH = Path("porcini_db.json")
 ALERT_STATE_PATH = Path("alert_state.json")
 REPORT_PATH = Path("porcini_report.html")
+INDEX_PATH = Path("index.html")
+ALERT_MARKER_START = "<!-- ALERT_PREVIEW_START -->"
+ALERT_MARKER_END = "<!-- ALERT_PREVIEW_END -->"
 
 ARCHIVE_API_URL = "https://archive-api.open-meteo.com/v1/archive"
 FORECAST_API_URL = "https://api.open-meteo.com/v1/forecast"
@@ -400,17 +403,18 @@ def send_twilio(account_sid: str, auth_token: str, from_number: str, to_number: 
         return False
 
 
-def dispatch_notification(cfg: Dict[str, Any], message: str) -> None:
+def dispatch_notification(cfg: Dict[str, Any], message: str) -> bool:
     settings = cfg.get("NOTIFICATION_SETTINGS", {})
     provider = str(settings.get("provider") or "").lower()
     if provider == "telegram":
-        send_telegram(settings.get("token", ""), settings.get("chat_id_or_recipient", ""), message)
+        return send_telegram(settings.get("token", ""), settings.get("chat_id_or_recipient", ""), message)
     elif provider == "pushover":
-        send_pushover(settings.get("api_token", ""), settings.get("user_key", ""), message)
+        return send_pushover(settings.get("api_token", ""), settings.get("user_key", ""), message)
     elif provider == "twilio":
-        send_twilio(settings.get("account_sid", ""), settings.get("auth_token", ""), settings.get("from_number", ""), settings.get("to_number", ""), message)
+        return send_twilio(settings.get("account_sid", ""), settings.get("auth_token", ""), settings.get("from_number", ""), settings.get("to_number", ""), message)
     else:
         print("[WARN] No active notification provider configured")
+        return False
 
 
 def build_alert_message(results: List[Tuple[str, int, str, str]], dashboard_url: str) -> str:
@@ -466,6 +470,44 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]],
 """
 
 
+def resolve_dashboard_url(cfg: Dict[str, Any]) -> str:
+    configured = cfg.get("FTP_SETTINGS", {}).get("dashboard_url") or cfg.get("DATABASE_SETTINGS", {}).get("dashboard_url") or ""
+    if configured and "yourdomain.com" not in configured:
+        return configured
+    endpoint = cfg.get("DATABASE_SETTINGS", {}).get("endpoint_url") or ""
+    if endpoint:
+        return endpoint.rsplit("/", 1)[0] + "/"
+    return configured or "https://example.invalid/porcini_report.html"
+
+
+def inject_alert_into_index(alert_message: str, alert_will_send: bool) -> None:
+    if not alert_message or not INDEX_PATH.exists():
+        return
+    content = INDEX_PATH.read_text(encoding="utf-8")
+    start = content.find(ALERT_MARKER_START)
+    end = content.find(ALERT_MARKER_END)
+    status = "This message will be sent with this run." if alert_will_send else "Preview only: no alert is triggered by this run."
+    block = (
+        f"{ALERT_MARKER_START}\n"
+        f"        <div class=\"card\">\n"
+        f"            <h2>📨 Alert Preview</h2>\n"
+        f"            <p><small>{html.escape(status)}</small></p>\n"
+        f"            <pre style=\"white-space: pre-wrap; background: #111827; border: 1px solid #374151; border-radius: 8px; padding: 12px;\">{html.escape(alert_message)}</pre>\n"
+        f"        </div>\n"
+        f"        {ALERT_MARKER_END}"
+    )
+    if start != -1 and end > start:
+        content = content[:start] + block + content[end + len(ALERT_MARKER_END):]
+    else:
+        anchor = '<div class="card">\n            <h2>📜 Harvest Archive Log'
+        idx = content.find(anchor)
+        if idx == -1:
+            print("[WARN] Could not locate insertion point for alert preview in index.html")
+            return
+        content = content[:idx] + block + "\n\n        " + content[idx:]
+    INDEX_PATH.write_text(content, encoding="utf-8")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Porcini tracker forecast engine")
     parser.add_argument("--test-alert", action="store_true", help="Send a test alert using current notification config")
@@ -480,7 +522,7 @@ def main() -> int:
         return 0
 
     threshold = int(cfg.get("ALERT_THRESHOLD", 65))
-    dashboard_url = cfg.get("FTP_SETTINGS", {}).get("dashboard_url") or cfg.get("DATABASE_SETTINGS", {}).get("dashboard_url") or "https://example.invalid/porcini_report.html"
+    dashboard_url = resolve_dashboard_url(cfg)
 
     analyses: List[Dict[str, Any]] = []
     alert_queue: List[Tuple[str, int, str, str]] = []
@@ -517,12 +559,12 @@ def main() -> int:
             }
 
     save_json(DB_PATH, db)
-    save_json(ALERT_STATE_PATH, alert_state)
 
     alert_results = alert_queue or [(a["name"], a["best_score"], a["best_day"], a["status"]) for a in analyses]
     message = build_alert_message(alert_results, dashboard_url) if alert_results else ""
     report_html = generate_dashboard_html(cfg, analyses, message, bool(alert_queue))
     REPORT_PATH.write_text(report_html, encoding="utf-8")
+    inject_alert_into_index(message, bool(alert_queue))
 
     print("\n### Porcini Summary")
     for item in analyses:
@@ -530,8 +572,11 @@ def main() -> int:
 
     if alert_queue:
         print("\n[INFO] Dispatching alert message")
-        dispatch_notification(cfg, message)
+        if not dispatch_notification(cfg, message):
+            print("[WARN] Alert not delivered; alert state not updated so it will be retried")
+            alert_state = build_alert_state()
 
+    save_json(ALERT_STATE_PATH, alert_state)
     return 0
 
 

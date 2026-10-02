@@ -11,6 +11,8 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
+from dates import parse_user_date
+
 HARVEST_LOG_PATH = Path("harvest_log.json")
 LOG_SCHEMA_VERSION = 1
 YIELD_TIERS = ("small", "medium", "large")
@@ -77,9 +79,9 @@ def validate_harvest(raw: Dict[str, str], known_locations: Optional[Iterable[str
             raise HarvestError(f"unknown location '{location}'")
         location = match
     try:
-        day = date.fromisoformat(raw.get("date", "").strip())
+        day = parse_user_date(raw.get("date", ""))
     except ValueError:
-        raise HarvestError("date must be YYYY-MM-DD")
+        raise HarvestError("date must be yyyy-MM-dd, dd.MM.yyyy or dd MMMM yyyy and a real calendar date")
     if day > today:
         raise HarvestError("date is in the future")
     observation_type = raw.get("observation_type", "").strip().lower() or "harvest"

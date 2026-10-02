@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - 'porcini.py'
+      - 'dates.py'
+      - 'harvest.py'
       - 'porcini_db.json'
       - 'harvest_log.json'
   workflow_dispatch:

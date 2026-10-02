@@ -1,6 +1,7 @@
 """Lightweight self-checks. Run: python -m unittest test_porcini -v (no network needed)."""
 import unittest
 from datetime import date, datetime, timedelta, timezone
+from unittest.mock import patch
 
 import porcini as p
 
@@ -90,6 +91,17 @@ class ModeTests(unittest.TestCase):
 
 
 LOC = {"tree_species": ["Spruce"], "aspect": "", "tree_density": "", "soil_pH": "acidic"}
+
+
+class ConfigTests(unittest.TestCase):
+    def test_load_config_prefers_config_json_environment(self):
+        with patch.dict("os.environ", {"CONFIG_JSON": '{"ALERT_THRESHOLD": 70}'}):
+            self.assertEqual(p.load_config(), {"ALERT_THRESHOLD": 70})
+
+    def test_load_config_rejects_non_object_json(self):
+        with patch.dict("os.environ", {"CONFIG_JSON": "[]"}):
+            with self.assertRaisesRegex(ValueError, "JSON object"):
+                p.load_config()
 
 
 class ScoringTests(unittest.TestCase):

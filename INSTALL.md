@@ -10,37 +10,39 @@ repository, optionally sends an alert, and writes `porcini_report.html`.
 - Sends Telegram / Pushover / Twilio alerts (see below).
 - Generates `porcini_report.html`: a self-contained dashboard (no CDN) with a score chart, harvest pins, tooltips and an observation browser.
 - **Not implemented:** a backend. Observations logged in the dashboard stay in that browser (localStorage), do not
-  change scores and are not synced. `DATABASE_SETTINGS.endpoint_url` / `FTP_SETTINGS` in `config.json` are not used
-  by `porcini.py`, and GitHub Pages cannot run PHP. To make a harvest count, add it to `past_harvests` in `config.json`.
-- The legacy `index.html` is a separate hand-written page; the script only injects the alert preview into it.
+  change scores and are not synced. To make a harvest count, add it to `past_harvests` in `CONFIG_JSON` and run the
+  workflow again.
+- `index.html` links to the generated report; GitHub Actions updates its alert preview.
 
 ## 1. Setup
 
 1. Fork/clone the repository. Python 3.10+ and `pip install requests` are required for local runs.
-2. Edit `config.json`: set `LOCATIONS` (name, `latitude`, `longitude`, `elevation_m`, `tree_species`, `tree_density`,
-   `aspect`, `soil_pH`, `past_harvests`, `last_seen_fly_agaric`) and `ALERT_THRESHOLD` (default 65).
+2. Configure `LOCATIONS` (name, `latitude`, `longitude`, `elevation_m`, `tree_species`, `tree_density`, `aspect`,
+   `soil_pH`, `past_harvests`, `last_seen_fly_agaric`) and `ALERT_THRESHOLD` (default 65) in the JSON configuration.
    Harvest entries: `date`, `yield_tier` (small/medium/large), `cap_stage` (`buttons_young`, `prime`, `old_overripe`), optional `weight_g`, `notes`.
 
 ## 2. Secrets
 
-`config.json` in the repo is public, so keep credentials out of it. Create a repository secret
-(Settings → Secrets and variables → Actions) named **`CONFIG_JSON`** containing the full contents of your
-`config.json`, including notification credentials:
+The configuration is not stored in the repository. The workflows read it from the repository Actions secret
+named **`CONFIG_JSON`** (Settings → Secrets and variables → Actions). Put the full JSON configuration there,
+including notification credentials:
 
 ```json
 "NOTIFICATION_SETTINGS": { "provider": "telegram", "token": "<bot token>", "chat_id_or_recipient": "<chat id>" }
 ```
 
 Pushover uses `api_token` + `user_key`; Twilio uses `account_sid`, `auth_token`, `from_number`, `to_number`.
-If `CONFIG_JSON` is unset the workflow falls back to the committed `config.json` (no alerts get delivered).
-The workflow never commits `config.json`.
+`CONFIG_JSON` is required for workflow runs; there is no committed-config fallback. For local runs, either set
+the `CONFIG_JSON` environment variable or create a local `config.json` (ignored by Git).
 
 ## 3. Workflow verification
 
 Two workflows live in `.github/workflows/`:
 
 - `porcini_tracker.yml` – the scheduled engine. Cron (UTC): daily 08:00 (default mode), Thursday 18:00 (weekend outlook), Friday 06:00 (final go/no-go). Needs `contents: write`, set in the file.
-- `update_report.yml` – re-runs the engine when `config.json` or `porcini_db.json` is pushed.
+- `update_report.yml` – re-runs the engine when `porcini.py` or `porcini_db.json` changes, or when manually
+  dispatched. Changes to the `CONFIG_JSON` secret do not trigger GitHub Actions automatically; run the workflow
+  manually after updating it.
 
 Both share one concurrency group, commit only `porcini_db.json`, `index.html`, `porcini_report.html`, `alert_state.json`, and rebase before pushing.
 

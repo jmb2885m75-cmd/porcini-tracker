@@ -901,7 +901,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
         <input id="lnotes" placeholder="notes" />
         <button type="submit">Save log</button>
       </form>
-      <div class="note">Limitation: there is no backend. Logs are kept in this browser's localStorage only; they are shown as pins but do NOT change scores or sync anywhere. To make them count, export them and add them to <code>past_harvests</code> in config.json; the next workflow run rescores.</div>
+      <div class="note">Limitation: there is no backend. Logs are kept in this browser's localStorage only; they are shown as pins but do NOT change scores or sync anywhere. To make them count, export them and add them to <code>past_harvests</code> in the GitHub Actions CONFIG_JSON secret; the next workflow run rescores.</div>
       <button id="export">Export logs (JSON)</button><button id="clearlogs">Clear logs</button>
       <pre id="exported" class="alert" style="display:none"></pre>
     </div>
@@ -1073,7 +1073,7 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]],
     )
 
 
-def resolve_dashboard_url(cfg: Dict[str, Any]) -> str:
+def resolve_dashboard_url() -> str:
     return "https://jmb2885m75-cmd.github.io/porcini-tracker/"
 
 
@@ -1134,7 +1134,7 @@ def main() -> int:
     print(f"[INFO] Run mode: {mode}")
 
     threshold = int(cfg.get("ALERT_THRESHOLD", 65))
-    dashboard_url = resolve_dashboard_url(cfg)
+    dashboard_url = resolve_dashboard_url()
 
     analyses: List[Dict[str, Any]] = []
     alert_queue: List[Tuple[str, int, str, str]] = []

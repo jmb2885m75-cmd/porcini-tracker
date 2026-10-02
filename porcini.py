@@ -211,8 +211,8 @@ def generate_html_report(config, db_data):
                 
                 const fileData = await getRes.json();
                 
-                // Base64-Zeilenumbrüche bereinigen, damit atob fehlerfrei läuft
-                const base64Clean = fileData.content.replace(/\\s/g, '');
+                // Sauberer Fix: Entfernt alle Zeilenumbrüche ohne Regex-Fehleranfälligkeit
+                const base64Clean = fileData.content.replaceAll('\\n', '').replaceAll('\\r', '');
                 const jsonString = decodeURIComponent(escape(atob(base64Clean)));
                 const content = JSON.parse(jsonString);
 

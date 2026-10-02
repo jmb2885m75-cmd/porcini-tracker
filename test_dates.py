@@ -11,31 +11,36 @@ from test_porcini import LOC, rec, series
 
 class DateUtilTests(unittest.TestCase):
     def test_display_format(self):
-        self.assertEqual(dates.format_display_date(date(2026, 10, 2)), "02 October 2026")
-        self.assertEqual(dates.format_display_date("2026-10-02"), "02 October 2026")
-        self.assertEqual(dates.format_display_date(datetime(2026, 10, 2, 23, 59, tzinfo=timezone.utc)), "02 October 2026")
+        self.assertEqual(dates.format_display_date(date(2026, 10, 2)), "Fri. 02 Oct. 2026")
+        self.assertEqual(dates.format_display_date("2026-10-02"), "Fri. 02 Oct. 2026")
+        self.assertEqual(dates.format_display_date(datetime(2026, 10, 2, 23, 59, tzinfo=timezone.utc)), "Fri. 02 Oct. 2026")
+        self.assertEqual(dates.format_display_date(date(2026, 10, 3)), "Sat. 03 Oct. 2026")
+        self.assertEqual(dates.format_display_date(date(2026, 9, 30)), "Wed. 30 Sep. 2026")
+        self.assertEqual(dates.format_display_date(date(2026, 10, 1)), "Thu. 01 Oct. 2026")
+        self.assertEqual(dates.format_display_date(date(2024, 2, 29)), "Thu. 29 Feb. 2024")
+        self.assertEqual(dates.format_display_date(date(2026, 5, 1)), "Fri. 01 May 2026")
 
     def test_accepted_inputs_normalize_to_iso(self):
         for text in ("2026-10-01", "01.10.2026", "01 October 2026", "1 october 2026", " 01. October 2026 "):
             self.assertEqual(dates.normalize_to_iso(text), "2026-10-01", text)
 
     def test_invalid_inputs(self):
-        for bad in ("2026-02-30", "31.04.2026", "01 Octobr 2026", "2026.10.02", "10/01/2026", "", None, 5):
+        for bad in ("2026-02-30", "31.04.2026", "01 Octobr 2026", "Wed. 15 Sep. 2026", "2026.10.02", "10/01/2026", "", None, 5):
             with self.assertRaises(ValueError, msg=repr(bad)):
                 dates.normalize_to_iso(bad)
 
     def test_date_only_has_no_timezone_shift(self):
         for tz in (timezone(timedelta(hours=-11)), timezone(timedelta(hours=13))):
-            self.assertEqual(dates.format_display_date(datetime(2026, 10, 1, 0, 30, tzinfo=tz)), "01 October 2026")
+            self.assertEqual(dates.format_display_date(datetime(2026, 10, 1, 0, 30, tzinfo=tz)), "Thu. 01 Oct. 2026")
         self.assertEqual(dates.parse_user_date("2026-10-01"), date(2026, 10, 1))
 
     def test_weekend_best_uses_display_format(self):
         recs = series(date(2026, 9, 25), 10, precipitation_sum=5.0)
         _, label, _, _ = p.find_weekend_best(LOC, recs, [], None, date(2026, 10, 1))
-        self.assertRegex(label, r"^[A-Z][a-z]{2} \d{2} [A-Z][a-z]+ \d{4}$")
+        self.assertRegex(label, r"^[A-Z][a-z]{2}\. \d{2} [A-Z][a-z]{2}\.? \d{4}$")
 
     def test_harvest_intake_accepts_all_formats(self):
-        for text in ("2026-09-15", "15.09.2026", "15 September 2026"):
+        for text in ("2026-09-15", "15.09.2026", "15 September 2026", "Tue. 15 Sep. 2026", "15 Sep. 2026"):
             raw = {"location": "A", "date": text, "observation_type": "no_mushrooms"}
             self.assertEqual(h.validate_harvest(raw, None, date(2026, 10, 1))["date"], "2026-09-15")
         with self.assertRaises(h.HarvestError):
@@ -53,7 +58,7 @@ class NoFindConsistencyTests(unittest.TestCase):
 
     def test_same_day_no_find_lowers_forecast_in_any_input_format(self):
         baseline = self.score([])[0]
-        for text in ("2026-10-01", "01.10.2026", "01 October 2026"):
+        for text in ("2026-10-01", "01.10.2026", "01 October 2026", "Thu. 01 Oct. 2026"):
             score = self.score([{"date": text, "observation_type": "no_mushrooms"}])
             self.assertLessEqual(score[0], 20, text)
             self.assertLess(score[0], baseline)
@@ -89,7 +94,7 @@ class DashboardUiTests(unittest.TestCase):
     def test_accessible_explanations_and_daily_timeline_are_generated(self):
         analysis = [{
             "name": "Test spot",
-            "best_day": "Fri 02 October 2026",
+            "best_day": "Fri. 02 Oct. 2026",
             "best_score": 71,
             "status": "✅ Viable conditions",
             "soil_moisture": 0.3,
@@ -115,7 +120,16 @@ class DashboardUiTests(unittest.TestCase):
         self.assertIn("ArrowLeft", html)
         self.assertIn("day-prev", html)
         self.assertIn("🍄' : '❌'", html)
-        self.assertIn("02 October 2026", html)
+        self.assertIn("Fri. 02 Oct. 2026", html)
+        self.assertIn("class='meta best-day'", html)
+        self.assertIn('id="rain-toggle"', html)
+        self.assertIn('id="temp-toggle"', html)
+        self.assertIn("weather-rain", html)
+        self.assertIn("weather-temperature", html)
+        self.assertIn("Rain ' + rm[3] + ' mm", html)
+        self.assertIn("stroke-width': 1.7, opacity: .42", html)
+        self.assertIn("The chart’s light rain and temperature lines add weather context", html)
+        self.assertIn(":focus-visible", html)
 
 
 if __name__ == "__main__":

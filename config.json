@@ -11,7 +11,7 @@
         "password": "your_password",
         "port": 21,
         "remote_path": "/public_html/porcini_report.html",
-        "dashboard_url": "https://yourdomain.com/porcini_report.html"
+        "dashboard_url": "https://jmb2885m75-cmd.github.io/porcini-tracker/"
     },
     "NOTIFICATION_SETTINGS": {
         "provider": "telegram",
@@ -39,18 +39,6 @@
                     "cap_stage": "prime",
                     "weight_g": 450,
                     "notes": "Massive flush after heavy autumn rain."
-                },
-                {
-                    "date": "2026-10-02",
-                    "cap_stage": "prime",
-                    "yield_tier": "large",
-                    "notes": ""
-                },
-                {
-                    "date": "2025-09-27",
-                    "cap_stage": "prime",
-                    "yield_tier": "large",
-                    "notes": ""
                 },
                 {
                     "date": "2026-10-02",

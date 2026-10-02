@@ -26,8 +26,10 @@ jobs:
           pip install requests
 
       - name: Create config.json from GitHub Secrets
+        env:
+          CONFIG_JSON: ${{ secrets.CONFIG_JSON }}
         run: |
-          echo '${{ secrets.CONFIG_JSON }}' > config.json
+          printf '%s' "$CONFIG_JSON" > config.json
 
       - name: Execute Porcini Evaluation Engine
         run: |

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Porcini Tracker Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #111827; color: #e5e7eb; margin: 0; padding: 24px; }
+    .wrap { max-width: 960px; margin: 0 auto; }
+    h1 { color: #a7f3d0; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+    .card { background: #1f2937; border: 1px solid #374151; border-radius: 12px; padding: 18px; }
+    .score { font-size: 2rem; font-weight: bold; color: #a7f3d0; }
+    .name { font-size: 1.1rem; margin-top: 6px; font-weight: bold; }
+    .meta { color: #cbd5e1; margin-top: 8px; }
+    .alert { background: #111827; border: 1px solid #374151; border-radius: 8px; padding: 12px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🍄 Porcini Tracker Dashboard</h1>
+    <div class="grid"><div class='card'><div class='score'>0%</div><div class='name'>East Berlin Pine & Oak Ridge</div><div class='meta'>Best day: N/A | Status: Monitoring</div><div class='meta'>Moisture: 0.00 m³/m³</div></div><div class='card'><div class='score'>0%</div><div class='name'>Oak & Beech Spot</div><div class='meta'>Best day: N/A | Status: Monitoring</div><div class='meta'>Moisture: 0.00 m³/m³</div></div></div>
+    <h2>📨 Alert Preview</h2>
+    <div class="card">
+      <div class="meta">This message will be sent with this run.</div>
+      <pre class="alert">🍄 Weekend Porcini Forecast (Ranked):
+1. East Berlin Pine &amp; Oak Ridge - 0% (N/A) | Monitoring
+
+🌐 Dashboard: https://jmb2885m75-cmd.github.io/porcini-tracker/</pre>
+      <div class="meta">Fields sent per ranked spot (top 3): rank, location name, best weekend score (%), best day, status. The final line is the dashboard link.</div>
+    </div>
+  </div>
+</body>
+</html>

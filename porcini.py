@@ -157,7 +157,7 @@ DAILY_FIELDS = [
     "temperature_2m_max",
     "temperature_2m_min",
     "wind_speed_10m_max",
-    "soil_temperature_0_to_10cm",
+    "soil_temperature_0_to_7cm_mean",
     "relative_humidity_2m_mean",
     "soil_moisture_0_to_7cm_mean",
 ]
@@ -415,6 +415,8 @@ def normalize_records(records: Any, today: date) -> Tuple[List[Dict[str, Any]], 
         if not isinstance(rec, dict) or not valid_date_string(rec.get("date")):
             continue
         rec = dict(rec)
+        if "soil_temperature_0_to_7cm_mean" not in rec and "soil_temperature_0_to_10cm" in rec:
+            rec["soil_temperature_0_to_7cm_mean"] = rec.pop("soil_temperature_0_to_10cm")
         if rec.get("source") not in SOURCE_RANK:
             legacy_final = parse_date(rec["date"]) <= today - timedelta(days=ARCHIVE_LAG_DAYS)
             rec["source"] = SOURCE_ARCHIVE if legacy_final else SOURCE_FORECAST
@@ -485,6 +487,8 @@ def ensure_location_history(location_name: str, db: Dict[str, Any], latitude: fl
     if start <= end:
         records = merge_records(records, fetch_archive_day_range(latitude, longitude, elevation, start, end))
     records = merge_records(records, fetch_forecast_day_range(latitude, longitude, elevation))
+    if not records:
+        raise RuntimeError(f"{location_name}: weather API returned no usable records; refusing to save an empty forecast")
     backfilled = backfill_runoff_data(records, latitude, longitude, elevation)
     # Runoff looks at the last 3 days, so each backfilled day can change the next two days' scores too.
     pending = set(loc_data.get("pending_rescore") or [])
@@ -638,12 +642,12 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
         frost_count = sum(
             1 for rec in hist.window(d, 7)
             if (rec.get("temperature_2m_min") is not None and rec["temperature_2m_min"] < -2)
-            or (rec.get("soil_temperature_0_to_10cm") is not None and rec["soil_temperature_0_to_10cm"] < 3)
+            or (rec.get("soil_temperature_0_to_7cm_mean") is not None and rec["soil_temperature_0_to_7cm_mean"] < 3)
         )
         if frost_count >= 2:
             return 0, "❄️ SEASON TERMINATED BY FROST", ""
 
-    soil_temp = daily.get("soil_temperature_0_to_10cm")
+    soil_temp = daily.get("soil_temperature_0_to_7cm_mean")
     if soil_temp is not None and soil_temp > 20:
         return 0, "🔥 SEASON DELAYED BY HIGH SOIL TEMP", ""
     if soil_temp is not None and 10 <= soil_temp <= 18:
@@ -1016,9 +1020,14 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     <h1>🍄 Porcini Tracker Dashboard</h1>
     <div class="meta"><span class="badge">__MODE_LABEL__</span> Generated __GENERATED__ UTC</div>
     <div class="grid">__CARDS__</div>__ALERT__
+    <h2>🌦 Rain &amp; Temperature Overview</h2>
+    <div class="card">
+      <label for="loc">Location:</label> <select id="loc"></select>
+      <div id="weather-label" class="meta"></div>
+      <table><thead><tr><th>Date</th><th>High °C</th><th>Low °C</th><th>Rain mm</th></tr></thead><tbody id="weather-rows"></tbody></table>
+    </div>
     <h2>📈 Daily Score History &amp; Harvest Pins</h2>
     <div class="card">
-      <select id="loc"></select>
       <select id="range"></select>
       <div id="chartbox"><svg id="chart" viewBox="0 0 900 320"></svg><div id="tip"></div></div>
       <div class="meta">Hover for details. Click a harvest pin (circle) or a table row to pin it below. Dashed line = alert threshold.</div>
@@ -1074,6 +1083,22 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     }
     function recMap() { var m = {}; loc.records.forEach(function (r) { m[r[0]] = r; }); return m; }
     function scoreMap() { var m = {}; loc.scores.forEach(function (r) { m[r[0]] = r; }); return m; }
+    function weatherOverview() {
+      var body = $('weather-rows'), today = new Date().toISOString().slice(0, 10);
+      body.textContent = '';
+      var future = loc.records.filter(function (r) { return r[0] >= today; }).slice(0, 7);
+      var rows = future.length ? future : loc.records.slice(-7).reverse();
+      $('weather-label').textContent = rows.length ? (future.length ? 'Forecast and current day' : 'Forecast unavailable; showing latest weather observations') : 'Weather overview unavailable: no weather records have been loaded.';
+      rows.forEach(function (r) {
+        var tr = document.createElement('tr');
+        [r[0], r[1], r[2], r[3]].forEach(function (v, i) {
+          var td = document.createElement('td');
+          td.textContent = v == null ? '—' : (i === 0 ? v : v + (i < 3 ? '°' : ''));
+          tr.appendChild(td);
+        });
+        body.appendChild(tr);
+      });
+    }
     function describe(date, extra) {
       var rm = recMap()[date], sm = scoreMap()[date], out = [date];
       if (sm) { out.push('Score: ' + sm[1] + '% - ' + sm[2]); if (sm[3]) out.push(sm[3]); }
@@ -1138,7 +1163,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
       var b = loc.backtest || {};
       $('backtest').textContent = b.evaluated_harvests ? 'Backtest: ' + b.hits + '/' + b.evaluated_harvests + ' medium/large harvests fell on days scoring >= ' + b.threshold + ' (mean score on harvest days ' + b.mean_score_on_harvest_days + ' vs in-season mean ' + b.mean_score_in_season + '). Small sample; indicative only.' : 'Backtest: no medium/large harvests with a stored score yet.';
     }
-    function refresh() { fillRange(); draw(); rows(); backtest(); }
+    function refresh() { fillRange(); draw(); rows(); backtest(); weatherOverview(); }
     $('loc').onchange = function () { loc = D.locations[+this.value]; pinned = []; page = 0; renderPins(); refresh(); };
     $('range').onchange = function () { page = 0; draw(); rows(); };
     $('q').oninput = $('src').onchange = function () { page = 0; rows(); };
@@ -1173,7 +1198,7 @@ def dashboard_payload(cfg: Dict[str, Any], analysis: List[Dict[str, Any]], mode:
             "name": item["name"],
             "scores": [[d, v["score"], v["status"], v.get("quality", "")] for d, v in sorted(scores.items())],
             # [date, tmax, tmin, rain, wind, soil_temp, rh, soil_moisture, source]
-            "records": [[r["date"]] + [rnd(r.get(k)) for k in ("temperature_2m_max", "temperature_2m_min", "precipitation_sum", "wind_speed_10m_max", "soil_temperature_0_to_10cm", "relative_humidity_2m_mean", "soil_moisture_0_to_7cm_mean")] + [r.get("source", "")] for r in records],
+            "records": [[r["date"]] + [rnd(r.get(k)) for k in ("temperature_2m_max", "temperature_2m_min", "precipitation_sum", "wind_speed_10m_max", "soil_temperature_0_to_7cm_mean", "relative_humidity_2m_mean", "soil_moisture_0_to_7cm_mean")] + [r.get("source", "")] for r in records],
             "harvests": item.get("harvests", []),
             "backtest": item.get("backtest", {}),
         })
@@ -1186,13 +1211,14 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]],
     threshold = int(cfg.get("ALERT_THRESHOLD", 65))
     cards = []
     for item in analysis:
+        available = item["best_day"] != "N/A"
         verdict = ""
-        if mode == MODE_FINAL:
+        if mode == MODE_FINAL and available:
             go = item["best_score"] >= threshold
             verdict = f"<div><span class='badge {'go' if go else 'nogo'}'>{'GO' if go else 'NO-GO'}</span></div>"
         quality = f"<div class='meta'>{html.escape(item['quality'])}</div>" if item.get("quality") else ""
         cards.append(
-            f"<div class='card'><div class='score'>{item['best_score']}%</div><div class='name'>{html.escape(str(item['name']))}</div>{verdict}"
+            f"<div class='card'><div class='score'>{item['best_score'] if available else 'N/A'}{'%' if available else ''}</div><div class='name'>{html.escape(str(item['name']))}</div>{verdict}"
             f"<div class='meta'>Best day: {html.escape(str(item['best_day']))} | Status: {html.escape(str(item['status']))}</div>{quality}"
             f"<div class='meta'>Moisture: {item['soil_moisture']:.2f} m³/m³</div></div>"
         )
@@ -1310,7 +1336,7 @@ def main() -> int:
             "name": name,
             "best_score": best_score,
             "best_day": best_day,
-            "status": status or "Monitoring",
+            "status": (status or "Monitoring") if best_day != "N/A" else "Weather data unavailable",
             "soil_moisture": moisture,
             "quality": quality,
             "records": records,
@@ -1319,30 +1345,32 @@ def main() -> int:
             "backtest": loc_store["backtest"],
         })
 
-        current_status = status or "Monitoring"
+        available = best_day != "N/A"
+        current_status = (status or "Monitoring") if available else "Weather data unavailable"
         send = False
         loc_state = alert_state["locations"].get(name, {})
-        if mode == MODE_FINAL:
+        if mode == MODE_FINAL and available:
             send = should_confirm_for_location(name, alert_state, today, friday_policy, best_score, threshold)
             if send:
                 loc_state["last_confirmation_date"] = iso_date(today)
-        else:
+        elif mode != MODE_FINAL and available:
             send = should_alert_for_location(name, best_score, current_status, threshold, alert_state, today)
             if send:
                 loc_state["last_alert_date"] = iso_date(today)
                 loc_state["last_alert_mode"] = mode
         if send:
             alert_queue.append((name, best_score, best_day, current_status))
-        # last_score / last_status always track the previous run so the next run can detect a crossing.
-        loc_state["last_score"] = best_score
-        loc_state["last_status"] = current_status
+        if available:
+            # Keep alert-crossing state unchanged when there is no score to compare.
+            loc_state["last_score"] = best_score
+            loc_state["last_status"] = current_status
         alert_state["locations"][name] = loc_state
 
     db["meta"] = {"last_run_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "last_run_mode": mode, "model_version": MODEL_VERSION}
     save_json(DB_PATH, db)
 
     # Without a queued alert the ranking is only a preview on the dashboard (nothing is sent).
-    alert_results = alert_queue or [(a["name"], a["best_score"], a["best_day"], a["status"]) for a in analyses]
+    alert_results = alert_queue or [(a["name"], a["best_score"], a["best_day"], a["status"]) for a in analyses if a["best_day"] != "N/A"]
     message = build_alert_message(alert_results, dashboard_url, mode, threshold) if alert_results else ""
     report_html = generate_dashboard_html(cfg, analyses, message, bool(alert_queue), mode)
     REPORT_PATH.write_text(report_html, encoding="utf-8")

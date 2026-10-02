@@ -120,9 +120,9 @@ class ConfigTests(unittest.TestCase):
 
 class ScoringTests(unittest.TestCase):
     def test_no_mushrooms_observation_caps_score_on_observed_date_only(self):
-        recs = series(date(2025, 8, 20), 30, precipitation_sum=5.0)
+        recs = series(date(2025, 8, 20), 60, precipitation_sum=5.0)
         hist = p.History(recs)
-        observed = date(2025, 9, 5)
+        observed = date(2025, 9, 25)
         no_find = [{"date": observed.isoformat(), "observation_type": "no_mushrooms"}]
         score = p.calculate_score_for_day(LOC, hist.get(observed), hist, no_find)
         self.assertLessEqual(score[0], 20)

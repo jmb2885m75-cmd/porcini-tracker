@@ -120,7 +120,6 @@ def fetch_location_weather(lat, lon, elevation, db_records):
             data = res.json().get("daily", {})
             dates = data.get("time", [])
             for i, d in enumerate(dates):
-                # If date already exists from archive, merge or update with forecast details
                 if d not in new_records:
                     new_records[d] = {}
                 new_records[d].update({
@@ -317,7 +316,7 @@ def generate_html_dashboard(locations_data, weather_db_all):
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Porcini Intelligence & Mycology Dashboard</title>
+    <title>Porcini Intelligence & Micro-Climate Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {{
@@ -326,6 +325,7 @@ def generate_html_dashboard(locations_data, weather_db_all):
             --accent-green: #2ecc71;
             --accent-gold: #f1c40f;
             --accent-orange: #e67e22;
+            --accent-blue: #3498db;
             --text-main: #ecf0f1;
             --text-muted: #95a5a6;
             --border-color: #2c3e50;
@@ -346,12 +346,12 @@ def generate_html_dashboard(locations_data, weather_db_all):
             margin-bottom: 5px;
         }}
         .container {{
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
         }}
         .grid {{
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
             gap: 20px;
             margin-bottom: 30px;
         }}
@@ -361,9 +361,10 @@ def generate_html_dashboard(locations_data, weather_db_all):
             border-radius: 8px;
             padding: 20px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            margin-bottom: 20px;
         }}
         .score-gauge {{
-            font-size: 2.5rem;
+            font-size: 2.2rem;
             font-weight: bold;
             color: var(--accent-green);
         }}
@@ -379,32 +380,145 @@ def generate_html_dashboard(locations_data, weather_db_all):
         }}
         .chart-container {{
             position: relative;
-            height: 400px;
-            margin-top: 20px;
+            height: 250px;
+            margin-top: 15px;
+        }}
+        .form-group {{
+            margin-bottom: 12px;
+        }}
+        label {{
+            display: block;
+            margin-bottom: 4px;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }}
+        input, select {{
+            width: 100%;
+            padding: 8px;
+            background: #12181b;
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            border-radius: 4px;
+            box-sizing: border-box;
+        }}
+        button {{
+            background-color: var(--accent-green);
+            color: #12181b;
+            font-weight: bold;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+        }}
+        button:hover {{
+            opacity: 0.9;
+        }}
+        textarea {{
+            width: 100%;
+            height: 80px;
+            background: #12181b;
+            border: 1px solid var(--border-color);
+            color: var(--accent-green);
+            font-family: monospace;
+            padding: 8px;
+            border-radius: 4px;
+            box-sizing: border-box;
+            margin-top: 8px;
+            font-size: 0.8rem;
+        }}
+        ul.harvest-list {{
+            list-style: none;
+            padding: 0;
+            margin: 10px 0 0 0;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }}
+        ul.harvest-list li {{
+            background: rgba(0,0,0,0.2);
+            padding: 6px 10px;
+            border-radius: 4px;
+            margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
         }}
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>🍄 Porcini Intelligence & Mycology Dashboard</h1>
-            <p>Automated Multi-Year Weather Archival & Probability Analysis</p>
+            <h1>🍄 Porcini Intelligence & Micro-Climate Dashboard</h1>
+            <p>Multi-Year Weather Archival, Probability Curves & Exact Historical Logging</p>
             <small>Last Generated: {datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC</small>
         </header>
 
         <div class="grid">
     """
 
-    for loc in locations_data:
+    for idx, loc in enumerate(locations_data):
         eval_res = loc["evaluation"]
+        harvests = loc.get("past_harvests", [])
+        
+        harvest_items_html = ""
+        for h in harvests:
+            harvest_items_html += f"<li><span>{h.get('date')} ({h.get('cap_stage')})</span> <strong>{h.get('yield_tier')}</strong></li>"
+
         html_content += f"""
             <div class="card">
                 <h2>{loc['name']}</h2>
                 <p><strong>Coordinates:</strong> {loc['latitude']}, {loc['longitude']} ({loc['elevation_m']}m)</p>
-                <div class="score-gauge">{eval_res['score']}%</div>
-                <div class="status-badge">{eval_res['status']}</div>
-                <p style="margin-top: 15px;"><strong>Quality Indicator:</strong> {eval_res['quality']}</p>
-                <p><strong>Best Weekend Window:</strong> {eval_res['best_weekend_day']} ({eval_res['best_weekend_score']}%)</p>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <div class="score-gauge">{eval_res['score']}%</div>
+                        <div class="status-badge">{eval_res['status']}</div>
+                    </div>
+                    <div style="text-align: right; font-size: 0.9rem; color: var(--text-muted);">
+                        <p><strong>Quality:</strong> {eval_res['quality']}</p>
+                        <p><strong>Best Window:</strong> {eval_res['best_weekend_day']} ({eval_res['best_weekend_score']}%)</p>
+                    </div>
+                </div>
+
+                <hr style="border-color: var(--border-color); margin: 20px 0;">
+
+                <h3>🌤️ Micro-Climate & Weather Timeline</h3>
+                <div class="chart-container">
+                    <canvas id="weatherChart_{idx}"></canvas>
+                </div>
+                
+                <hr style="border-color: var(--border-color); margin: 20px 0;">
+                
+                <h3>🍄 Log Historical / Recent Find</h3>
+                <div class="form-group">
+                    <label>Date Found (Supports past years):</label>
+                    <input type="date" id="date_{idx}" value="2024-09-15">
+                </div>
+                <div class="form-group">
+                    <label>Cap Stage:</label>
+                    <select id="stage_{idx}">
+                        <option value="buttons_young">Buttons / Young (+20 Boost / Flush Trigger)</option>
+                        <option value="prime_open">Prime Open Caps</option>
+                        <option value="old_overripe">Old / Overripe (-25 Penalty / End)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Yield Tier:</label>
+                    <select id="yield_{idx}">
+                        <option value="small">Small (Few mushrooms)</option>
+                        <option value="medium">Medium (Basket)</option>
+                        <option value="large">Large (Full haul)</option>
+                    </select>
+                </div>
+                <button onclick="addHarvest({idx})">Add to Harvest Log</button>
+                
+                <h4 style="margin-top: 15px; margin-bottom: 5px;">Current Logged Finds:</h4>
+                <ul class="harvest-list" id="list_{idx}">
+                    {harvest_items_html if harvest_items_html else "<li>No past finds logged yet.</li>"}
+                </ul>
+
+                <div style="margin-top: 15px;">
+                    <label><strong>Generated config.json snippet:</strong></label>
+                    <textarea id="output_{idx}" readonly>Click 'Add to Harvest Log' to generate JSON snippet...</textarea>
+                </div>
             </div>
         """
 
@@ -412,8 +526,8 @@ def generate_html_dashboard(locations_data, weather_db_all):
         </div>
 
         <div class="card">
-            <h2>📈 Multi-Year Backtest & Probability Timeline</h2>
-            <div class="chart-container">
+            <h2>📈 Multi-Year Backtest & Mycelium Probability Timeline</h2>
+            <div class="chart-container" style="height: 350px;">
                 <canvas id="porciniChart"></canvas>
             </div>
         </div>
@@ -421,6 +535,90 @@ def generate_html_dashboard(locations_data, weather_db_all):
 
     <script>
         const rawLocations = {json.dumps(locations_data)};
+        const allWeatherData = {json.dumps(weather_db_all)};
+
+        rawLocations.forEach((loc, idx) => {{
+            const wData = allWeatherData || {{}};
+            const dates = Object.keys(wData).sort();
+            const recentDates = dates.slice(-60);
+            const temps = recentDates.map(d => wData[d].temperature_2m_max);
+            const rains = recentDates.map(d => wData[d].precipitation_sum);
+
+            const ctxW = document.getElementById('weatherChart_' + idx).getContext('2d');
+            new Chart(ctxW, {{
+                type: 'line',
+                data: {{
+                    labels: recentDates,
+                    datasets: [
+                        {{
+                            label: 'Max Temp (°C)',
+                            data: temps,
+                            borderColor: '#e67e22',
+                            backgroundColor: 'transparent',
+                            yAxisID: 'yTemp',
+                            tension: 0.2,
+                            pointRadius: 0
+                        }},
+                        {{
+                            label: 'Precipitation (mm)',
+                            data: rains,
+                            type: 'bar',
+                            backgroundColor: 'rgba(52, 152, 219, 0.5)',
+                            yAxisID: 'yRain',
+                            barPercentage: 0.6
+                        }}
+                    ]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {{
+                        yTemp: {{
+                            type: 'linear',
+                            position: 'left',
+                            grid: {{ color: '#2c3e50' }},
+                            ticks: {{ color: '#95a5a6', font: {{ size: 10 }} }}
+                        }},
+                        yRain: {{
+                            type: 'linear',
+                            position: 'right',
+                            grid: {{ display: false }},
+                            ticks: {{ color: '#95a5a6', font: {{ size: 10 }} }},
+                            beginAtZero: true
+                        }},
+                        x: {{
+                            grid: {{ color: '#2c3e50' }},
+                            ticks: {{ color: '#95a5a6', font: {{ size: 10 }}, maxTicksLimit: 6 }}
+                        }}
+                    }},
+                    plugins: {{
+                        legend: {{ labels: {{ color: '#ecf0f1', boxWidth: 12, font: {{ size: 11 }} }} }}
+                    }}
+                }}
+            }});
+        }});
+
+        function addHarvest(locIdx) {{
+            const date = document.getElementById('date_' + locIdx).value;
+            const cap_stage = document.getElementById('stage_' + locIdx).value;
+            const yield_tier = document.getElementById('yield_' + locIdx).value;
+
+            if(!rawLocations[locIdx].past_harvests) {{
+                rawLocations[locIdx].past_harvests = [];
+            }}
+
+            rawLocations[locIdx].past_harvests.push({{ date, cap_stage, yield_tier }});
+            
+            const listEl = document.getElementById('list_' + locIdx);
+            if (listEl.innerHTML.includes('No past finds')) {{
+                listEl.innerHTML = '';
+            }}
+            listEl.innerHTML += `<li><span>${{date}} (${{cap_stage}})</span> <strong>${{yield_tier}}</strong></li>`;
+            
+            const textarea = document.getElementById('output_' + locIdx);
+            textarea.value = JSON.stringify(rawLocations[locIdx].past_harvests, null, 4);
+        }}
+
         const firstLocEval = rawLocations[0].evaluation.daily_history;
         const labels = Object.keys(firstLocEval).sort();
         const scoreData = labels.map(d => firstLocEval[d].score);
@@ -445,8 +643,11 @@ def generate_html_dashboard(locations_data, weather_db_all):
                 responsive: true,
                 maintainAspectRatio: false,
                 scales: {{
-                    y: {{ beginAtZero: true, max: 100, grid: {{ color: '#2c3e50' }} }},
-                    x: {{ grid: {{ color: '#2c3e50' }} }}
+                    y: {{ beginAtZero: true, max: 100, grid: {{ color: '#2c3e50' }}, ticks: {{ color: '#95a5a6' }} }},
+                    x: {{ grid: {{ color: '#2c3e50' }}, ticks: {{ color: '#95a5a6' }} }}
+                }},
+                plugins: {{
+                    legend: {{ labels: {{ color: '#ecf0f1' }} }}
                 }}
             }}
         }});

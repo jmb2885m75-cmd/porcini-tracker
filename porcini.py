@@ -4,6 +4,7 @@ import os
 import argparse
 import urllib.request
 import datetime
+import urllib.error
 
 # --- CONFIGURATION & PATHS ---
 CONFIG_FILE = "config.json"
@@ -54,6 +55,18 @@ DEFAULT_CONFIG = {
                 }
             ],
             "last_seen_fly_agaric": "2026-09-28"
+        },
+        {
+            "name": "Oak & Beech Spot",
+            "latitude": 52.51,
+            "longitude": 13.42,
+            "elevation_m": 65,
+            "tree_species": ["Oak", "Beech"],
+            "tree_density": "open_deciduous",
+            "aspect": "south",
+            "soil_pH": "acidic",
+            "past_harvests": [],
+            "last_seen_fly_agaric": None
         }
     ]
 }
@@ -90,7 +103,7 @@ Welcome to the automated Porcini Mushroom Forecasting Dashboard repository (`jmb
 2. Go to **Settings > Actions > General**, scroll to **Workflow permissions**, and select **Read and write permissions**.
 
 ## 2. Configuration (`config.json`)
-Modify `config.json` to configure your GPS locations, tree species, soil properties, and notification credentials.
+Modify `config.json` to configure your GPS locations, tree species, soil properties, and notification provider credentials.
 
 ## 3. GitHub Secrets
 Add the following secrets under **Settings > Secrets and variables > Actions**:
@@ -129,10 +142,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.10
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.10'
 
       - name: Run Porcini Engine
         env:
@@ -166,7 +179,7 @@ def fetch_weather_archive_and_forecast(lat, lon, elevation, existing_data=None):
             start_date = (today - datetime.timedelta(days=5)).strftime("%Y-%m-%d")
 
     end_date = today.strftime("%Y-%m-%d")
-    archive_url = (
+    url = (
         f"https://archive-api.open-meteo.com/v1/archive?"
         f"latitude={lat}&longitude={lon}&elevation={elevation}"
         f"&start_date={start_date}&end_date={end_date}"
@@ -175,7 +188,7 @@ def fetch_weather_archive_and_forecast(lat, lon, elevation, existing_data=None):
     )
 
     try:
-        req = urllib.request.urlopen(archive_url)
+        req = urllib.request.urlopen(url)
         data = json.loads(req.read().decode("utf-8"))
         daily = data.get("daily", {})
 
@@ -199,7 +212,7 @@ def fetch_weather_archive_and_forecast(lat, lon, elevation, existing_data=None):
                         merged[key].append(vals[i] if i < len(vals) else None)
             return merged
         return daily
-    except Exception as e:
+    except (urllib.error.HTTPError, urllib.error.URLError, ValueError) as e:
         print(f"Fehler beim Abrufen der Wetterdaten für ({lat}, {lon}): {e}")
         return existing_data or {}
 
@@ -241,6 +254,7 @@ def calculate_score_breakdown(location, weather_data):
     latest_soil_t = soil_temp[-1] if soil_temp and soil_temp[-1] is not None else 14.0
     latest_soil_m = soil_moisture[-1] if soil_moisture and soil_moisture[-1] is not None else 0.25
 
+    # Frost gate
     recent_min_air = [t for t in t_min[-7:] if t is not None]
     if recent_min_air and any(t < -2.0 for t in recent_min_air):
         return 0, "SEASON TERMINATED BY FROST", "Frost", "Gefahr von Frostschäden", {"frost": True}
@@ -281,6 +295,7 @@ def calculate_score_breakdown(location, weather_data):
         drop = (t_max[i - 1] - t_max[i]) if i > 0 and t_max[i - 1] and t_max[i] else 0
         r_sum = sum(rain[j] for j in range(max(0, i - 2), min(len(rain), i + 1)) if rain[j] is not None)
         req_rain = 45.0 if is_severe_drought else 20.0
+
         if drop >= 4.0 and r_sum >= req_rain:
             trigger_found = True
             days_since_trigger = len(times) - 1 - i
@@ -444,21 +459,22 @@ def generate_html_report(config, db_data):
         loc_scores.append((loc.get("name"), score, status, quality, sm, best_day, best_score))
 
     loc_scores.sort(key=lambda item: item[1], reverse=True)
-
-    rows_html = "".join(
-        f"""
+    rows_html = ""
+    day_labels = {"friday": "Freitag", "saturday": "Samstag", "sunday": "Sonntag"}
+    for i, (name, score, status, quality, sm, best_day, best_score) in enumerate(loc_scores):
+        score_class = "score-high" if score >= 65 else ("score-low" if score < 40 else "")
+        day_label = day_labels.get(best_day, best_day)
+        rows_html += f"""
         <tr>
-            <td>{idx}</td>
+            <td>{i + 1}</td>
             <td><b>{name}</b></td>
-            <td class="{'score-high' if score >= 65 else 'score-low' if score < 40 else ''}">{score}%</td>
+            <td class="{score_class}">{score}%</td>
             <td>{day_label} ({best_score}%)</td>
             <td>{status}</td>
             <td>{quality}</td>
             <td>{sm}</td>
         </tr>
-        """.replace("{idx}", str(i + 1)).replace("{name}", name).replace("{score}", str(score)).replace("{day_label}", {"friday": "Freitag", "saturday": "Samstag", "sunday": "Sonntag"}.get(best_day, best_day)).replace("{best_score}", str(best_score)).replace("{status}", status).replace("{quality}", quality).replace("{sm}", sm)
-        for i, (name, score, status, quality, sm, best_day, best_score) in enumerate(loc_scores)
-    )
+        """
 
     html_content = f"""<!DOCTYPE html>
 <html lang="de">
@@ -758,10 +774,25 @@ def main():
         elevation = loc.get("elevation_m", 100)
         loc_name = loc.get("name")
 
-        if lat and lon:
-            print(f"   📡 Synchronisiere Wetterdaten für: {loc_name}...")
-            existing_loc_weather = db_data.get(loc_name, {})
-            updated_weather = fetch_weather_archive_and_forecast(lat, lon, elevation, existing_loc_weather)
+        if lat is None or lon is None:
+            print(f"   ⚠️  {loc_name} hat ungültige Koordinaten; übersprungen.")
+            continue
+
+        try:
+            lat = float(lat)
+            lon = float(lon)
+        except (TypeError, ValueError):
+            print(f"   ⚠️  {loc_name} hat ungültige Koordinaten; übersprungen.")
+            continue
+
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            print(f"   ⚠️  {loc_name} hat Koordinaten außerhalb des gültigen Bereichs; übersprungen.")
+            continue
+
+        print(f"   📡 Synchronisiere Wetterdaten für: {loc_name}...")
+        existing_loc_weather = db_data.get(loc_name, {})
+        updated_weather = fetch_weather_archive_and_forecast(lat, lon, elevation, existing_loc_weather)
+        if updated_weather:
             db_data[loc_name] = updated_weather
 
     save_json(DB_FILE, db_data)

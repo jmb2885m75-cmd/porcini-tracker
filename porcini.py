@@ -32,22 +32,26 @@ HOST_TREE_SCORES = {
     "Pine": 10,
 }
 
+
 def load_json(path: Path, default: Any = None) -> Any:
     if not path.exists():
         return default if default is not None else {}
     with path.open("r", encoding="utf-8") as fh:
         return json.load(fh)
 
+
 def save_json(path: Path, payload: Any) -> None:
     with path.open("w", encoding="utf-8") as fh:
         json.dump(payload, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
+
 
 def load_config() -> Dict[str, Any]:
     cfg = load_json(CONFIG_PATH)
     if not cfg:
         raise FileNotFoundError(f"Missing {CONFIG_PATH}")
     return cfg
+
 
 def ensure_notification_settings(cfg: Dict[str, Any]) -> Dict[str, Any]:
     settings = cfg.setdefault("NOTIFICATION_SETTINGS", {})
@@ -65,6 +69,7 @@ def ensure_notification_settings(cfg: Dict[str, Any]) -> Dict[str, Any]:
     cfg.setdefault("ALERT_THRESHOLD", 65)
     return cfg
 
+
 def fetch_json(url: str, params: Dict[str, Any], timeout: int = 30) -> Optional[Dict[str, Any]]:
     try:
         response = requests.get(url, params=params, timeout=timeout)
@@ -74,22 +79,27 @@ def fetch_json(url: str, params: Dict[str, Any], timeout: int = 30) -> Optional[
         print(f"[WARN] URL fetch failed: {url} :: {exc}")
         return None
 
+
 def iso_date(value: date) -> str:
     return value.strftime("%Y-%m-%d")
 
+
 def parse_date(value: str) -> date:
     return datetime.strptime(value, "%Y-%m-%d").date()
+
 
 def month_day_window(dt: date) -> bool:
     aug_15 = date(dt.year, 8, 15)
     dec_01 = date(dt.year, 12, 1)
     return aug_15 <= dt <= dec_01
 
+
 def lunar_phase_fraction(day: date) -> float:
     known_new_moon = datetime(2000, 1, 6)
     days_since = (datetime.combine(day, datetime.min.time()) - known_new_moon).days
     cycle = 29.53
     return (days_since % cycle) / cycle
+
 
 def fetch_archive_day_range(latitude: float, longitude: float, elevation: int, start: date, end: date) -> List[Dict[str, Any]]:
     payload = fetch_json(
@@ -125,6 +135,7 @@ def fetch_archive_day_range(latitude: float, longitude: float, elevation: int, s
         records.append(item)
     return records
 
+
 def fetch_forecast_day_range(latitude: float, longitude: float, elevation: int) -> List[Dict[str, Any]]:
     payload = fetch_json(
         FORECAST_API_URL,
@@ -159,11 +170,13 @@ def fetch_forecast_day_range(latitude: float, longitude: float, elevation: int) 
         records.append(item)
     return records
 
+
 def load_or_init_db() -> Dict[str, Any]:
     db = load_json(DB_PATH, {"locations": {}})
     if "locations" not in db:
         db["locations"] = {}
     return db
+
 
 def append_unique_records(records: List[Dict[str, Any]], new_records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     seen = {r["date"] for r in records}
@@ -172,6 +185,7 @@ def append_unique_records(records: List[Dict[str, Any]], new_records: List[Dict[
             records.append(item)
     records.sort(key=lambda r: r.get("date", ""))
     return records
+
 
 def ensure_location_history(location_name: str, db: Dict[str, Any], latitude: float, longitude: float, elevation: int) -> List[Dict[str, Any]]:
     loc_data = db["locations"].get(location_name, {})
@@ -204,6 +218,7 @@ def ensure_location_history(location_name: str, db: Dict[str, Any], latitude: fl
         "last_sync_date": last_sync,
     }
     return records
+
 
 def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], historical: List[Dict[str, Any]], past_harvests: List[Dict[str, Any]]) -> Tuple[int, str, str]:
     score = 0
@@ -311,6 +326,7 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
         status = "✅ Viable conditions" if score >= 65 else "⚠️ Watch closely"
     return int(score), status, quality
 
+
 def find_weekend_best(location: Dict[str, Any], records: List[Dict[str, Any]], harvests: List[Dict[str, Any]]) -> Tuple[int, str, str, str]:
     valid_days = []
     for record in records:
@@ -324,11 +340,13 @@ def find_weekend_best(location: Dict[str, Any], records: List[Dict[str, Any]], h
     best_date, score, status, flag = best
     return score, best_date.strftime("%a %Y-%m-%d"), status, flag
 
+
 def build_alert_state() -> Dict[str, Any]:
     state = load_json(ALERT_STATE_PATH, {"locations": {}})
     if "locations" not in state:
         state["locations"] = {}
     return state
+
 
 def should_alert_for_location(location_name: str, current_score: int, threshold: int, state: Dict[str, Any]) -> bool:
     loc_state = state["locations"].get(location_name, {})
@@ -338,6 +356,7 @@ def should_alert_for_location(location_name: str, current_score: int, threshold:
     delta = (today - parse_date(last_date)).days if last_date else 999
     crossed = last_score < threshold and current_score >= threshold
     return crossed or delta >= 5
+
 
 def send_telegram(token: str, chat_id: str, message: str) -> bool:
     if not token or not chat_id:
@@ -352,6 +371,7 @@ def send_telegram(token: str, chat_id: str, message: str) -> bool:
         print(f"[WARN] Telegram alert failed: {exc}")
         return False
 
+
 def send_pushover(api_token: str, user_key: str, message: str) -> bool:
     if not api_token or not user_key:
         return False
@@ -363,6 +383,7 @@ def send_pushover(api_token: str, user_key: str, message: str) -> bool:
     except Exception as exc:
         print(f"[WARN] Pushover alert failed: {exc}")
         return False
+
 
 def send_twilio(account_sid: str, auth_token: str, from_number: str, to_number: str, message: str) -> bool:
     if not (account_sid and auth_token and from_number and to_number):
@@ -377,6 +398,7 @@ def send_twilio(account_sid: str, auth_token: str, from_number: str, to_number: 
         print(f"[WARN] Twilio alert failed: {exc}")
         return False
 
+
 def dispatch_notification(cfg: Dict[str, Any], message: str) -> None:
     settings = cfg.get("NOTIFICATION_SETTINGS", {})
     provider = str(settings.get("provider") or "").lower()
@@ -389,6 +411,7 @@ def dispatch_notification(cfg: Dict[str, Any], message: str) -> None:
     else:
         print("[WARN] No active notification provider configured")
 
+
 def build_alert_message(results: List[Tuple[str, int, str, str]], dashboard_url: str) -> str:
     ranking = sorted(results, key=lambda item: item[1], reverse=True)[:3]
     lines = ["🍄 Weekend Porcini Forecast (Ranked):"]
@@ -397,6 +420,7 @@ def build_alert_message(results: List[Tuple[str, int, str, str]], dashboard_url:
     lines.append("")
     lines.append(f"🌐 Dashboard: {dashboard_url}")
     return "\n".join(lines)
+
 
 def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]]) -> str:
     rows = []
@@ -428,6 +452,7 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]])
 </body>
 </html>
 """
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Porcini tracker forecast engine")
@@ -495,6 +520,7 @@ def main() -> int:
         dispatch_notification(cfg, message)
 
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

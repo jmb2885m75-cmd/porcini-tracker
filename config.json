@@ -57,6 +57,12 @@
                     "cap_stage": "prime",
                     "yield_tier": "large",
                     "notes": ""
+                },
+                {
+                    "date": "2025-09-27",
+                    "cap_stage": "prime",
+                    "yield_tier": "large",
+                    "notes": ""
                 }
             ],
             "last_seen_fly_agaric": "2026-09-28"

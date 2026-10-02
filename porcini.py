@@ -191,7 +191,7 @@ def generate_html_report(config, db_data):
                 if (repo) localStorage.setItem('gh_repo', repo);
             }}
             if (!token) {{
-                token = prompt("Bitte gib dein GitHub Personal Access Token (PAT mit repo-Rechten) ein:");
+                token = prompt("Bitte gib dein GitHub Personal Access Token (PAT) ein:");
                 if (token) localStorage.setItem('gh_token', token);
             }}
 
@@ -204,16 +204,19 @@ def generate_html_report(config, db_data):
 
             try {{
                 const url = `https://api.github.com/repos/${{repo}}/contents/config.json`;
+                
+                // WICHTIG: Fine-grained Tokens (github_pat_) verlangen 'Bearer' statt 'token'
                 const getRes = await fetch(url, {{
-                    headers: {{ 'Authorization': `token ${{token}}`, 'Accept': 'vnd.github.v3+json' }}
+                    headers: {{ 'Authorization': `Bearer ${{token}}`, 'Accept': 'vnd.github.v3+json' }}
                 }});
                 if (!getRes.ok) throw new Error("Fehler beim Laden der config.json (Token oder Repo ungültig?)");
                 
                 const fileData = await getRes.json();
                 
-                // Sauberer Fix: Entfernt alle Zeilenumbrüche ohne Regex-Fehleranfälligkeit
                 const base64Clean = fileData.content.replaceAll('\\n', '').replaceAll('\\r', '');
-                const jsonString = decodeURIComponent(escape(atob(base64Clean)));
+                const binString = atob(base64Clean);
+                const bytes = Uint8Array.from(binString, (m) => m.codePointAt(0));
+                const jsonString = new TextDecoder().decode(bytes);
                 const content = JSON.parse(jsonString);
 
                 const locIdx = parseInt(document.getElementById('locIndex').value) || 0;
@@ -229,12 +232,14 @@ def generate_html_report(config, db_data):
                 content.LOCATIONS[locIdx].past_harvests.push(newHarvest);
 
                 statusEl.innerText = "Speichere neuen Fund in config.json auf GitHub...";
-                const updatedContentBase64 = btoa(unescape(encodeURIComponent(JSON.stringify(content, null, 4))));
+                
+                const updatedBytes = new TextEncoder().encode(JSON.stringify(content, null, 4));
+                const updatedContentBase64 = btoa(String.fromCharCode(...updatedBytes));
 
                 const putRes = await fetch(url, {{
                     method: 'PUT',
                     headers: {{
-                        'Authorization': `token ${{token}}`,
+                        'Authorization': `Bearer ${{token}}`,
                         'Content-Type': 'application/json',
                     }},
                     body: JSON.stringify({{
@@ -247,7 +252,7 @@ def generate_html_report(config, db_data):
                 if (!putRes.ok) throw new Error("Fehler beim Speichern auf GitHub.");
 
                 statusEl.innerText = "Erfolgreich gespeichert! GitHub Action gestartet.";
-                alert("Fund erfolgreich übertragen! Das Dashboard aktualisiert sich gleich.");
+                alert("Fund erfolgreich übertragen! Das Dashboard aktualisiert sich in wenigen Sekunden.");
             }} catch (err) {{
                 statusEl.innerText = "Fehler: " + err.message;
                 console.error(err);

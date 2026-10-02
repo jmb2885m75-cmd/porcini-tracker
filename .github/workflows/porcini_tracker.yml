@@ -2,8 +2,15 @@ name: Porcini Intelligence Daily Engine
 
 on:
   schedule:
-    - cron: '0 8 * * *'  # Runs daily at 08:00 UTC
+    - cron: '0 8 * * *'   # Daily run (default mode) at 08:00 UTC
+    - cron: '0 18 * * 4'  # Thursday 18:00 UTC -> weekend outlook mode (porcini.py detects it from the UTC time)
+    - cron: '0 6 * * 5'   # Friday 06:00 UTC -> final go/no-go confirmation mode
   workflow_dispatch:     # Allows manual triggering from the GitHub Actions tab
+
+# One run at a time: the job rewrites and commits the shared JSON state files.
+concurrency:
+  group: porcini-state
+  cancel-in-progress: false
 
 jobs:
   run-porcini-engine:
@@ -29,7 +36,11 @@ jobs:
         env:
           CONFIG_JSON: ${{ secrets.CONFIG_JSON }}
         run: |
-          printf '%s' "$CONFIG_JSON" > config.json
+          if [ -n "$CONFIG_JSON" ]; then
+            printf '%s' "$CONFIG_JSON" > config.json
+          else
+            echo "CONFIG_JSON secret not set; using the config.json committed in the repo (no alerts will be delivered without notification credentials)"
+          fi
 
       - name: Execute Porcini Evaluation Engine
         run: |
@@ -38,7 +49,14 @@ jobs:
       - name: Commit and Push Updated Weather Database & Report
         run: |
           git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.io"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           touch alert_state.json
           git add porcini_db.json index.html porcini_report.html alert_state.json
-          git diff --quiet && git diff --staged --quiet || (git commit -m "🍄 Auto-update Porcini weather DB & report [skip ci]" && git push)
+          # Only the staged files above are committed (config.json holds secrets and is never added).
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "🍄 Auto-update Porcini weather DB & report [skip ci]"
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
+            git push
+          fi

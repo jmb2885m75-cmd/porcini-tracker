@@ -9,6 +9,11 @@ on:
 permissions:
   contents: write
 
+# Share the lock with the scheduled workflow: both rewrite and commit the same JSON files.
+concurrency:
+  group: porcini-state
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -32,7 +37,14 @@ jobs:
       - name: Commit and push updated report
         run: |
           git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.io"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           touch alert_state.json
           git add porcini_db.json index.html porcini_report.html alert_state.json
-          git diff --quiet && git diff --staged --quiet || (git commit -m "🍄 Auto-update Porcini weather DB & report [skip ci]" && git push)
+          # Only the staged files above are committed (config.json holds secrets and is never added).
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "🍄 Auto-update Porcini weather DB & report [skip ci]"
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
+            git push
+          fi

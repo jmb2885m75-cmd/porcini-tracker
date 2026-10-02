@@ -31,14 +31,13 @@
 <body>
   <div class="wrap">
     <h1>🍄 Porcini Tracker Dashboard</h1>
-    <div class="meta"><span class="badge">Daily run</span> Generated 2026-10-02 20:11 UTC</div>
-    <div class="grid"><div class='card'><div class='score'>0%</div><div class='name'>East Berlin Pine &amp; Oak Ridge</div><div class='meta'>Best day: N/A | Status: Monitoring</div><div class='meta'>Moisture: 0.00 m³/m³</div></div><div class='card'><div class='score'>0%</div><div class='name'>Oak &amp; Beech Spot</div><div class='meta'>Best day: N/A | Status: Monitoring</div><div class='meta'>Moisture: 0.00 m³/m³</div></div></div>
+    <div class="meta"><span class="badge">Daily run</span> Generated 2026-10-02 20:35 UTC</div>
+    <div class="grid"><div class='card'><div class='score'>0%</div><div class='name'>Oak &amp; Beech Spot</div><div class='meta'>Best day: N/A | Status: Monitoring</div><div class='meta'>Moisture: 0.00 m³/m³</div></div></div>
     <h2>📨 Alert Preview</h2>
     <div class="card">
       <div class="meta">Preview only: no alert is triggered by this run.</div>
       <pre class="alert">🍄 Weekend Porcini Forecast (Ranked):
-1. East Berlin Pine &amp; Oak Ridge - 0% (N/A) | Monitoring
-2. Oak &amp; Beech Spot - 0% (N/A) | Monitoring
+1. Oak &amp; Beech Spot - 0% (N/A) | Monitoring
 
 🌐 Dashboard: https://jmb2885m75-cmd.github.io/porcini-tracker/</pre>
       <div class="meta">Fields sent per ranked spot (top 3): rank, location name, best weekend score (%), best day, status. The final line is the dashboard link.</div>
@@ -74,7 +73,7 @@
       <pre id="exported" class="alert" style="display:none"></pre>
     </div>
   </div>
-  <script id="porcini-data" type="application/json">{"mode": "default", "threshold": 65, "repo": "jmb2885m75-cmd/porcini-tracker", "locations": [{"name": "East Berlin Pine & Oak Ridge", "scores": [], "records": [], "harvests": [{"date": "2025-09-27", "cap_stage": "prime", "yield_tier": "large", "notes": "", "origin": "config"}, {"date": "2026-09-15", "yield_tier": "large", "cap_stage": "prime", "weight_g": 450, "notes": "Massive flush after heavy autumn rain.", "origin": "config"}, {"date": "2026-10-02", "cap_stage": "prime", "yield_tier": "large", "notes": "", "origin": "config"}], "backtest": {"threshold": 65, "evaluated_harvests": 0, "hits": 0, "hit_rate": null, "mean_score_on_harvest_days": null, "mean_score_in_season": null}}, {"name": "Oak & Beech Spot", "scores": [], "records": [], "harvests": [], "backtest": {"threshold": 65, "evaluated_harvests": 0, "hits": 0, "hit_rate": null, "mean_score_on_harvest_days": null, "mean_score_in_season": null}}]}</script>
+  <script id="porcini-data" type="application/json">{"mode": "default", "threshold": 65, "repo": "jmb2885m75-cmd/porcini-tracker", "locations": [{"name": "Oak & Beech Spot", "scores": [], "records": [], "harvests": [], "backtest": {"threshold": 65, "evaluated_harvests": 0, "hits": 0, "hit_rate": null, "mean_score_on_harvest_days": null, "mean_score_in_season": null}}]}</script>
   <script>
   (function () {
     var D = JSON.parse(document.getElementById('porcini-data').textContent);

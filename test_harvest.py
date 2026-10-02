@@ -129,6 +129,7 @@ class StoreMergeTests(unittest.TestCase):
         html_out = p.generate_dashboard_html({"ALERT_THRESHOLD": 65}, [])
         self.assertIn("harvest_log.json", html_out)
         self.assertIn("unsynced draft", html_out)
+        self.assertIn("Visited, found no mushrooms", html_out)
 
 
 if __name__ == "__main__":

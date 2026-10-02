@@ -23,6 +23,7 @@ and writes `porcini_report.html`. A separate GitHub issue workflow validates har
    Optional `FRIDAY_POLICY`: `thursday_alerted_only` (default; Friday confirmation only for spots alerted on Thursday) or
    `all_above_threshold` (Friday confirmation for every spot at or above `ALERT_THRESHOLD`).
    Harvest entries: `date`, `yield_tier` (small/medium/large), `cap_stage` (`buttons_young`, `prime`, `old_overripe`), optional `weight_g`, `notes`.
+   A no-find report is recorded as `observation_type: no_mushrooms` with just the location and date.
 
 ## 2. Secrets
 

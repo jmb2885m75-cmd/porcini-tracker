@@ -30,7 +30,6 @@ def fetch_weather_data(lat, lon):
         return {}
 
 def get_approximate_moon_phase(date_obj):
-    # Einfache astronomische Annäherung für den Mondzyklus (ca. 29.53 Tage)
     known_new_moon = datetime.date(2026, 1, 19)
     days_diff = (date_obj.date() - known_new_moon).days
     cycle = 29.53058867
@@ -47,14 +46,12 @@ def get_approximate_moon_phase(date_obj):
 def calculate_flush_score(location, weather_data):
     score = 50  # Basiswert
     
-    # Historische Funde / Flush Boosts
     for harvest in location.get("past_harvests", []):
         if harvest.get("cap_stage") == "buttons_young":
             score += 20
         elif harvest.get("cap_stage") == "old_overripe":
             score -= 25
 
-    # Baumarten-Bonus
     species = location.get("tree_species", [])
     if "Spruce" in species or "Beech" in species:
         score += 15
@@ -186,7 +183,6 @@ def generate_html_report(config, db_data):
         async function commitHarvestToGitHub() {{
             const statusEl = document.getElementById('apiStatus');
             
-            // Credentials aus dem Browser-Speicher abrufen oder abfragen
             let repo = localStorage.getItem('gh_repo');
             let token = localStorage.getItem('gh_token');
 
@@ -207,7 +203,6 @@ def generate_html_report(config, db_data):
             statusEl.innerText = "Lade aktuelle config.json von GitHub...";
 
             try {{
-                // 1. config.json laden
                 const url = `https://api.github.com/repos/${{repo}}/contents/config.json`;
                 const getRes = await fetch(url, {{
                     headers: {{ 'Authorization': `token ${{token}}`, 'Accept': 'vnd.github.v3+json' }}
@@ -215,9 +210,12 @@ def generate_html_report(config, db_data):
                 if (!getRes.ok) throw new Error("Fehler beim Laden der config.json (Token oder Repo ungültig?)");
                 
                 const fileData = await getRes.json();
-                const content = JSON.parse(atob(fileData.content));
+                
+                // Base64-Zeilenumbrüche bereinigen, damit atob fehlerfrei läuft
+                const base64Clean = fileData.content.replace(/\\s/g, '');
+                const jsonString = decodeURIComponent(escape(atob(base64Clean)));
+                const content = JSON.parse(jsonString);
 
-                // 2. Neuen Fund anfügen
                 const locIdx = parseInt(document.getElementById('locIndex').value) || 0;
                 const newHarvest = {{
                     "date": document.getElementById('findDate').value,
@@ -230,7 +228,6 @@ def generate_html_report(config, db_data):
                 }}
                 content.LOCATIONS[locIdx].past_harvests.push(newHarvest);
 
-                // 3. Aktualisierte config.json zurückschreiben
                 statusEl.innerText = "Speichere neuen Fund in config.json auf GitHub...";
                 const updatedContentBase64 = btoa(unescape(encodeURIComponent(JSON.stringify(content, null, 4))));
 
@@ -249,11 +246,12 @@ def generate_html_report(config, db_data):
 
                 if (!putRes.ok) throw new Error("Fehler beim Speichern auf GitHub.");
 
-                statusEl.innerText = "Erfolgreich gespeichert! GitHub Action wurde im Hintergrund gestartet.";
-                alert("Fund erfolgreich an GitHub übertragen! Das Dashboard aktualisiert sich in wenigen Sekunden automatisch.");
+                statusEl.innerText = "Erfolgreich gespeichert! GitHub Action gestartet.";
+                alert("Fund erfolgreich übertragen! Das Dashboard aktualisiert sich gleich.");
             }} catch (err) {{
                 statusEl.innerText = "Fehler: " + err.message;
                 console.error(err);
+                alert("Verbindungsfehler: " + err.message);
             }}
         }}
     </script>
@@ -263,7 +261,7 @@ def generate_html_report(config, db_data):
     return html_content
 
 def main():
-    print("Starte vollständigen Porcini Report Generator mit Mondphasen & API...")
+    print("Starte vollständigen Porcini Report Generator...")
     config = load_json(CONFIG_FILE)
     db_data = load_json(DB_FILE)
     

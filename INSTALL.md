@@ -15,9 +15,13 @@ and writes `porcini_report.html`. A separate GitHub issue workflow validates har
   repository owner or collaborators and stores them in `harvest_log.json`; browser drafts stay local until submitted.
   Existing harvests can also be configured in `past_harvests` in the private `CONFIG_JSON` secret.
 - **Dates:** stored and exchanged as ISO `yyyy-MM-dd` (database, `harvest_log.json`, issue payloads); every
-  user-facing date is displayed as `dd MMMM yyyy` (e.g. `02 October 2026`). Accepted input formats (issue form,
-  `past_harvests`): `yyyy-MM-dd`, `dd.MM.yyyy` and `dd MMMM yyyy` (English month names); they are normalised to ISO
+  user-facing date is displayed as `Ddd. dd Mon. yyyy` (e.g. `Sat. 03 Oct. 2026`; May has no period). Accepted input formats (issue form,
+  `past_harvests`): `yyyy-MM-dd`, `dd.MM.yyyy`, `dd MMMM yyyy`, and the abbreviated display format with or without
+  its matching weekday; they are normalised to ISO
   and impossible dates are rejected. Dates are date-only (no time zone), so they never shift by a day. See `dates.py`.
+- The daily score chart includes optional rain and temperature context lines, each scaled to its visible range and
+  shown behind the more prominent favourability score line. Toggle them from the chart legend; gaps mean weather data
+  is unavailable for those dates.
 - `index.html` links to the generated report; GitHub Actions updates its alert preview.
 
 ## 1. Setup

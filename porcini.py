@@ -4,6 +4,7 @@ Porcini tracker with multi-year weather archive, scoring, alerts, and dashboard 
 """
 
 import argparse
+import html
 import json
 import math
 import os
@@ -422,12 +423,22 @@ def build_alert_message(results: List[Tuple[str, int, str, str]], dashboard_url:
     return "\n".join(lines)
 
 
-def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]]) -> str:
+def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]], alert_message: str = "", alert_will_send: bool = False) -> str:
     rows = []
     for item in analysis:
         rows.append(
             f"<div class='card'><div class='score'>{item['best_score']}%</div><div class='name'>{item['name']}</div><div class='meta'>Best day: {item['best_day']} | Status: {item['status']}</div><div class='meta'>Moisture: {item['soil_moisture']:.2f} m³/m³</div></div>"
         )
+    alert_status = "This message will be sent with this run." if alert_will_send else "Preview only: no alert is triggered by this run."
+    alert_section = ""
+    if alert_message:
+        alert_section = f"""
+    <h2>📨 Alert Preview</h2>
+    <div class="card">
+      <div class="meta">{html.escape(alert_status)}</div>
+      <pre class="alert">{html.escape(alert_message)}</pre>
+      <div class="meta">Fields sent per ranked spot (top 3): rank, location name, best weekend score (%), best day, status. The final line is the dashboard link.</div>
+    </div>"""
     return f"""<!DOCTYPE html>
 <html>
 <head>
@@ -442,12 +453,13 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]])
     .score {{ font-size: 2rem; font-weight: bold; color: #a7f3d0; }}
     .name {{ font-size: 1.1rem; margin-top: 6px; font-weight: bold; }}
     .meta {{ color: #cbd5e1; margin-top: 8px; }}
+    .alert {{ background: #111827; border: 1px solid #374151; border-radius: 8px; padding: 12px; white-space: pre-wrap; }}
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>🍄 Porcini Tracker Dashboard</h1>
-    <div class="grid">{''.join(rows)}</div>
+    <div class="grid">{''.join(rows)}</div>{alert_section}
   </div>
 </body>
 </html>
@@ -507,15 +519,16 @@ def main() -> int:
     save_json(DB_PATH, db)
     save_json(ALERT_STATE_PATH, alert_state)
 
-    html = generate_dashboard_html(cfg, analyses)
-    REPORT_PATH.write_text(html, encoding="utf-8")
+    alert_results = alert_queue or [(a["name"], a["best_score"], a["best_day"], a["status"]) for a in analyses]
+    message = build_alert_message(alert_results, dashboard_url) if alert_results else ""
+    report_html = generate_dashboard_html(cfg, analyses, message, bool(alert_queue))
+    REPORT_PATH.write_text(report_html, encoding="utf-8")
 
     print("\n### Porcini Summary")
     for item in analyses:
         print(f"- {item['name']}: {item['best_score']}% on {item['best_day']} | {item['status']} | moisture {item['soil_moisture']:.2f} m³/m³")
 
     if alert_queue:
-        message = build_alert_message(alert_queue, dashboard_url)
         print("\n[INFO] Dispatching alert message")
         dispatch_notification(cfg, message)
 

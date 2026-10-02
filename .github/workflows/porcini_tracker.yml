@@ -32,17 +32,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests
 
-      - name: Create config.json from GitHub Secrets
+      - name: Execute Porcini Evaluation Engine
         env:
           CONFIG_JSON: ${{ secrets.CONFIG_JSON }}
-        run: |
-          if [ -n "$CONFIG_JSON" ]; then
-            printf '%s' "$CONFIG_JSON" > config.json
-          else
-            echo "CONFIG_JSON secret not set; using the config.json committed in the repo (no alerts will be delivered without notification credentials)"
-          fi
-
-      - name: Execute Porcini Evaluation Engine
         run: |
           python porcini.py
 
@@ -52,7 +44,6 @@ jobs:
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           touch alert_state.json
           git add porcini_db.json index.html porcini_report.html alert_state.json
-          # Only the staged files above are committed (config.json holds secrets and is never added).
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else

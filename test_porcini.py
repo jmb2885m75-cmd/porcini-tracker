@@ -155,5 +155,67 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(p.update_daily_scores(LOC, recs, store), 1)  # forecast days are
 
 
+class RunoffBackfillTests(unittest.TestCase):
+    @staticmethod
+    def hourly(day, peak):
+        vals = [0.0] * 24
+        vals[5], vals[6] = peak, 0.0
+        return {"hourly": {"time": [f"{day}T{h:02d}:00" for h in range(24)], "precipitation": vals}}
+
+    def test_backfill_fills_and_marks_basis(self):
+        records = [rec("2025-09-01", precip_peak_2h_mm=None, precipitation_sum=20.0), rec("2025-09-02", source=p.SOURCE_FORECAST)]
+        changed = p.backfill_runoff_data(records, 0, 0, 0, fetch_hourly=lambda *a: self.hourly("2025-09-01", 14.0))
+        self.assertEqual(changed, ["2025-09-01"])
+        self.assertEqual(records[0]["precip_peak_2h_mm"], 14.0)
+        self.assertEqual(records[0]["precip_peak_basis"], p.PEAK_BASIS_BACKFILL)
+        self.assertNotIn("precip_peak_basis", records[1])
+        self.assertTrue(p.has_runoff(p.History(records), date(2025, 9, 1)))
+
+    def test_failure_is_soft_and_retried(self):
+        records = [rec("2025-09-01")]
+        self.assertEqual(p.backfill_runoff_data(records, 0, 0, 0, fetch_hourly=lambda *a: None), [])
+        def boom(*a):
+            raise RuntimeError("down")
+        self.assertEqual(p.backfill_runoff_data(records, 0, 0, 0, fetch_hourly=boom), [])
+        self.assertTrue(p.needs_runoff_backfill(records[0]))
+
+    def test_backfill_forces_rescore(self):
+        loc = {"name": "A", "aspect": "N"}
+        records = [rec(f"2025-09-0{i}", precipitation_sum=20.0) for i in range(1, 4)]
+        store = {}
+        p.update_daily_scores(loc, records, store)
+        store["pending_rescore"] = ["2025-09-02"]
+        self.assertEqual(p.update_daily_scores(loc, records, store), 1)
+
+
+class LegacyMigrationTests(unittest.TestCase):
+    def test_quarantine_and_integrity(self):
+        db = {"schema_version": p.SCHEMA_VERSION, "locations": {}, "2024-10-02": {"precipitation_sum": 5.0}, "Old Spot": {"time": []}}
+        self.assertTrue(any("top-level date keys" in i for i in p.check_db_integrity(db)))
+        self.assertEqual(p.migrate_legacy_entries(db), 2)
+        self.assertEqual(db[p.LEGACY_KEY]["2024-10-02"], {"precipitation_sum": 5.0})
+        self.assertEqual(p.check_db_integrity(db, date(2025, 1, 1)), [])
+        self.assertEqual(p.migrate_legacy_entries(db), 0)
+
+
+class FridayPolicyTests(unittest.TestCase):
+    friday = date(2025, 10, 10)
+
+    def test_both_modes(self):
+        thursday_alerted = {"locations": {"A": {"last_alert_date": "2025-10-09", "last_alert_mode": p.MODE_OUTLOOK}, "B": {}}}
+        only, allp = p.FRIDAY_POLICY_THURSDAY_ONLY, p.FRIDAY_POLICY_ALL_ABOVE
+        self.assertTrue(p.should_confirm_for_location("A", thursday_alerted, self.friday, only, 10, 65))
+        self.assertFalse(p.should_confirm_for_location("B", thursday_alerted, self.friday, only, 90, 65))
+        self.assertTrue(p.should_confirm_for_location("B", thursday_alerted, self.friday, allp, 70, 65))
+        self.assertFalse(p.should_confirm_for_location("B", thursday_alerted, self.friday, allp, 40, 65))
+        thursday_alerted["locations"]["A"]["last_confirmation_date"] = "2025-10-10"
+        self.assertFalse(p.should_confirm_for_location("A", thursday_alerted, self.friday, allp, 90, 65))
+
+    def test_default_policy(self):
+        self.assertEqual(p.resolve_friday_policy({}), p.FRIDAY_POLICY_THURSDAY_ONLY)
+        self.assertEqual(p.resolve_friday_policy({"FRIDAY_POLICY": "bogus"}), p.FRIDAY_POLICY_THURSDAY_ONLY)
+        self.assertEqual(p.resolve_friday_policy({"FRIDAY_POLICY": p.FRIDAY_POLICY_ALL_ABOVE}), p.FRIDAY_POLICY_ALL_ABOVE)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -5,6 +5,7 @@ on:
     paths:
       - 'porcini.py'
       - 'porcini_db.json'
+      - 'harvest_log.json'
   workflow_dispatch:
 
 permissions:
@@ -42,7 +43,7 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           touch alert_state.json
-          git add porcini_db.json index.html porcini_report.html alert_state.json
+          git add porcini_db.json harvest_log.json index.html porcini_report.html alert_state.json
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else

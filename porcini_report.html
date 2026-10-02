@@ -31,13 +31,14 @@
 <body>
   <div class="wrap">
     <h1>🍄 Porcini Tracker Dashboard</h1>
-    <div class="meta"><span class="badge">Daily run</span> Generated 2026-10-02 20:27 UTC</div>
-    <div class="grid"><div class='card'><div class='score'>0%</div><div class='name'>Oak &amp; Beech Spot</div><div class='meta'>Best day: N/A | Status: Monitoring</div><div class='meta'>Moisture: 0.00 m³/m³</div></div></div>
+    <div class="meta"><span class="badge">Daily run</span> Generated 2026-10-02 20:11 UTC</div>
+    <div class="grid"><div class='card'><div class='score'>0%</div><div class='name'>East Berlin Pine &amp; Oak Ridge</div><div class='meta'>Best day: N/A | Status: Monitoring</div><div class='meta'>Moisture: 0.00 m³/m³</div></div><div class='card'><div class='score'>0%</div><div class='name'>Oak &amp; Beech Spot</div><div class='meta'>Best day: N/A | Status: Monitoring</div><div class='meta'>Moisture: 0.00 m³/m³</div></div></div>
     <h2>📨 Alert Preview</h2>
     <div class="card">
       <div class="meta">Preview only: no alert is triggered by this run.</div>
       <pre class="alert">🍄 Weekend Porcini Forecast (Ranked):
-1. Oak &amp; Beech Spot - 0% (N/A) | Monitoring
+1. East Berlin Pine &amp; Oak Ridge - 0% (N/A) | Monitoring
+2. Oak &amp; Beech Spot - 0% (N/A) | Monitoring
 
 🌐 Dashboard: https://jmb2885m75-cmd.github.io/porcini-tracker/</pre>
       <div class="meta">Fields sent per ranked spot (top 3): rank, location name, best weekend score (%), best day, status. The final line is the dashboard link.</div>
@@ -58,7 +59,7 @@
       <table><thead><tr><th>Date</th><th>Score</th><th>Tmax</th><th>Rain mm</th><th>Wind</th><th>Soil °C</th><th>RH %</th><th>Src</th></tr></thead><tbody id="rows"></tbody></table>
       <button id="prev">&laquo; Prev</button><button id="next">Next &raquo;</button> <span id="pageinfo" class="meta"></span>
     </div>
-    <h2>📝 Log Field Observation (this browser only)</h2>
+    <h2>📝 Log Field Observation</h2>
     <div class="card">
       <form id="logform">
         <input type="date" id="ldate" required />
@@ -66,14 +67,14 @@
         <select id="lstage"><option>buttons_young</option><option>prime</option><option>old_overripe</option></select>
         <input type="number" id="lweight" placeholder="weight g" min="0" />
         <input id="lnotes" placeholder="notes" />
-        <button type="submit">Save log</button>
+        <button type="submit">Submit via GitHub issue</button>
       </form>
-      <div class="note">Limitation: there is no backend. Logs are kept in this browser's localStorage only; they are shown as pins but do NOT change scores or sync anywhere. To make them count, export them and add them to <code>past_harvests</code> in the GitHub Actions CONFIG_JSON secret; the next workflow run rescores.</div>
-      <button id="export">Export logs (JSON)</button><button id="clearlogs">Clear logs</button>
+      <div class="note">Submitting opens a pre-filled GitHub issue (sign-in required). Only issues from the repository owner or collaborators are accepted: a workflow then appends the harvest to <code>harvest_log.json</code>, rescores and republishes this page, usually within a few minutes. Until then it is only an unsynced draft in this browser's localStorage (blue pin); the source of truth is the repository file. Red pins are synced harvests.</div>
+      <button id="export">Export drafts (JSON)</button><button id="clearlogs">Clear drafts</button>
       <pre id="exported" class="alert" style="display:none"></pre>
     </div>
   </div>
-  <script id="porcini-data" type="application/json">{"mode": "default", "threshold": 65, "locations": [{"name": "Oak & Beech Spot", "scores": [], "records": [], "harvests": [], "backtest": {"threshold": 65, "evaluated_harvests": 0, "hits": 0, "hit_rate": null, "mean_score_on_harvest_days": null, "mean_score_in_season": null}}]}</script>
+  <script id="porcini-data" type="application/json">{"mode": "default", "threshold": 65, "repo": "jmb2885m75-cmd/porcini-tracker", "locations": [{"name": "East Berlin Pine & Oak Ridge", "scores": [], "records": [], "harvests": [{"date": "2025-09-27", "cap_stage": "prime", "yield_tier": "large", "notes": "", "origin": "config"}, {"date": "2026-09-15", "yield_tier": "large", "cap_stage": "prime", "weight_g": 450, "notes": "Massive flush after heavy autumn rain.", "origin": "config"}, {"date": "2026-10-02", "cap_stage": "prime", "yield_tier": "large", "notes": "", "origin": "config"}], "backtest": {"threshold": 65, "evaluated_harvests": 0, "hits": 0, "hit_rate": null, "mean_score_on_harvest_days": null, "mean_score_in_season": null}}, {"name": "Oak & Beech Spot", "scores": [], "records": [], "harvests": [], "backtest": {"threshold": 65, "evaluated_harvests": 0, "hits": 0, "hit_rate": null, "mean_score_on_harvest_days": null, "mean_score_in_season": null}}]}</script>
   <script>
   (function () {
     var D = JSON.parse(document.getElementById('porcini-data').textContent);
@@ -94,8 +95,8 @@
     }
     function inRange(d) { var r = $('range').value || 'all'; if (r === 'all') return true; if (r === '365') return Date.parse(d) >= Date.now() - 365 * 864e5; return d.slice(0, 4) === r; }
     function harvestsFor() {
-      var h = (loc.harvests || []).map(function (x) { return Object.assign({ origin: 'config' }, x); });
-      loadLogs().filter(function (x) { return x.location === loc.name; }).forEach(function (x) { h.push(Object.assign({ origin: 'local log' }, x)); });
+      var h = (loc.harvests || []).map(function (x) { return Object.assign({}, x, { origin: x.origin === 'log' ? 'harvest_log.json' : 'config' }); });
+      loadLogs().filter(function (x) { return x.location === loc.name; }).forEach(function (x) { h.push(Object.assign({ origin: 'draft (unsynced)' }, x)); });
       return h;
     }
     function recMap() { var m = {}; loc.records.forEach(function (r) { m[r[0]] = r; }); return m; }
@@ -130,7 +131,7 @@
       svg.appendChild(cursor);
       harvestsFor().forEach(function (h) {
         var t = Date.parse(h.date); if (isNaN(t) || t < t0 || t > t1) return;
-        var c = el('circle', { cx: x(t), cy: y(sm[h.date] ? sm[h.date][1] : 0), r: 6, fill: h.origin === 'config' ? '#f87171' : '#60a5fa', stroke: '#fff', class: 'pin' });
+        var c = el('circle', { cx: x(t), cy: y(sm[h.date] ? sm[h.date][1] : 0), r: 6, fill: h.origin === 'draft (unsynced)' ? '#60a5fa' : '#f87171', stroke: '#fff', class: 'pin' });
         c.addEventListener('click', function () { pin(h.date); });
         svg.appendChild(c);
       });
@@ -172,11 +173,13 @@
     $('next').onclick = function () { page++; rows(); };
     $('logform').onsubmit = function (e) {
       e.preventDefault(); var logs = loadLogs();
-      logs.push({ location: loc.name, date: $('ldate').value, yield_tier: $('ltier').value, cap_stage: $('lstage').value, weight_g: +$('lweight').value || undefined, notes: $('lnotes').value });
-      saveLogs(logs); this.reset(); draw();
+      var entry = { location: loc.name, date: $('ldate').value, yield_tier: $('ltier').value, cap_stage: $('lstage').value, weight_g: +$('lweight').value || undefined, notes: $('lnotes').value };
+      logs.push(entry); saveLogs(logs); this.reset(); draw();
+      var q = new URLSearchParams({ template: 'harvest.yml', title: 'Harvest: ' + entry.location + ' ' + entry.date, labels: 'harvest', location: entry.location, date: entry.date, yield_tier: entry.yield_tier, cap_stage: entry.cap_stage, weight_g: entry.weight_g || '', notes: entry.notes });
+      window.open('https://github.com/' + D.repo + '/issues/new?' + q.toString(), '_blank', 'noopener');
     };
     $('export').onclick = function () { var pre = $('exported'); pre.style.display = 'block'; pre.textContent = JSON.stringify(loadLogs(), null, 2); };
-    $('clearlogs').onclick = function () { if (confirm('Delete all logs stored in this browser?')) { saveLogs([]); draw(); } };
+    $('clearlogs').onclick = function () { if (confirm('Delete all drafts stored in this browser?')) { saveLogs([]); draw(); } };
     refresh();
   })();
   </script>

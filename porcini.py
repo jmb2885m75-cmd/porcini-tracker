@@ -17,6 +17,8 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import requests
 
+from harvest import HarvestError, load_harvest_log, merge_harvests
+
 CONFIG_PATH = Path("config.json")
 DB_PATH = Path("porcini_db.json")
 ALERT_STATE_PATH = Path("alert_state.json")
@@ -117,9 +119,9 @@ def lunar_phase_fraction(day: date) -> float:
 
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 # Bump when the scoring rules change; forces every stored daily score to be recomputed.
-MODEL_VERSION = 2
+MODEL_VERSION = 3  # 3: runoff rule also applies to records backfilled from hourly data
 ARCHIVE_LAG_DAYS = 5
 SOURCE_ARCHIVE = "archive"
 SOURCE_FORECAST = "forecast"
@@ -135,6 +137,13 @@ MODE_LABELS = {
     MODE_OUTLOOK: "Thursday weekend outlook",
     MODE_FINAL: "Friday final go/no-go",
 }
+
+# Friday final-confirmation targeting (config key FRIDAY_POLICY):
+#   thursday_alerted_only - only spots that received the Thursday outlook alert (the default / original behaviour)
+#   all_above_threshold   - every spot whose best weekend score is at or above ALERT_THRESHOLD
+FRIDAY_POLICY_THURSDAY_ONLY = "thursday_alerted_only"
+FRIDAY_POLICY_ALL_ABOVE = "all_above_threshold"
+FRIDAY_POLICIES = (FRIDAY_POLICY_THURSDAY_ONLY, FRIDAY_POLICY_ALL_ABOVE)
 
 MIN_ALERT_GAP_DAYS = 5
 AFFINITY_LOOKBACK_DAYS = 730  # "proven spot affinity" only counts harvests from the last 2 years
@@ -154,6 +163,18 @@ DAILY_FIELDS = [
 ]
 # precip_peak_2h_mm is derived from the hourly precipitation series (busiest 2 consecutive hours of the day).
 RECORD_FIELDS = DAILY_FIELDS + ["precip_peak_2h_mm"]
+
+# precip_peak_basis says how precip_peak_2h_mm was obtained, so approximated vs observed data is explicit:
+#   "hourly"          - fully observed: derived from the hourly series fetched together with the daily record
+#   "hourly_backfill" - derived later from a separate hourly archive request (same data, filled in afterwards)
+#   "unavailable"     - the hourly request succeeded but had no data for this day; no runoff penalty can apply
+#   (missing)         - not yet backfilled (older records, or a backfill request failed); retried on the next run
+# Nothing is ever estimated from daily totals: a missing peak simply means "no runoff penalty".
+PEAK_BASIS_HOURLY = "hourly"
+PEAK_BASIS_BACKFILL = "hourly_backfill"
+PEAK_BASIS_UNAVAILABLE = "unavailable"
+BACKFILL_CHUNK_DAYS = 365
+BACKFILL_MAX_CHUNKS_PER_RUN = 4  # bounds API calls per run; the rest is picked up by the next run (TODO: one-time manual run if needed)
 
 
 def peak_precip_by_day(hourly: Dict[str, Any]) -> Dict[str, float]:
@@ -182,6 +203,8 @@ def parse_open_meteo_payload(payload: Optional[Dict[str, Any]], source: str) -> 
             values = daily.get(field) or []
             item[field] = values[idx] if idx < len(values) else None
         item["precip_peak_2h_mm"] = peaks.get(date_str)
+        if item["precip_peak_2h_mm"] is not None:
+            item["precip_peak_basis"] = PEAK_BASIS_HOURLY
         records.append(item)
     return records
 
@@ -204,6 +227,64 @@ def fetch_archive_day_range(latitude: float, longitude: float, elevation: int, s
         },
     )
     return parse_open_meteo_payload(payload, SOURCE_ARCHIVE)
+
+
+def fetch_archive_hourly_precip(latitude: float, longitude: float, elevation: int, start: date, end: date) -> Optional[Dict[str, Any]]:
+    """Hourly precipitation only (used for the runoff backfill). Returns None on any API failure."""
+    return fetch_json(
+        ARCHIVE_API_URL,
+        {
+            "latitude": latitude,
+            "longitude": longitude,
+            "elevation": elevation,
+            "start_date": iso_date(start),
+            "end_date": iso_date(end),
+            "hourly": "precipitation",
+            "precipitation_unit": "mm",
+            "timezone": "UTC",
+        },
+    )
+
+
+def needs_runoff_backfill(rec: Dict[str, Any]) -> bool:
+    return rec.get("source") == SOURCE_ARCHIVE and rec.get("precip_peak_2h_mm") is None and rec.get("precip_peak_basis") is None
+
+
+def backfill_runoff_data(records: List[Dict[str, Any]], latitude: float, longitude: float, elevation: int,
+                         fetch_hourly: Any = None, max_chunks: int = BACKFILL_MAX_CHUNKS_PER_RUN) -> List[str]:
+    """Fill precip_peak_2h_mm on older archive records (in place) from hourly precipitation.
+
+    Fails soft: a failed/empty chunk leaves its records untouched (they are retried next run) and never
+    raises. Returns the dates that were changed so their scores can be recomputed.
+    """
+    fetch_hourly = fetch_hourly or fetch_archive_hourly_precip
+    pending = sorted((r for r in records if needs_runoff_backfill(r)), key=lambda r: r["date"])
+    changed: List[str] = []
+    chunks = 0
+    while pending and chunks < max_chunks:
+        start = parse_date(pending[0]["date"])
+        end = start + timedelta(days=BACKFILL_CHUNK_DAYS - 1)
+        chunk = [r for r in pending if parse_date(r["date"]) <= end]
+        pending = pending[len(chunk):]
+        chunks += 1
+        try:
+            payload = fetch_hourly(latitude, longitude, elevation, start, parse_date(chunk[-1]["date"]))
+        except Exception as exc:  # partial API failure must never break the run
+            print(f"[WARN] Runoff backfill chunk {iso_date(start)} failed: {exc}")
+            continue
+        hourly = payload.get("hourly") if isinstance(payload, dict) else None
+        if not hourly or not hourly.get("time"):
+            print(f"[WARN] Runoff backfill chunk starting {iso_date(start)} returned no hourly data; will retry next run")
+            continue
+        peaks = peak_precip_by_day(hourly)
+        for rec in chunk:
+            peak = peaks.get(rec["date"])
+            rec["precip_peak_2h_mm"] = peak
+            rec["precip_peak_basis"] = PEAK_BASIS_BACKFILL if peak is not None else PEAK_BASIS_UNAVAILABLE
+            changed.append(rec["date"])
+    if pending:
+        print(f"[INFO] {len(pending)} records still await runoff backfill (continues on the next run)")
+    return changed
 
 
 def fetch_forecast_day_range(latitude: float, longitude: float, elevation: int) -> List[Dict[str, Any]]:
@@ -252,8 +333,36 @@ def load_or_init_db() -> Dict[str, Any]:
     # Schema history: 1 = {"locations": {name: {daily_records}}}; 2 adds source/precip_peak_2h_mm per
     # record, per-location daily_scores + backtest, and this version marker. v1 data is migrated in
     # normalize_records() (missing "source" is inferred from the archive lag).
+    # v3 adds precip_peak_basis per record and moves legacy top-level entries into LEGACY_KEY.
+    moved = migrate_legacy_entries(db)
+    if moved:
+        print(f"[INFO] Quarantined {moved} legacy top-level entries under '{LEGACY_KEY}'")
     db["schema_version"] = SCHEMA_VERSION
     return db
+
+
+LEGACY_KEY = "legacy_quarantine"
+KNOWN_TOP_LEVEL_KEYS = {"locations", "schema_version", "meta", LEGACY_KEY}
+
+
+def migrate_legacy_entries(db: Dict[str, Any]) -> int:
+    """Quarantine pre-schema top-level entries (date-keyed rows and per-spot columnar payloads).
+
+    They are MOVED, not deleted, to db[LEGACY_KEY]: the old rows carry no location or source information, so
+    converting them into location records could silently mix up data. Moving keeps the data intact while
+    clearing the top level. TODO: a one-time manual review can convert them into per-location records.
+    Returns the number of entries moved.
+    """
+    legacy = db.get(LEGACY_KEY)
+    if not isinstance(legacy, dict):
+        legacy = {}
+    moved = 0
+    for key in [k for k in db if k not in KNOWN_TOP_LEVEL_KEYS]:
+        legacy[key] = db.pop(key)
+        moved += 1
+    if legacy:
+        db[LEGACY_KEY] = legacy
+    return moved
 
 
 def valid_date_string(value: Any) -> bool:
@@ -322,6 +431,12 @@ def check_db_integrity(db: Dict[str, Any], today: Optional[date] = None) -> List
         return ["database has no 'locations' mapping"]
     if db.get("schema_version") != SCHEMA_VERSION:
         issues.append(f"schema_version is {db.get('schema_version')!r}, expected {SCHEMA_VERSION}")
+    leftover_dates = [k for k in db if valid_date_string(k)]
+    if leftover_dates:
+        issues.append(f"{len(leftover_dates)} legacy top-level date keys (e.g. {min(leftover_dates)}); run the engine to quarantine them")
+    other = [k for k in db if k not in KNOWN_TOP_LEVEL_KEYS and not valid_date_string(k)]
+    if other:
+        issues.append(f"unexpected top-level keys: {', '.join(map(str, other[:5]))}")
     for name, loc in db["locations"].items():
         records = loc.get("daily_records") if isinstance(loc, dict) else None
         if not isinstance(records, list):
@@ -370,6 +485,12 @@ def ensure_location_history(location_name: str, db: Dict[str, Any], latitude: fl
     if start <= end:
         records = merge_records(records, fetch_archive_day_range(latitude, longitude, elevation, start, end))
     records = merge_records(records, fetch_forecast_day_range(latitude, longitude, elevation))
+    backfilled = backfill_runoff_data(records, latitude, longitude, elevation)
+    # Runoff looks at the last 3 days, so each backfilled day can change the next two days' scores too.
+    pending = set(loc_data.get("pending_rescore") or [])
+    for d in backfilled:
+        pending.update(iso_date(parse_date(d) + timedelta(days=i)) for i in range(3))
+    loc_data["pending_rescore"] = sorted(pending)
 
     loc_data.update({
         "latitude": latitude,
@@ -483,7 +604,7 @@ def find_drought_rebound(hist: History, day: date) -> Optional[date]:
 def has_runoff(hist: History, day: date) -> bool:
     """Heavy-rain runoff: a day (last 3) with >= 15 mm where >50% fell in its busiest 2 hours.
 
-    Needs hourly data (precip_peak_2h_mm); records stored before hourly support have none, so no penalty.
+    Needs hourly data (precip_peak_2h_mm); records without it (not yet backfilled, see backfill_runoff_data) get no penalty.
     """
     for rec in hist.window(day, 3):
         total, peak = _precip(rec), rec.get("precip_peak_2h_mm")
@@ -643,12 +764,13 @@ def update_daily_scores(location: Dict[str, Any], records: List[Dict[str, Any]],
         scores = {}
     hist = History(records)
     harvests = location.get("past_harvests", [])
+    force = set(loc_store.get("pending_rescore") or [])
     updated = 0
     result: Dict[str, Any] = {}
     for rec in records:
         d = rec["date"]
         prev = scores.get(d)
-        if isinstance(prev, dict) and prev.get("source") == SOURCE_ARCHIVE and rec["source"] == SOURCE_ARCHIVE:
+        if d not in force and isinstance(prev, dict) and prev.get("source") == SOURCE_ARCHIVE and rec["source"] == SOURCE_ARCHIVE:
             result[d] = prev
             continue
         score, status, quality = calculate_score_for_day(location, rec, hist, harvests)
@@ -656,6 +778,7 @@ def update_daily_scores(location: Dict[str, Any], records: List[Dict[str, Any]],
         updated += 1
     loc_store["daily_scores"] = result
     loc_store["scores_signature"] = signature
+    loc_store["pending_rescore"] = []
     return updated
 
 
@@ -758,14 +881,32 @@ def should_alert_for_location(location_name: str, current_score: int, status: st
     return crossed and status_changed and days_since >= MIN_ALERT_GAP_DAYS
 
 
-def should_confirm_for_location(location_name: str, state: Dict[str, Any], today: Optional[date] = None) -> bool:
-    """Friday final confirmation: only for spots that got a Thursday outlook alert within the last 2 days."""
+def resolve_friday_policy(cfg: Dict[str, Any]) -> str:
+    policy = cfg.get("FRIDAY_POLICY", FRIDAY_POLICY_THURSDAY_ONLY)
+    if policy not in FRIDAY_POLICIES:
+        print(f"[WARN] Unknown FRIDAY_POLICY {policy!r}; using {FRIDAY_POLICY_THURSDAY_ONLY!r}")
+        return FRIDAY_POLICY_THURSDAY_ONLY
+    return policy
+
+
+def should_confirm_for_location(location_name: str, state: Dict[str, Any], today: Optional[date] = None,
+                                policy: str = FRIDAY_POLICY_THURSDAY_ONLY, best_score: Optional[int] = None,
+                                threshold: int = 65) -> bool:
+    """Friday final confirmation, at most once per day per spot. Who is eligible depends on `policy`:
+
+    thursday_alerted_only: only spots that got a Thursday outlook alert within the last 2 days (default).
+    all_above_threshold:   every spot whose best weekend score is >= threshold.
+    """
     loc_state = state["locations"].get(location_name, {})
     today = today or datetime.now(timezone.utc).date()
+    if loc_state.get("last_confirmation_date") == iso_date(today):
+        return False
+    if policy == FRIDAY_POLICY_ALL_ABOVE:
+        return best_score is not None and best_score >= threshold
     last_date = loc_state.get("last_alert_date")
     if loc_state.get("last_alert_mode") != MODE_OUTLOOK or not last_date or not valid_date_string(last_date):
         return False
-    return 0 <= (today - parse_date(last_date)).days <= 2 and loc_state.get("last_confirmation_date") != iso_date(today)
+    return 0 <= (today - parse_date(last_date)).days <= 2
 
 
 def send_telegram(token: str, chat_id: str, message: str) -> bool:
@@ -891,7 +1032,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
       <table><thead><tr><th>Date</th><th>Score</th><th>Tmax</th><th>Rain mm</th><th>Wind</th><th>Soil °C</th><th>RH %</th><th>Src</th></tr></thead><tbody id="rows"></tbody></table>
       <button id="prev">&laquo; Prev</button><button id="next">Next &raquo;</button> <span id="pageinfo" class="meta"></span>
     </div>
-    <h2>📝 Log Field Observation (this browser only)</h2>
+    <h2>📝 Log Field Observation</h2>
     <div class="card">
       <form id="logform">
         <input type="date" id="ldate" required />
@@ -899,10 +1040,10 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
         <select id="lstage"><option>buttons_young</option><option>prime</option><option>old_overripe</option></select>
         <input type="number" id="lweight" placeholder="weight g" min="0" />
         <input id="lnotes" placeholder="notes" />
-        <button type="submit">Save log</button>
+        <button type="submit">Submit via GitHub issue</button>
       </form>
-      <div class="note">Limitation: there is no backend. Logs are kept in this browser's localStorage only; they are shown as pins but do NOT change scores or sync anywhere. To make them count, export them and add them to <code>past_harvests</code> in the GitHub Actions CONFIG_JSON secret; the next workflow run rescores.</div>
-      <button id="export">Export logs (JSON)</button><button id="clearlogs">Clear logs</button>
+      <div class="note">Submitting opens a pre-filled GitHub issue (sign-in required). Only issues from the repository owner or collaborators are accepted: a workflow then appends the harvest to <code>harvest_log.json</code>, rescores and republishes this page, usually within a few minutes. Until then it is only an unsynced draft in this browser's localStorage (blue pin); the source of truth is the repository file. Red pins are synced harvests.</div>
+      <button id="export">Export drafts (JSON)</button><button id="clearlogs">Clear drafts</button>
       <pre id="exported" class="alert" style="display:none"></pre>
     </div>
   </div>
@@ -927,8 +1068,8 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     }
     function inRange(d) { var r = $('range').value || 'all'; if (r === 'all') return true; if (r === '365') return Date.parse(d) >= Date.now() - 365 * 864e5; return d.slice(0, 4) === r; }
     function harvestsFor() {
-      var h = (loc.harvests || []).map(function (x) { return Object.assign({ origin: 'config' }, x); });
-      loadLogs().filter(function (x) { return x.location === loc.name; }).forEach(function (x) { h.push(Object.assign({ origin: 'local log' }, x)); });
+      var h = (loc.harvests || []).map(function (x) { return Object.assign({}, x, { origin: x.origin === 'log' ? 'harvest_log.json' : 'config' }); });
+      loadLogs().filter(function (x) { return x.location === loc.name; }).forEach(function (x) { h.push(Object.assign({ origin: 'draft (unsynced)' }, x)); });
       return h;
     }
     function recMap() { var m = {}; loc.records.forEach(function (r) { m[r[0]] = r; }); return m; }
@@ -963,7 +1104,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
       svg.appendChild(cursor);
       harvestsFor().forEach(function (h) {
         var t = Date.parse(h.date); if (isNaN(t) || t < t0 || t > t1) return;
-        var c = el('circle', { cx: x(t), cy: y(sm[h.date] ? sm[h.date][1] : 0), r: 6, fill: h.origin === 'config' ? '#f87171' : '#60a5fa', stroke: '#fff', class: 'pin' });
+        var c = el('circle', { cx: x(t), cy: y(sm[h.date] ? sm[h.date][1] : 0), r: 6, fill: h.origin === 'draft (unsynced)' ? '#60a5fa' : '#f87171', stroke: '#fff', class: 'pin' });
         c.addEventListener('click', function () { pin(h.date); });
         svg.appendChild(c);
       });
@@ -1005,11 +1146,13 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     $('next').onclick = function () { page++; rows(); };
     $('logform').onsubmit = function (e) {
       e.preventDefault(); var logs = loadLogs();
-      logs.push({ location: loc.name, date: $('ldate').value, yield_tier: $('ltier').value, cap_stage: $('lstage').value, weight_g: +$('lweight').value || undefined, notes: $('lnotes').value });
-      saveLogs(logs); this.reset(); draw();
+      var entry = { location: loc.name, date: $('ldate').value, yield_tier: $('ltier').value, cap_stage: $('lstage').value, weight_g: +$('lweight').value || undefined, notes: $('lnotes').value };
+      logs.push(entry); saveLogs(logs); this.reset(); draw();
+      var q = new URLSearchParams({ template: 'harvest.yml', title: 'Harvest: ' + entry.location + ' ' + entry.date, labels: 'harvest', location: entry.location, date: entry.date, yield_tier: entry.yield_tier, cap_stage: entry.cap_stage, weight_g: entry.weight_g || '', notes: entry.notes });
+      window.open('https://github.com/' + D.repo + '/issues/new?' + q.toString(), '_blank', 'noopener');
     };
     $('export').onclick = function () { var pre = $('exported'); pre.style.display = 'block'; pre.textContent = JSON.stringify(loadLogs(), null, 2); };
-    $('clearlogs').onclick = function () { if (confirm('Delete all logs stored in this browser?')) { saveLogs([]); draw(); } };
+    $('clearlogs').onclick = function () { if (confirm('Delete all drafts stored in this browser?')) { saveLogs([]); draw(); } };
     refresh();
   })();
   </script>
@@ -1034,11 +1177,12 @@ def dashboard_payload(cfg: Dict[str, Any], analysis: List[Dict[str, Any]], mode:
             "harvests": item.get("harvests", []),
             "backtest": item.get("backtest", {}),
         })
-    return {"mode": mode, "threshold": int(cfg.get("ALERT_THRESHOLD", 65)), "locations": locations}
+    repo = os.environ.get("GITHUB_REPOSITORY") or cfg.get("GITHUB_REPOSITORY") or "jmb2885m75-cmd/porcini-tracker"
+    return {"mode": mode, "threshold": int(cfg.get("ALERT_THRESHOLD", 65)), "repo": repo, "locations": locations}
 
 
 def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]], alert_message: str = "", alert_will_send: bool = False, mode: str = MODE_DEFAULT) -> str:
-    """Self-contained dashboard (inline CSS/JS/data, no CDN). Static hosting only: no backend sync."""
+    """Self-contained dashboard (inline CSS/JS/data, no CDN). Static hosting only; harvests come from harvest_log.json via the issue workflow."""
     threshold = int(cfg.get("ALERT_THRESHOLD", 65))
     cards = []
     for item in analysis:
@@ -1134,7 +1278,14 @@ def main() -> int:
     print(f"[INFO] Run mode: {mode}")
 
     threshold = int(cfg.get("ALERT_THRESHOLD", 65))
+    friday_policy = resolve_friday_policy(cfg)
     dashboard_url = resolve_dashboard_url()
+
+    try:
+        harvest_log = load_harvest_log()
+    except HarvestError as exc:
+        print(f"[WARN] {exc}; continuing with config past_harvests only")
+        harvest_log = {"harvests": []}
 
     analyses: List[Dict[str, Any]] = []
     alert_queue: List[Tuple[str, int, str, str]] = []
@@ -1144,10 +1295,10 @@ def main() -> int:
         latitude = float(location.get("latitude"))
         longitude = float(location.get("longitude"))
         elevation = int(location.get("elevation_m", 0))
-        harvests = location.get("past_harvests", [])
+        harvests = merge_harvests(location.get("past_harvests", []), harvest_log, name)
         records = ensure_location_history(name, db, latitude, longitude, elevation, today)
         loc_store = db["locations"][name]
-        update_daily_scores(location, records, loc_store)
+        update_daily_scores(dict(location, past_harvests=harvests), records, loc_store)
         loc_store["backtest"] = backtest_accuracy(loc_store["daily_scores"], harvests, threshold)
 
         best_score, best_day, status, quality = find_weekend_best(location, records, harvests, loc_store["daily_scores"], today)
@@ -1172,7 +1323,7 @@ def main() -> int:
         send = False
         loc_state = alert_state["locations"].get(name, {})
         if mode == MODE_FINAL:
-            send = should_confirm_for_location(name, alert_state, today)
+            send = should_confirm_for_location(name, alert_state, today, friday_policy, best_score, threshold)
             if send:
                 loc_state["last_confirmation_date"] = iso_date(today)
         else:

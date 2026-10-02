@@ -1,0 +1,43 @@
+name: Harvest observation
+description: Log a porcini harvest. Only issues from the repository owner or collaborators are ingested.
+title: "Harvest: "
+labels: ["harvest"]
+body:
+  - type: input
+    id: location
+    attributes:
+      label: Location / spot
+      description: Must match a configured location name exactly.
+    validations:
+      required: true
+  - type: input
+    id: date
+    attributes:
+      label: Date
+      description: YYYY-MM-DD
+    validations:
+      required: true
+  - type: dropdown
+    id: yield_tier
+    attributes:
+      label: Yield tier
+      options: [small, medium, large]
+    validations:
+      required: true
+  - type: dropdown
+    id: cap_stage
+    attributes:
+      label: Cap stage
+      options: [buttons_young, prime, old_overripe]
+    validations:
+      required: true
+  - type: input
+    id: weight_g
+    attributes:
+      label: Weight (g)
+      description: Optional
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Optional

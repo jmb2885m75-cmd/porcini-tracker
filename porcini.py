@@ -72,10 +72,7 @@ def fetch_location_weather(lat, lon, elevation, db_records):
                 "precipitation_sum",
                 "temperature_2m_max",
                 "temperature_2m_min",
-                "wind_speed_10m_max",
-                "soil_temperature_0_to_10cm",
-                "relative_humidity_2m_mean",
-                "soil_moisture_0_to_7cm_mean"
+                "wind_speed_10m_max"
             ],
             "timezone": "UTC"
         }
@@ -90,10 +87,12 @@ def fetch_location_weather(lat, lon, elevation, db_records):
                         "temperature_2m_max": data.get("temperature_2m_max", [])[i] or 15.0,
                         "temperature_2m_min": data.get("temperature_2m_min", [])[i] or 5.0,
                         "wind_speed_10m_max": data.get("wind_speed_10m_max", [])[i] or 10.0,
-                        "soil_temperature_0_to_10cm": data.get("soil_temperature_0_to_10cm", [])[i] or 12.0,
-                        "relative_humidity_2m_mean": data.get("relative_humidity_2m_mean", [])[i] or 75.0,
-                        "soil_moisture_0_to_7cm_mean": data.get("soil_moisture_0_to_7cm_mean", [])[i] or 0.25
+                        "soil_temperature_0_to_10cm": 12.0,
+                        "relative_humidity_2m_mean": 75.0,
+                        "soil_moisture_0_to_7cm_mean": 0.25
                     }
+            else:
+                print(f"Archive API returned status {res.status_code}: {res.text}")
         except Exception as e:
             print(f"Error fetching archive data for ({lat}, {lon}): {e}")
 
@@ -121,7 +120,10 @@ def fetch_location_weather(lat, lon, elevation, db_records):
             data = res.json().get("daily", {})
             dates = data.get("time", [])
             for i, d in enumerate(dates):
-                new_records[d] = {
+                # If date already exists from archive, merge or update with forecast details
+                if d not in new_records:
+                    new_records[d] = {}
+                new_records[d].update({
                     "precipitation_sum": data.get("precipitation_sum", [])[i] or 0.0,
                     "temperature_2m_max": data.get("temperature_2m_max", [])[i] or 15.0,
                     "temperature_2m_min": data.get("temperature_2m_min", [])[i] or 5.0,
@@ -129,7 +131,7 @@ def fetch_location_weather(lat, lon, elevation, db_records):
                     "soil_temperature_0_to_10cm": data.get("soil_temperature_0_to_10cm", [])[i] or 12.0,
                     "relative_humidity_2m_mean": data.get("relative_humidity_2m_mean", [])[i] or 75.0,
                     "soil_moisture_0_to_7cm_mean": data.get("soil_moisture_0_to_7cm_mean", [])[i] or 0.25
-                }
+                })
     except Exception as e:
         print(f"Error fetching forecast data for ({lat}, {lon}): {e}")
 
@@ -160,10 +162,10 @@ def evaluate_location(loc, weather_db):
         past_14d_weather = [weather_db[k] for k in past_14d_keys if k in weather_db]
 
         past_120d_keys = [(d_obj - datetime.timedelta(days=i)).strftime("%Y-%m-%d") for i in range(120)]
-        rain_120d = sum(weather_db[k]["precipitation_sum"] for k in past_120d_keys if k in weather_db)
+        rain_120d = sum(weather_db[k].get("precipitation_sum", 0) for k in past_120d_keys if k in weather_db)
         is_severe_drought = rain_120d < 100.0
 
-        past_7d_rain = sum(weather_db[k]["precipitation_sum"] for k in past_14d_keys[:7] if k in weather_db)
+        past_7d_rain = sum(weather_db[k].get("precipitation_sum", 0) for k in past_14d_keys[:7] if k in weather_db)
         required_rain = 45.0 if is_severe_drought else 20.0
 
         drought_broken = False
@@ -174,7 +176,7 @@ def evaluate_location(loc, weather_db):
             daily_scores[d_str] = {"score": 20.0, "status": "TOO DRY - DROUGHT UNBROKEN", "quality": "UNKNOWN"}
             continue
 
-        frost_days = sum(1 for pw in past_14d_weather[:7] if pw["temperature_2m_min"] < -2.0 or pw["soil_temperature_0_to_10cm"] < 3.0)
+        frost_days = sum(1 for pw in past_14d_weather[:7] if pw.get("temperature_2m_min", 5) < -2.0 or pw.get("soil_temperature_0_to_10cm", 12) < 3.0)
         if frost_days >= 2:
             daily_scores[d_str] = {"score": 0.0, "status": "SEASON TERMINATED BY FROST", "quality": "FROST-DAMAGED"}
             continue
@@ -184,7 +186,7 @@ def evaluate_location(loc, weather_db):
 
         month = d_obj.month
         if month in [8, 9, 10, 11] or (month == 12 and d_obj.day <= 1):
-            soil_temp_7d = sum(pw["soil_temperature_0_to_10cm"] for pw in past_14d_weather[:7]) / max(1, len(past_14d_weather[:7]))
+            soil_temp_7d = sum(pw.get("soil_temperature_0_to_10cm", 12) for pw in past_14d_weather[:7]) / max(1, len(past_14d_weather[:7]))
             if soil_temp_7d > 20.0:
                 score += 0
                 status = "SEASON DELAYED BY HIGH SOIL TEMP"
@@ -194,8 +196,8 @@ def evaluate_location(loc, weather_db):
         trigger_day_index = -1
         for idx, pw in enumerate(past_14d_weather[1:8], start=1):
             prev_pw = past_14d_weather[idx-1]
-            temp_drop = prev_pw["temperature_2m_max"] - pw["temperature_2m_max"]
-            if temp_drop >= 4.0 and pw["precipitation_sum"] >= 5.0:
+            temp_drop = prev_pw.get("temperature_2m_max", 15) - pw.get("temperature_2m_max", 15)
+            if temp_drop >= 4.0 and pw.get("precipitation_sum", 0) >= 5.0:
                 trigger_day_index = idx
                 break
 
@@ -222,22 +224,22 @@ def evaluate_location(loc, weather_db):
         if "Pine" in trees: tree_pts = max(tree_pts, 10)
         score += min(host_max_pts, tree_pts)
 
-        current_soil_t = w["soil_temperature_0_to_10cm"]
+        current_soil_t = w.get("soil_temperature_0_to_10cm", 12)
         if 12.0 <= current_soil_t <= 17.0:
             score += 15.0
 
-        soil_m = w["soil_moisture_0_to_7cm_mean"]
+        soil_m = w.get("soil_moisture_0_to_7cm_mean", 0.25)
         if soil_m > 0.35:
             score += 10.0
         elif soil_m < 0.18:
             score -= 15.0
 
-        avg_hum = w["relative_humidity_2m_mean"]
+        avg_hum = w.get("relative_humidity_2m_mean", 75)
         if avg_hum < 60.0:
             score -= 15.0
             quality = "DRY LEATHER CAPS"
 
-        if w["wind_speed_10m_max"] > 30.0:
+        if w.get("wind_speed_10m_max", 10) > 30.0:
             score -= 10.0
 
         fly_date_str = loc.get("last_seen_fly_agaric")
@@ -270,7 +272,7 @@ def evaluate_location(loc, weather_db):
         if medium_large_count >= 2:
             score += 10.0
 
-        max_t = w["temperature_2m_max"]
+        max_t = w.get("temperature_2m_max", 15)
         if max_t > 18.0:
             quality = "⚠️ HIGH MAGGOT RISK"
         elif 8.0 <= max_t <= 15.0:

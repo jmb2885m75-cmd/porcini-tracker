@@ -154,6 +154,22 @@ RAIN_TRIGGER_MM = 10.0
 THERMAL_SHOCK_DROP_C = 5.0
 TRIGGER_LOOKBACK_DAYS = 14
 RUNOFF_MIN_DAY_MM = 15.0
+VERDICT_LOW_TIERS = (
+    (25, "🚫 Not worth it"),
+    (45, "😐 Unlikely"),
+    (60, "🤔 Long shot"),
+)
+VERDICT_WORTH_LOOK = "👀 Worth a look"
+VERDICT_GO = "👍 Good chance – go"
+VERDICT_DEFINITE_GO = "🔥 Definitely go for it"
+VERDICT_SPECIAL_TAGS = {
+    "terminated": "❄️ Season over",
+    "off_season": "🍂 Off season",
+    "delayed": "🔥 Too warm – wait",
+    "dry": "💧 Too dry – wait",
+}
+SCORE_COLOR_MIN = 40
+SCORE_COLOR_MAX = 70
 
 DAILY_FIELDS = [
     "precipitation_sum",
@@ -888,6 +904,28 @@ def status_category(status: Optional[str]) -> str:
     return "watch"
 
 
+def score_verdict_tag(score: int, status: Optional[str], threshold: int = 65) -> str:
+    status_text = (status or "").lower()
+    if "no mushrooms found" in status_text:
+        return "🔎 No mushrooms found (field observation)"
+    category = status_category(status)
+    if category in VERDICT_SPECIAL_TAGS:
+        return VERDICT_SPECIAL_TAGS[category]
+    for upper_bound, label in VERDICT_LOW_TIERS:
+        if score < upper_bound:
+            return label
+    if score >= max(75, threshold):
+        return VERDICT_DEFINITE_GO
+    if score >= threshold:
+        return VERDICT_GO
+    return VERDICT_WORTH_LOOK
+
+
+def score_color(score: int) -> str:
+    hue = round(max(0, min(1, (score - SCORE_COLOR_MIN) / (SCORE_COLOR_MAX - SCORE_COLOR_MIN))) * 120)
+    return f"hsl({hue} 80% 58%)"
+
+
 def should_alert_for_location(location_name: str, current_score: int, status: str, threshold: int, state: Dict[str, Any], today: Optional[date] = None) -> bool:
     """All three conditions must hold: threshold crossed upward, significant status change, >=5 days since last alert.
 
@@ -998,7 +1036,8 @@ def build_alert_message(results: List[Tuple[str, int, str, str]], dashboard_url:
         lines = ["🍄 Weekend Porcini Forecast (Ranked):"]
     for index, (name, score, best_day, status) in enumerate(ranking, 1):
         verdict = f"{'GO' if score >= threshold else 'NO-GO'} - " if mode == MODE_FINAL else ""
-        lines.append(f"{index}. {name} - {verdict}{score}% ({best_day}) | {status}")
+        tag = score_verdict_tag(score, status, threshold)
+        lines.append(f"{index}. {name} - {verdict}{score}% – {tag} ({best_day}) | {status}")
     lines.append("")
     lines.append(f"🌐 Dashboard: {dashboard_url}")
     return "\n".join(lines)
@@ -1025,7 +1064,9 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     h2 { color: var(--text); font-size: var(--heading); line-height: 1.3; margin: var(--space-4) 0 var(--space-2); }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: var(--space-3); }
     .card { min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: clamp(.9rem, 2vw, 1.2rem); margin-bottom: var(--space-3); }
-    .score { font-size: clamp(2.3rem, 6vw, 3rem); font-weight: 800; line-height: 1; color: var(--accent); }
+    .score-line { display: flex; flex-wrap: wrap; align-items: center; gap: .65rem; }
+    .score { font-size: clamp(2.3rem, 6vw, 3rem); font-weight: 800; line-height: 1; }
+    .verdict-tag { display: inline-block; background: var(--surface-raised); border: 1px solid var(--border); border-radius: 999px; padding: .25rem .65rem; font-size: var(--small); font-weight: 700; }
     .name { font-size: 1.12rem; margin-top: var(--space-2); font-weight: 700; }
     .meta { color: var(--muted); margin-top: var(--space-2); font-size: var(--small); }
     .best-day strong { color: var(--text); margin-left: .3rem; }
@@ -1183,6 +1224,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
         'The weather feed supplies 7 forecast days in total (including today) and the previous 7 days of recent weather. That means it can score up to 6 calendar days after today; beyond that, this dashboard has no forward weather forecast. Older observed weather is kept in the archive.',
         'For each scored day, the model looks for a rain or sharp-cooling signal 7–12 days earlier. It checks the recent 14-day period; a rain-and-cooling signal is stronger than either one alone. Recent rain, soil temperature and moisture, humidity, wind, drought, season, local tree/site settings and field observations also matter.',
         'The displayed percentage is a 0–100 favourability score, not a measured chance that mushrooms will be found. For example, 60% means the model rates conditions as fairly favourable; it does not mean a 60-in-100 guarantee. The usual alert threshold is 65.',
+        'Verdict guide at the default 65 threshold: below 25 Not worth it; 25–44 Unlikely; 45–59 Long shot; 60–64 Worth a look; 65–74 Good chance – go; 75+ Definitely go for it. The go boundary follows the configured ALERT_THRESHOLD. Tags provide meaning in addition to the red-to-green score colour.',
         'The chart’s light rain and temperature lines add weather context on their own visible-range scales; missing readings leave gaps, and the score line remains the main signal.',
         'Quality notes are separate from the score: they use recent average high temperatures to flag possible maggot risk or prime-quality conditions.',
         'Scores are estimates and become less dependable further into the 7-day weather forecast. Conditions and local growing spots can differ from the weather grid.'
@@ -1246,7 +1288,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     }
     function describe(date, extra) {
       var rm = recMap()[date], sm = scoreMap()[date], out = [fmtDate(date)];
-      if (sm) { out.push('Score: ' + sm[1] + '% - ' + sm[2]); if (sm[3]) out.push(sm[3]); }
+      if (sm) { out.push('Score: ' + sm[1] + '% – ' + sm[4] + ' — ' + sm[2]); if (sm[3]) out.push(sm[3]); }
       if (rm) {
         var weather = [];
         if (rm[1] != null) weather.push('Tmax ' + rm[1] + '°C');
@@ -1277,7 +1319,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
       $('selected-label').textContent = selectedDate ? 'Selected: ' + fmtDate(selectedDate) : 'No score dates available';
       $('selected-date').value = selectedDate;
       var lines = selectedDate ? [fmtDate(selectedDate)] : [];
-      if (sm) lines.push('Model score: ' + sm[1] + '% — ' + sm[2], 'Weather: ' + (rm && rm[8] === 'forecast' ? 'forecast' : 'recorded'));
+      if (sm) lines.push('Model score: ' + sm[1] + '% — ' + sm[4] + ' — ' + sm[2], 'Weather: ' + (rm && rm[8] === 'forecast' ? 'forecast' : 'recorded'));
       else if (selectedDate) lines.push('No score is available for this day.');
       hs.forEach(function (h) { lines.push((h.observation_type === 'no_mushrooms' ? '❌ Visited, no mushrooms found' : '🍄 Mushrooms found') + (h.origin === 'draft (unsynced)' ? ' (unsynced draft)' : '')); });
       setLines($('selected-day'), lines);
@@ -1311,7 +1353,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
         var marker = document.createElement('span'); marker.className = 'observation'; marker.textContent = observations.map(function (h) { return h.observation_type === 'no_mushrooms' ? '❌' : '🍄'; }).join(''); day.appendChild(marker);
         var heat = document.createElement('span'); heat.className = 'heat'; heat.setAttribute('aria-hidden', 'true');
         var bar = document.createElement('span'), score = row ? row[1] : 0;
-        bar.style.width = Math.max(0, Math.min(100, score)) + '%'; bar.style.background = 'hsl(' + Math.round(score * 1.2) + ' 65% 45%)';
+        bar.style.width = Math.max(0, Math.min(100, score)) + '%'; bar.style.background = row ? row[5] : '';
         heat.appendChild(bar); day.appendChild(heat);
         day.title = fmtDate(d) + (row ? ', score ' + score + '%' : '') + (observations.length ? ', ' + observations.map(function (h) { return h.observation_type === 'no_mushrooms' ? 'no mushrooms found' : 'mushrooms found'; }).join(', ') : '');
         day.setAttribute('aria-label', day.title);
@@ -1370,6 +1412,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
       svg.appendChild(el('text', { x: W - 5, y: T + 12, fill: '#93c5fd', 'font-size': 10, 'text-anchor': 'end' }, rain ? 'rain max ' + rangeText(rain.max) + ' mm' : 'rain unavailable'));
       svg.appendChild(el('text', { x: W - 5, y: T + 26, fill: '#fdba74', 'font-size': 10, 'text-anchor': 'end' }, temperature ? 'temp ' + rangeText(temperature.min) + '–' + rangeText(temperature.max) + ' °C' : 'temp unavailable'));
       svg.appendChild(el('polyline', { points: pts.map(function (r) { return x(Date.parse(r[0])) + ',' + y(r[1]); }).join(' '), fill: 'none', stroke: '#34d399', 'stroke-width': 2.8, class: 'score-series' }));
+      pts.forEach(function (r) { svg.appendChild(el('circle', { cx: x(Date.parse(r[0])), cy: y(r[1]), r: 2.2, fill: r[5], class: 'score-point', 'aria-hidden': 'true' })); });
       var sm = scoreMap(), cursor = el('line', { y1: T, y2: H - B, stroke: '#6b7280', visibility: 'hidden' });
       svg.appendChild(cursor);
       var markerOffsets = {};
@@ -1458,20 +1501,23 @@ def dashboard_payload(cfg: Dict[str, Any], analysis: List[Dict[str, Any]], mode:
     def rnd(value: Any) -> Any:
         return round(value, 2) if isinstance(value, float) else value
 
+    threshold = int(cfg.get("ALERT_THRESHOLD", 65))
     locations = []
     for item in analysis:
         records = item.get("records", [])
         scores = item.get("scores", {})
         locations.append({
             "name": item["name"],
-            "scores": [[d, v["score"], v["status"], v.get("quality", "")] for d, v in sorted(scores.items())],
+            "scores": [[d, v["score"], v["status"], v.get("quality", ""),
+                        score_verdict_tag(v["score"], v["status"], threshold), score_color(v["score"])]
+                       for d, v in sorted(scores.items())],
             # [date, tmax, tmin, rain, wind, soil_temp, rh, soil_moisture, source]
             "records": [[r["date"]] + [rnd(r.get(k)) for k in ("temperature_2m_max", "temperature_2m_min", "precipitation_sum", "wind_speed_10m_max", "soil_temperature_0_to_7cm_mean", "relative_humidity_2m_mean", "soil_moisture_0_to_7cm_mean")] + [r.get("source", "")] for r in records],
             "harvests": item.get("harvests", []),
             "backtest": item.get("backtest", {}),
         })
     repo = os.environ.get("GITHUB_REPOSITORY") or cfg.get("GITHUB_REPOSITORY") or "jmb2885m75-cmd/porcini-tracker"
-    return {"mode": mode, "threshold": int(cfg.get("ALERT_THRESHOLD", 65)), "repo": repo, "locations": locations}
+    return {"mode": mode, "threshold": threshold, "repo": repo, "locations": locations}
 
 
 def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]], alert_message: str = "", alert_will_send: bool = False, mode: str = MODE_DEFAULT) -> str:
@@ -1481,12 +1527,19 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]],
     for item in analysis:
         available = item["best_day"] != "N/A"
         verdict = ""
+        score = item["best_score"]
+        score_display = "N/A"
+        if available:
+            score_display = (
+                f"<span class='score' style='color:{score_color(score)}'>{score}%</span>"
+                f"<span class='verdict-tag'>{html.escape(score_verdict_tag(score, item['status'], threshold))}</span>"
+            )
         if mode == MODE_FINAL and available:
-            go = item["best_score"] >= threshold
+            go = score >= threshold
             verdict = f"<div><span class='badge {'go' if go else 'nogo'}'>{'GO' if go else 'NO-GO'}</span></div>"
         quality = f"<div class='meta'>{html.escape(item['quality'])}</div>" if item.get("quality") else ""
         cards.append(
-            f"<div class='card'><div class='score'>{item['best_score'] if available else 'N/A'}{'%' if available else ''}</div><div class='name'>{html.escape(str(item['name']))}</div>{verdict}"
+            f"<div class='card'><div class='score-line'>{score_display}</div><div class='name'>{html.escape(str(item['name']))}</div>{verdict}"
             f"<div class='meta best-day'>Best day<strong>{html.escape(str(item['best_day']))}</strong></div><div class='meta'>Status: {html.escape(str(item['status']))}</div>{quality}"
             f"<div class='meta'>Moisture: {item['soil_moisture']:.2f} m³/m³</div></div>"
         )

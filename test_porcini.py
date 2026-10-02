@@ -89,6 +89,43 @@ class AntiSpamTests(unittest.TestCase):
         self.assertFalse(p.should_alert_for_location("A", 10, watch, 65, self.state(last_score=10, last_status=watch, last_alert_date="2025-09-01"), self.today))
 
 
+class VerdictTests(unittest.TestCase):
+    def test_score_tiers_and_configured_go_threshold(self):
+        cases = [
+            (24, "🚫 Not worth it"),
+            (25, "😐 Unlikely"),
+            (45, "🤔 Long shot"),
+            (60, "👀 Worth a look"),
+            (64, "👀 Worth a look"),
+            (65, "👍 Good chance – go"),
+            (74, "👍 Good chance – go"),
+            (75, "🔥 Definitely go for it"),
+        ]
+        for score, expected in cases:
+            with self.subTest(score=score):
+                self.assertEqual(p.score_verdict_tag(score, "⚠️ Watch closely"), expected)
+        self.assertEqual(p.score_verdict_tag(70, "⚠️ Watch closely", 70), "👍 Good chance – go")
+        self.assertEqual(p.score_verdict_tag(69, "⚠️ Watch closely", 70), "👀 Worth a look")
+
+    def test_special_statuses_override_score_tier(self):
+        cases = [
+            ("❌ Outside mushroom season", "🍂 Off season"),
+            ("❄️ SEASON TERMINATED BY FROST", "❄️ Season over"),
+            ("🔥 SEASON DELAYED BY HIGH SOIL TEMP", "🔥 Too warm – wait"),
+            ("TOO DRY - DROUGHT UNBROKEN", "💧 Too dry – wait"),
+            ("🔎 No mushrooms found (field observation)", "🔎 No mushrooms found (field observation)"),
+        ]
+        for status, expected in cases:
+            with self.subTest(status=status):
+                self.assertEqual(p.score_verdict_tag(0, status), expected)
+
+    def test_score_color_clamps_red_and_green(self):
+        self.assertEqual(p.score_color(37), "hsl(0 80% 58%)")
+        self.assertEqual(p.score_color(40), "hsl(0 80% 58%)")
+        self.assertEqual(p.score_color(70), "hsl(120 80% 58%)")
+        self.assertEqual(p.score_color(100), "hsl(120 80% 58%)")
+
+
 class ModeTests(unittest.TestCase):
     def test_modes(self):
         utc = timezone.utc
@@ -101,6 +138,7 @@ class ModeTests(unittest.TestCase):
         r = [("A", 70, "Fri 2025-10-03", "ok")]
         self.assertIn("Outlook", p.build_alert_message(r, "u", p.MODE_OUTLOOK))
         self.assertIn("GO - 70%", p.build_alert_message(r, "u", p.MODE_FINAL, 65))
+        self.assertIn("70% – 👍 Good chance – go (Fri 2025-10-03)", p.build_alert_message(r, "u"))
         self.assertIn("Forecast", p.build_alert_message(r, "u"))
 
 
@@ -231,6 +269,22 @@ class WeatherFailureTests(unittest.TestCase):
         self.assertIn("Weather overview unavailable: no weather records have been loaded.", report)
         self.assertIn(">N/A</div>", report)
         self.assertNotIn(">0%</div>", report)
+
+    def test_dashboard_renders_verdict_and_score_color_everywhere(self):
+        status = "⚠️ Watch closely"
+        report = p.generate_dashboard_html(
+            {"ALERT_THRESHOLD": 65},
+            [{"name": "A", "best_score": 37, "best_day": "Sun. 04 Oct. 2026", "status": status,
+              "quality": "", "soil_moisture": 0.2, "records": [],
+              "scores": {"2026-10-04": {"score": 37, "status": status, "quality": ""}},
+              "harvests": [], "backtest": {}}],
+        )
+        self.assertIn("style='color:hsl(0 80% 58%)'>37%</span>", report)
+        self.assertIn("<span class='verdict-tag'>😐 Unlikely</span>", report)
+        self.assertIn('["2026-10-04", 37, "⚠️ Watch closely", "", "😐 Unlikely", "hsl(0 80% 58%)"]', report)
+        self.assertIn("Score: ' + sm[1] + '% – ' + sm[4]", report)
+        self.assertIn("bar.style.background = row ? row[5]", report)
+        self.assertIn("seasonOnly", report)
 
 
 class LegacyMigrationTests(unittest.TestCase):

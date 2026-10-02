@@ -6906,11 +6906,23 @@
   },
   "locations": {
     "Oak & Beech Spot": {
-      "latitude": 52.51,
-      "longitude": 13.42,
-      "elevation_m": 65,
+      "latitude": 52.41,
+      "longitude": 13.83,
+      "elevation_m": 50,
       "daily_records": [],
-      "last_sync_date": "2026-10-02"
+      "last_sync_date": "2026-10-02",
+      "record_count": 0,
+      "merge_policy": "archive replaces forecast for the same date; forecast-only dates are kept; newer forecast replaces older forecast",
+      "daily_scores": {},
+      "scores_signature": "2:78d7c9a708c1",
+      "backtest": {
+        "threshold": 65,
+        "evaluated_harvests": 0,
+        "hits": 0,
+        "hit_rate": null,
+        "mean_score_on_harvest_days": null,
+        "mean_score_in_season": null
+      }
     },
     "East Berlin Pine & Oak Ridge": {
       "latitude": 52.52,
@@ -6919,5 +6931,11 @@
       "daily_records": [],
       "last_sync_date": "2026-10-02"
     }
+  },
+  "schema_version": 2,
+  "meta": {
+    "last_run_utc": "2026-10-02T20:27:20Z",
+    "last_run_mode": "default",
+    "model_version": 2
   }
 }

@@ -9,9 +9,7 @@ repository, optionally sends an alert, and writes `porcini_report.html`.
 - Keeps a multi-year weather archive per location in `porcini_db.json` (schema version 2) and a per-day score series.
 - Sends Telegram / Pushover / Twilio alerts (see below).
 - Generates `porcini_report.html`: a self-contained dashboard (no CDN) with a score chart, harvest pins, tooltips and an observation browser.
-- **Not implemented:** a backend. Observations logged in the dashboard stay in that browser (localStorage), do not
-  change scores and are not synced. `DATABASE_SETTINGS.endpoint_url` / `FTP_SETTINGS` in `config.json` are not used
-  by `porcini.py`, and GitHub Pages cannot run PHP. To make a harvest count, add it to `past_harvests` in `config.json`.
+- Observations logged in the dashboard stay in that browser (localStorage), do not change scores and are not synced.
 - The legacy `index.html` is a separate hand-written page; the script only injects the alert preview into it.
 
 ## 1. Setup

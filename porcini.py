@@ -1211,14 +1211,11 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]],
     )
 
 
+DASHBOARD_URL = "https://jmb2885m75-cmd.github.io/porcini-tracker/"
+
+
 def resolve_dashboard_url(cfg: Dict[str, Any]) -> str:
-    configured = cfg.get("FTP_SETTINGS", {}).get("dashboard_url") or cfg.get("DATABASE_SETTINGS", {}).get("dashboard_url") or ""
-    if configured and "yourdomain.com" not in configured:
-        return configured
-    endpoint = cfg.get("DATABASE_SETTINGS", {}).get("endpoint_url") or ""
-    if endpoint:
-        return endpoint.rsplit("/", 1)[0] + "/"
-    return configured or "https://example.invalid/porcini_report.html"
+    return DASHBOARD_URL
 
 
 def inject_alert_into_index(alert_message: str, alert_will_send: bool) -> None:

@@ -1,18 +1,5 @@
 {
     "ALERT_THRESHOLD": 65,
-    "DATABASE_SETTINGS": {
-        "endpoint_url": "https://jmb2885m75-cmd.github.io/porcini-tracker/api.php"
-    },
-    "FTP_SETTINGS": {
-        "enabled": false,
-        "use_tls": true,
-        "host": "ftps.yourserver.com",
-        "username": "your_username",
-        "password": "your_password",
-        "port": 21,
-        "remote_path": "/public_html/porcini_report.html",
-        "dashboard_url": "https://jmb2885m75-cmd.github.io/porcini-tracker/"
-    },
     "NOTIFICATION_SETTINGS": {
         "provider": "telegram",
         "token": "",

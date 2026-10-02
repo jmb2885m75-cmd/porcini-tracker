@@ -85,5 +85,38 @@ class NoFindConsistencyTests(unittest.TestCase):
         self.assertLess(store["daily_scores"]["2026-10-01"]["score"], before)
 
 
+class DashboardUiTests(unittest.TestCase):
+    def test_accessible_explanations_and_daily_timeline_are_generated(self):
+        analysis = [{
+            "name": "Test spot",
+            "best_day": "Fri 02 October 2026",
+            "best_score": 71,
+            "status": "✅ Viable conditions",
+            "soil_moisture": 0.3,
+            "quality": "",
+            "records": [{
+                "date": "2026-10-02", "temperature_2m_max": 14, "temperature_2m_min": 7,
+                "precipitation_sum": 5, "wind_speed_10m_max": 10,
+                "soil_temperature_0_to_7cm_mean": 13, "relative_humidity_2m_mean": 80,
+                "soil_moisture_0_to_7cm_mean": 0.3, "source": "forecast",
+            }],
+            "scores": {"2026-10-02": {"score": 71, "status": "✅ Viable conditions", "quality": ""}},
+            "harvests": [{"date": "2026-10-02", "observation_type": "no_mushrooms", "origin": "log"}],
+            "backtest": {},
+        }]
+        html = p.generate_dashboard_html({"ALERT_THRESHOLD": 65}, analysis)
+        self.assertIn('<dialog id="info-dialog"', html)
+        self.assertIn('aria-modal="true"', html)
+        self.assertIn('aria-haspopup="dialog"', html)
+        self.assertIn("7 forecast days in total", html)
+        self.assertIn("not a measured chance", html)
+        self.assertIn("valid evidence", html)
+        self.assertIn('id="timeline-scroll"', html)
+        self.assertIn("ArrowLeft", html)
+        self.assertIn("day-prev", html)
+        self.assertIn("🍄' : '❌'", html)
+        self.assertIn("02 October 2026", html)
+
+
 if __name__ == "__main__":
     unittest.main()

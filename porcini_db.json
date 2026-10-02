@@ -13973,38 +13973,38 @@
           "source": "forecast"
         },
         "2026-10-02": {
-          "score": 57,
-          "status": "⚠️ Watch closely",
+          "score": 20,
+          "status": "🔎 No mushrooms found (field observation)",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         },
         "2026-10-03": {
-          "score": 57,
-          "status": "⚠️ Watch closely",
+          "score": 32,
+          "status": "🔎 Recent empty visit lowers odds",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         },
         "2026-10-04": {
-          "score": 57,
-          "status": "⚠️ Watch closely",
+          "score": 37,
+          "status": "🔎 Recent empty visit lowers odds",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         },
         "2026-10-05": {
-          "score": 57,
-          "status": "⚠️ Watch closely",
+          "score": 42,
+          "status": "🔎 Recent empty visit lowers odds",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         },
         "2026-10-06": {
-          "score": 57,
-          "status": "⚠️ Watch closely",
+          "score": 47,
+          "status": "🔎 Recent empty visit lowers odds",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         },
         "2026-10-07": {
-          "score": 57,
-          "status": "⚠️ Watch closely",
+          "score": 52,
+          "status": "🔎 Recent empty visit lowers odds",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         },
@@ -14015,14 +14015,14 @@
           "source": "forecast"
         }
       },
-      "scores_signature": "5:78d7c9a708c1",
+      "scores_signature": "5:268e80a8ec7c",
       "backtest": {
         "threshold": 65,
         "evaluated_harvests": 0,
         "hits": 0,
         "hit_rate": null,
         "mean_score_on_harvest_days": null,
-        "mean_score_in_season": 42.0
+        "mean_score_in_season": 41.5
       }
     },
     "East Berlin Pine & Oak Ridge": {
@@ -20955,7 +20955,7 @@
   },
   "schema_version": 3,
   "meta": {
-    "last_run_utc": "2026-10-02T21:33:11Z",
+    "last_run_utc": "2026-10-02T21:40:42Z",
     "last_run_mode": "default",
     "model_version": 5
   }

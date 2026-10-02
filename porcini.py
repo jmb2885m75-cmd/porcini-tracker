@@ -1026,6 +1026,23 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     #chartbox { position: relative; }
     svg { width: 100%; height: auto; background: #111827; border-radius: 8px; }
     #tip { position: absolute; display: none; pointer-events: none; background: #030712; border: 1px solid #4b5563; border-radius: 8px; padding: 8px 10px; font-size: .85rem; max-width: 280px; z-index: 5; }
+    .info-button { border-radius: 50%; color: #a7f3d0; font-size: 1rem; line-height: 1; padding: 4px 7px; }
+    dialog { width: min(34rem, calc(100% - 40px)); max-height: 80vh; overflow: auto; background: #1f2937; color: #e5e7eb; border: 1px solid #6b7280; border-radius: 12px; padding: 20px; }
+    dialog::backdrop { background: rgb(3 7 18 / 75%); }
+    #timeline-scroll { overflow-x: auto; overscroll-behavior-x: contain; padding: 8px 2px 12px; }
+    #timeline { display: flex; gap: 3px; min-width: max-content; align-items: stretch; }
+    .timeline-day { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; width: 42px; min-height: 80px; padding: 14px 3px 5px; margin: 0; border-radius: 6px; }
+    .timeline-day.weekend { background: #273449; }
+    .timeline-day.forecast { border-style: dashed; }
+    .timeline-day.selected { outline: 2px solid #a7f3d0; outline-offset: 1px; }
+    .timeline-day.today::after { content: "Today"; position: absolute; top: 0; color: #fbbf24; font-size: .65rem; }
+    .timeline-day .month { position: absolute; top: 0; font-size: .65rem; color: #a7f3d0; }
+    .timeline-day .tick { height: 7px; border-left: 1px solid #9ca3af; }
+    .timeline-day .day-number { font-weight: bold; }
+    .timeline-day .observation { min-height: 1.2em; font-size: .9rem; }
+    .timeline-day .heat { width: 100%; height: 4px; background: #374151; border-radius: 3px; overflow: hidden; }
+    .timeline-day .heat span { display: block; height: 100%; }
+    .legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 8px 0; }
     table { width: 100%; border-collapse: collapse; font-size: .85rem; }
     th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid #374151; }
     tr.row { cursor: pointer; } tr.row:hover { background: #374151; }
@@ -1039,21 +1056,35 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     <h1>🍄 Porcini Tracker Dashboard</h1>
     <div class="meta"><span class="badge">__MODE_LABEL__</span> Generated __GENERATED__ UTC</div>
     <div class="grid">__CARDS__</div>__ALERT__
-    <h2>🌦 Rain &amp; Temperature Overview</h2>
+    <h2>🌦 Rain &amp; Temperature Overview <button class="info-button" type="button" data-info="weather" aria-label="How to read the weather factors" aria-haspopup="dialog" aria-controls="info-dialog">ⓘ</button></h2>
     <div class="card">
       <label for="loc">Location:</label> <select id="loc"></select>
       <div id="weather-label" class="meta"></div>
       <table><thead><tr><th>Date</th><th>High °C</th><th>Low °C</th><th>Rain mm</th></tr></thead><tbody id="weather-rows"></tbody></table>
     </div>
-    <h2>📈 Daily Score History &amp; Field Observations</h2>
+    <h2>📈 Daily Score History &amp; Field Observations <button class="info-button" type="button" data-info="score" aria-label="How the forecast score is calculated" aria-haspopup="dialog" aria-controls="info-dialog">ⓘ</button></h2>
     <div class="card">
       <select id="range"></select>
       <div id="chartbox"><svg id="chart" viewBox="0 0 900 320"></svg><div id="tip"></div></div>
-      <div class="meta">Hover for details. Click a harvest pin (circle) or a table row to pin it below. Dashed line = alert threshold.</div>
+      <div class="meta">Hover or tap the chart for day details. Dashed line = alert threshold.</div>
+      <div class="legend" aria-label="Chart and timeline legend">
+        <span>🍄 Found</span><span>❌ Visited, none found</span><span>Solid outline: recorded weather</span><span>Dashed outline: forecast weather</span><span>Weekend shading; “Today” label</span>
+      </div>
+      <div class="meta">Select a day (or use the controls and ← / → keys). The strip shows 35 days around the selected date.</div>
+      <div>
+        <button id="day-prev" type="button" aria-label="Previous day">&larr; Previous day</button>
+        <label for="selected-date">Choose date:</label> <input type="date" id="selected-date" />
+        <button id="day-next" type="button" aria-label="Next day">Next day &rarr;</button>
+        <strong id="selected-label" aria-live="polite"></strong>
+      </div>
+      <div id="timeline-scroll" tabindex="0" role="group" aria-label="Daily forecast timeline. Use left and right arrow keys to change day.">
+        <div id="timeline"></div>
+      </div>
+      <div id="selected-day" class="meta" aria-live="polite"></div>
       <div id="pins" class="meta"></div>
       <div id="backtest" class="meta"></div>
     </div>
-    <h2>🔎 Observation Browser</h2>
+    <h2>🔎 Observation Browser <button class="info-button" type="button" data-info="observations" aria-label="How field observations affect the score" aria-haspopup="dialog" aria-controls="info-dialog">ⓘ</button></h2>
     <div class="card">
       <input id="q" placeholder="Filter by date (e.g. 2025-09, ISO prefix)" />
       <select id="src"><option value="">all sources</option><option>archive</option><option>forecast</option></select>
@@ -1073,11 +1104,16 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
         <input id="lnotes" placeholder="notes" />
         <button type="submit">Submit via GitHub issue</button>
       </form>
-      <div class="note">Submitting opens a pre-filled GitHub issue (sign-in required). Only issues from the repository owner or collaborators are accepted: a workflow then appends the observation to <code>harvest_log.json</code>, rescores and republishes this page, usually within a few minutes. A no-find observation caps that date's score at 20. Until synced it remains an unsynced draft in this browser's localStorage (blue pin); the source of truth is the repository file. Red pins are harvests; purple pins are no-find observations.</div>
+      <div class="note">Submitting opens a pre-filled GitHub issue (sign-in required). Only issues from the repository owner or collaborators are accepted: a workflow then appends the observation to <code>harvest_log.json</code>, rescores and republishes this page, usually within a few minutes. A no-find observation caps that date's score at 20 and lowers scores for the next five days. Until synced it remains an unsynced draft in this browser's localStorage; the source of truth is the repository file. 🍄 marks a find; ❌ marks a visit with no mushrooms.</div>
       <button id="export">Export drafts (JSON)</button><button id="clearlogs">Clear drafts</button>
       <pre id="exported" class="alert" style="display:none"></pre>
     </div>
   </div>
+  <dialog id="info-dialog" aria-labelledby="info-title" aria-describedby="info-copy" aria-modal="true">
+    <h2 id="info-title"></h2>
+    <div id="info-copy"></div>
+    <button id="info-close" type="button">Close</button>
+  </dialog>
   <script id="porcini-data" type="application/json">__DATA__</script>
   <script>
   (function () {
@@ -1088,9 +1124,46 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     function saveLogs(l) { try { localStorage.setItem(LOG_KEY, JSON.stringify(l)); } catch (e) { alert('Could not save: storage unavailable'); } }
     var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     function fmtDate(s) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); return m ? m[3] + ' ' + MONTHS[+m[2] - 1] + ' ' + m[1] : s; }
+    var INFO = {
+      weather: ['Weather indicators', [
+        'High and low show the forecast or recorded air temperature for that day. Soil temperature is the temperature near the surface where mushrooms grow. Moderate soil temperatures (10–18°C) help the score; above 20°C stops that day’s score, and repeated frost can end the season.',
+        'Rain shows the daily total. Recent rain helps keep a spot wet; the usual window is 7 days and is adjusted for the configured slope direction and canopy (roughly 4–11 days). The model also checks the longer 120-day rainfall history for drought.',
+        'Humidity is checked as a 12-day average; below 60% can lower the score. Soil moisture above 0.35 can help, while below 0.18 after more than 5 mm of rain can lower it.',
+        'Wind above 30 km/h on several days after rain can reduce the score. A day with at least 15 mm of concentrated rain can also cause runoff and a small penalty.',
+        'A rain trigger is at least 10 mm in a day. A sharp cooling signal means the high temperature fell at least 5°C below the average of the previous 3 days. The strongest signal is rain together with that cooling.',
+        'Weather source “archive” means recorded past weather; “forecast” means weather-model data. Weather inputs guide the score; they do not confirm mushrooms are present.'
+      ]],
+      score: ['How the forecast score works', [
+        'The weather feed supplies 7 forecast days in total (including today) and the previous 7 days of recent weather. That means it can score up to 6 calendar days after today; beyond that, this dashboard has no forward weather forecast. Older observed weather is kept in the archive.',
+        'For each scored day, the model looks for a rain or sharp-cooling signal 7–12 days earlier. It checks the recent 14-day period; a rain-and-cooling signal is stronger than either one alone. Recent rain, soil temperature and moisture, humidity, wind, drought, season, local tree/site settings and field observations also matter.',
+        'The displayed percentage is a 0–100 favourability score, not a measured chance that mushrooms will be found. For example, 60% means the model rates conditions as fairly favourable; it does not mean a 60-in-100 guarantee. The usual alert threshold is 65.',
+        'Quality notes are separate from the score: they use recent average high temperatures to flag possible maggot risk or prime-quality conditions.',
+        'Scores are estimates and become less dependable further into the 7-day weather forecast. Conditions and local growing spots can differ from the weather grid.'
+      ]],
+      observations: ['How observations affect the forecast', [
+        'A visit with no mushrooms is valid evidence, not missing data. On that date it caps the score at 20, even if weather or other bonuses would have made it higher.',
+        'A no-find observation also lowers scores on the next five days (the effect fades from day to day). It does not change unrelated dates.',
+        'Finding young/button mushrooms can raise scores over the following few days; an old/overripe find can lower scores while a flush cools off. Repeated medium or large finds can also add a small site-familiarity bonus.',
+        '🍄 marks a recorded find and ❌ marks a visit where none were found. Draft observations stay in this browser until submitted and accepted.'
+      ]]
+    };
+    var infoDialog = $('info-dialog');
+    function openInfo(key) {
+      var info = INFO[key];
+      if (!info) return;
+      $('info-title').textContent = info[0];
+      var body = $('info-copy'); body.textContent = '';
+      info[1].forEach(function (text) { var p = document.createElement('p'); p.textContent = text; body.appendChild(p); });
+      infoDialog.showModal();
+    }
+    document.querySelectorAll('[data-info]').forEach(function (button) {
+      button.addEventListener('click', function () { openInfo(button.dataset.info); });
+    });
+    $('info-close').addEventListener('click', function () { infoDialog.close(); });
+    infoDialog.addEventListener('click', function (ev) { if (ev.target === infoDialog) infoDialog.close(); });
     var NS = 'http://www.w3.org/2000/svg';
     function el(name, attrs, text) { var e = document.createElementNS(NS, name); for (var k in attrs) e.setAttribute(k, attrs[k]); if (text) e.textContent = text; return e; }
-    var loc = D.locations[0], pinned = [], page = 0;
+    var loc = D.locations[0], pinned = [], page = 0, selectedDate = '', activeTimelineDates = [];
     if (!loc) { $('chart').replaceWith(document.createTextNode('No locations configured.')); return; }
     D.locations.forEach(function (l, i) { var o = document.createElement('option'); o.value = i; o.textContent = l.name; $('loc').appendChild(o); });
     function years() { var s = {}; loc.scores.forEach(function (r) { s[r[0].slice(0, 4)] = 1; }); return Object.keys(s).sort(); }
@@ -1136,6 +1209,67 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
       pinned.forEach(function (p, i) { var d = document.createElement('div'); d.textContent = '📌 ' + describe(p.date, p.h).join(' | ') + ' (click to unpin)'; d.style.cursor = 'pointer'; d.onclick = function () { pinned.splice(i, 1); renderPins(); }; box.appendChild(d); });
     }
     function pin(date) { var hs = harvestsFor().filter(function (h) { return h.date === date; }); if (!pinned.some(function (p) { return p.date === date; })) pinned.push({ date: date, h: hs }); renderPins(); }
+    function nearestDate(target, dates) {
+      if (!dates.length) return '';
+      var best = dates[0], distance = Infinity, time = Date.parse(target + 'T00:00:00Z');
+      dates.forEach(function (d) { var delta = Math.abs(Date.parse(d + 'T00:00:00Z') - time); if (delta < distance) { best = d; distance = delta; } });
+      return best;
+    }
+    function initialDate() { return nearestDate(new Date().toISOString().slice(0, 10), loc.scores.map(function (r) { return r[0]; })); }
+    function renderSelectedDay() {
+      var sm = scoreMap()[selectedDate], rm = recMap()[selectedDate], hs = harvestsFor().filter(function (h) { return h.date === selectedDate; });
+      $('selected-label').textContent = selectedDate ? 'Selected: ' + fmtDate(selectedDate) : 'No score dates available';
+      $('selected-date').value = selectedDate;
+      var lines = selectedDate ? [fmtDate(selectedDate)] : [];
+      if (sm) lines.push('Model score: ' + sm[1] + '% — ' + sm[2], 'Weather: ' + (rm && rm[8] === 'forecast' ? 'forecast' : 'recorded'));
+      else if (selectedDate) lines.push('No score is available for this day.');
+      hs.forEach(function (h) { lines.push((h.observation_type === 'no_mushrooms' ? '❌ Visited, no mushrooms found' : '🍄 Mushrooms found') + (h.origin === 'draft (unsynced)' ? ' (unsynced draft)' : '')); });
+      setLines($('selected-day'), lines);
+    }
+    function renderTimeline() {
+      var days = loc.scores;
+      if (!selectedDate && days.length) selectedDate = initialDate();
+      var target = selectedDate || initialDate(), centerDate = nearestDate(target, days.map(function (r) { return r[0]; }));
+      var center = days.findIndex(function (r) { return r[0] === centerDate; });
+      var start = Math.max(0, center - 17), end = Math.min(days.length, start + 35);
+      start = Math.max(0, end - 35);
+      activeTimelineDates = days.slice(start, end).map(function (r) { return r[0]; });
+      var timeline = $('timeline'), records = recMap(), scores = scoreMap(), visits = harvestsFor();
+      timeline.textContent = '';
+      activeTimelineDates.forEach(function (d, i) {
+        var row = scores[d], weather = records[d], observations = visits.filter(function (h) { return h.date === d; });
+        var day = document.createElement('button');
+        day.type = 'button'; day.className = 'timeline-day';
+        var weekday = new Date(d + 'T00:00:00Z').getUTCDay();
+        if (weekday === 0 || weekday === 6) day.classList.add('weekend');
+        if (weather && weather[8] === 'forecast') day.classList.add('forecast');
+        if (d === selectedDate) day.classList.add('selected');
+        if (d === new Date().toISOString().slice(0, 10)) day.classList.add('today');
+        day.setAttribute('aria-pressed', d === selectedDate ? 'true' : 'false');
+        var previous = activeTimelineDates[i - 1], dateParts = d.split('-');
+        if ((dateParts[2] === '01' || !previous || previous.slice(0, 7) !== d.slice(0, 7)) && d !== new Date().toISOString().slice(0, 10)) {
+          var month = document.createElement('span'); month.className = 'month'; month.textContent = MONTHS[+dateParts[1] - 1].slice(0, 3); day.appendChild(month);
+        }
+        var tick = document.createElement('span'); tick.className = 'tick'; tick.setAttribute('aria-hidden', 'true'); day.appendChild(tick);
+        var number = document.createElement('span'); number.className = 'day-number'; number.textContent = dateParts[2]; day.appendChild(number);
+        var marker = document.createElement('span'); marker.className = 'observation'; marker.textContent = observations.map(function (h) { return h.observation_type === 'no_mushrooms' ? '❌' : '🍄'; }).join(''); day.appendChild(marker);
+        var heat = document.createElement('span'); heat.className = 'heat'; heat.setAttribute('aria-hidden', 'true');
+        var bar = document.createElement('span'), score = row ? row[1] : 0;
+        bar.style.width = Math.max(0, Math.min(100, score)) + '%'; bar.style.background = 'hsl(' + Math.round(score * 1.2) + ' 65% 45%)';
+        heat.appendChild(bar); day.appendChild(heat);
+        day.title = fmtDate(d) + (row ? ', score ' + score + '%' : '') + (observations.length ? ', ' + observations.map(function (h) { return h.observation_type === 'no_mushrooms' ? 'no mushrooms found' : 'mushrooms found'; }).join(', ') : '');
+        day.setAttribute('aria-label', day.title);
+        day.addEventListener('click', function () { selectedDate = d; renderTimeline(); var button = Array.prototype.find.call($('timeline').children, function (item) { return item.getAttribute('aria-label').indexOf(fmtDate(d)) === 0; }); if (button) button.focus(); });
+        timeline.appendChild(day);
+      });
+      renderSelectedDay();
+    }
+    function moveSelectedDay(direction) {
+      var all = loc.scores.map(function (r) { return r[0]; }), index = all.indexOf(selectedDate);
+      if (index < 0) index = all.indexOf(nearestDate(selectedDate || initialDate(), all));
+      var next = all[Math.max(0, Math.min(all.length - 1, index + direction))];
+      if (next) { selectedDate = next; renderTimeline(); var button = Array.prototype.find.call($('timeline').children, function (item) { return item.getAttribute('aria-label').indexOf(fmtDate(next)) === 0; }); if (button) button.focus(); }
+    }
     function draw() {
       var svg = $('chart'), tip = $('tip'); svg.textContent = '';
       var pts = loc.scores.filter(function (r) { return inRange(r[0]); });
@@ -1146,30 +1280,36 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
       function y(v) { return T + (H - T - B) * (1 - v / 100); }
       [0, 25, 50, 75, 100].forEach(function (v) { svg.appendChild(el('line', { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: '#374151' })); svg.appendChild(el('text', { x: 4, y: y(v) + 4, fill: '#9ca3af', 'font-size': 11 }, String(v))); });
       svg.appendChild(el('line', { x1: L, x2: W - R, y1: y(D.threshold), y2: y(D.threshold), stroke: '#f59e0b', 'stroke-dasharray': '5 4' }));
-      svg.appendChild(el('text', { x: L, y: H - 6, fill: '#9ca3af', 'font-size': 11 }, pts[0][0]));
-      svg.appendChild(el('text', { x: W - R, y: H - 6, fill: '#9ca3af', 'font-size': 11, 'text-anchor': 'end' }, pts[pts.length - 1][0]));
+      svg.appendChild(el('text', { x: L, y: H - 6, fill: '#9ca3af', 'font-size': 11 }, fmtDate(pts[0][0])));
+      svg.appendChild(el('text', { x: W - R, y: H - 6, fill: '#9ca3af', 'font-size': 11, 'text-anchor': 'end' }, fmtDate(pts[pts.length - 1][0])));
       svg.appendChild(el('polyline', { points: pts.map(function (r) { return x(Date.parse(r[0])) + ',' + y(r[1]); }).join(' '), fill: 'none', stroke: '#34d399', 'stroke-width': 1.5 }));
       var sm = scoreMap(), cursor = el('line', { y1: T, y2: H - B, stroke: '#6b7280', visibility: 'hidden' });
       svg.appendChild(cursor);
+      var markerOffsets = {};
       harvestsFor().forEach(function (h) {
         var t = Date.parse(h.date); if (isNaN(t) || t < t0 || t > t1) return;
-        var fill = h.observation_type === 'no_mushrooms' ? '#c084fc' : h.origin === 'draft (unsynced)' ? '#60a5fa' : '#f87171';
-        var c = el('circle', { cx: x(t), cy: y(sm[h.date] ? sm[h.date][1] : 0), r: 6, fill: fill, stroke: '#fff', class: 'pin' });
-        c.addEventListener('click', function () { pin(h.date); });
+        var offset = markerOffsets[h.date] || 0; markerOffsets[h.date] = offset + 18;
+        var found = h.observation_type !== 'no_mushrooms';
+        var c = el('text', { x: x(t), y: y(sm[h.date] ? sm[h.date][1] : 0) - offset, 'text-anchor': 'middle', 'font-size': 17, class: 'pin', tabindex: '0', role: 'button' }, found ? '🍄' : '❌');
+        var markerLabel = fmtDate(h.date) + (found ? ': mushrooms found' : ': visited, no mushrooms found');
+        c.setAttribute('aria-label', markerLabel); c.appendChild(el('title', {}, markerLabel));
+        c.addEventListener('click', function (ev) { ev.stopPropagation(); pin(h.date); selectedDate = h.date; renderTimeline(); setLines(tip, describe(h.date, harvestsFor().filter(function (item) { return item.date === h.date; }))); tip.style.display = 'block'; });
+        c.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); pin(h.date); } });
         svg.appendChild(c);
       });
-      var overlay = el('rect', { x: L, y: T, width: W - L - R, height: H - T - B, fill: 'transparent' });
-      overlay.addEventListener('mousemove', function (ev) {
+      svg.onmousemove = function (ev) {
         var box = svg.getBoundingClientRect(), px = (ev.clientX - box.left) * (W / box.width), t = t0 + (px - L) / (W - L - R) * (t1 - t0), best = pts[0], bd = Infinity;
         pts.forEach(function (r) { var dd = Math.abs(Date.parse(r[0]) - t); if (dd < bd) { bd = dd; best = r; } });
         var hs = harvestsFor().filter(function (h) { return h.date === best[0]; });
         setLines(tip, describe(best[0], hs)); tip.dataset.date = best[0]; tip.style.display = 'block';
         tip.style.left = Math.min(ev.clientX - box.left + 12, box.width - 290) + 'px'; tip.style.top = (ev.clientY - box.top + 12) + 'px';
         cursor.setAttribute('x1', x(Date.parse(best[0]))); cursor.setAttribute('x2', x(Date.parse(best[0]))); cursor.setAttribute('visibility', 'visible');
-      });
-      overlay.addEventListener('mouseleave', function () { tip.style.display = 'none'; cursor.setAttribute('visibility', 'hidden'); });
-      overlay.addEventListener('click', function (ev) { if (tip.dataset.date) pin(tip.dataset.date); });
-      svg.appendChild(overlay);
+      };
+      svg.onmouseleave = function () { tip.style.display = 'none'; cursor.setAttribute('visibility', 'hidden'); };
+      svg.onclick = function (ev) {
+        if (ev.target.classList && ev.target.classList.contains('pin')) return;
+        if (tip.dataset.date) { pin(tip.dataset.date); selectedDate = tip.dataset.date; renderTimeline(); }
+      };
     }
     function rows() {
       var q = $('q').value.trim(), s = $('src').value, sm = scoreMap();
@@ -1188,12 +1328,18 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
       var b = loc.backtest || {};
       $('backtest').textContent = b.evaluated_harvests ? 'Backtest: ' + b.hits + '/' + b.evaluated_harvests + ' medium/large harvests fell on days scoring >= ' + b.threshold + ' (mean score on harvest days ' + b.mean_score_on_harvest_days + ' vs in-season mean ' + b.mean_score_in_season + '). Small sample; indicative only.' : 'Backtest: no medium/large harvests with a stored score yet.';
     }
-    function refresh() { fillRange(); draw(); rows(); backtest(); weatherOverview(); }
-    $('loc').onchange = function () { loc = D.locations[+this.value]; pinned = []; page = 0; renderPins(); refresh(); };
+    function refresh() { fillRange(); draw(); rows(); backtest(); weatherOverview(); renderTimeline(); }
+    $('loc').onchange = function () { loc = D.locations[+this.value]; pinned = []; page = 0; selectedDate = initialDate(); renderPins(); refresh(); };
     $('range').onchange = function () { page = 0; draw(); rows(); };
     $('q').oninput = $('src').onchange = function () { page = 0; rows(); };
     $('prev').onclick = function () { page = Math.max(0, page - 1); rows(); };
     $('next').onclick = function () { page++; rows(); };
+    $('day-prev').onclick = function () { moveSelectedDay(-1); };
+    $('day-next').onclick = function () { moveSelectedDay(1); };
+    $('selected-date').onchange = function () { if (this.value) { selectedDate = this.value; renderTimeline(); } };
+    $('timeline-scroll').addEventListener('keydown', function (ev) {
+      if (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') { ev.preventDefault(); moveSelectedDay(ev.key === 'ArrowLeft' ? -1 : 1); }
+    });
     function toggleHarvestFields() { $('harvest-fields').hidden = $('lobservation').value !== 'harvest'; }
     $('lobservation').onchange = toggleHarvestFields;
     toggleHarvestFields();

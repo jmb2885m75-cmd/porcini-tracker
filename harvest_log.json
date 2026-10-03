@@ -1,11 +1,4 @@
 {
   "schema_version": 1,
-  "harvests": [
-    {
-      "location": "Oak & Beech Spot",
-      "date": "2026-10-02",
-      "observation_type": "no_mushrooms",
-      "issue": 13
-    }
-  ]
+  "harvests": []
 }

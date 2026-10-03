@@ -262,7 +262,7 @@ def build_observation_log(locations: Optional[List[Dict[str, Any]]], log: Option
 
     Same de-duplication rule as merge_harvests (config wins over an identical log entry), but keeps location,
     issue number and reporter, and includes log entries for locations that are no longer configured.
-    Each entry carries origin 'config' or 'log'.
+    Each entry carries origin 'config', 'log' or 'log (location not configured)'.
     """
     entries: List[Dict[str, Any]] = []
     seen = set()
@@ -281,8 +281,10 @@ def build_observation_log(locations: Optional[List[Dict[str, Any]]], log: Option
     for loc in locations or []:
         for item in loc.get("past_harvests", []) or []:
             add(item, loc.get("name"), "config")
+    configured = {loc.get("name") for loc in locations or []}
     for item in (log or {}).get("harvests", []):
-        add(item, item.get("location") if isinstance(item, dict) else None, "log")
+        name = item.get("location") if isinstance(item, dict) else None
+        add(item, name, "log" if name in configured else "log (location not configured)")
     return sorted(entries, key=lambda e: (str(e["date"]), e.get("issue") or 0), reverse=True)
 
 

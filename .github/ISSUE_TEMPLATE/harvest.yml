@@ -3,42 +3,60 @@ description: Log a porcini harvest or a visit where no mushrooms were found. Onl
 title: "Observation: "
 labels: ["harvest"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        **Quick log:** pick the spot, leave the date empty for today, choose what you found and submit.
+        For "No mushrooms found" you only need the spot and (optionally) a date or note. The dashboard's *Log Field Observation* form can pre-fill this page for you.
+  # BEGIN LOCATION FIELD
   - type: input
     id: location
     attributes:
       label: Location / spot
-      description: Must match a configured location name exactly.
+      description: Must match a configured location name (the dashboard form pre-fills it).
     validations:
       required: true
+  # END LOCATION FIELD
   - type: input
     id: date
     attributes:
       label: Date
-      description: YYYY-MM-DD
-    validations:
-      required: true
+      description: Leave empty for today. Or type today, yesterday, YYYY-MM-DD or DD.MM.YYYY.
+      placeholder: today
   - type: dropdown
     id: observation_type
     attributes:
       label: Observation type
-      options: [harvest, no_mushrooms]
+      options:
+        - Found mushrooms
+        - No mushrooms found
+      default: 0
     validations:
       required: true
   - type: dropdown
     id: yield_tier
     attributes:
       label: Yield tier
-      options: [small, medium, large]
+      description: Only needed when mushrooms were found.
+      options:
+        - Small
+        - Medium
+        - Large
   - type: dropdown
     id: cap_stage
     attributes:
       label: Cap stage
-      options: [buttons_young, prime, old_overripe]
+      description: Only needed when mushrooms were found.
+      options:
+        - Buttons / young
+        - Prime
+        - Old / overripe
   - type: input
     id: weight_g
     attributes:
       label: Weight (g)
-      description: Optional
+      description: Optional, found mushrooms only. A number of grams, e.g. 450 (1.2 kg also works).
+      placeholder: "450"
   - type: textarea
     id: notes
     attributes:

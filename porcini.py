@@ -18,7 +18,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 import requests
 
 from dates import format_display_date, parse_user_date
-from harvest import HarvestError, load_harvest_log, merge_harvests
+from harvest import HarvestError, build_observation_log, load_harvest_log, merge_harvests, summarize_observations
 
 CONFIG_PATH = Path("config.json")
 DB_PATH = Path("porcini_db.json")
@@ -1188,6 +1188,12 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     button:hover { background: var(--surface-raised); border-color: #94a3b8; }
     :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
     .pin { cursor: pointer; }
+    .log-summary { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0 0 var(--space-2); }
+    .log-summary .chip { background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius); padding: .4rem .7rem; font-size: var(--small); color: var(--muted); }
+    .log-summary .chip strong { color: var(--text); display: block; }
+    .log-table td.notes { white-space: normal; min-width: 12rem; max-width: 26rem; }
+    .log-table td.num, .log-table th.num { text-align: right; }
+    .type-found { color: var(--accent); } .type-none { color: #fca5a5; }
     #logform { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); align-items: end; }
     #harvest-fields { display: contents; }
     #harvest-fields[hidden] { display: none; }
@@ -1249,6 +1255,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
       <div class="table-wrap"><table class="observation-table"><thead><tr><th>Date</th><th>Score</th><th>Tmax</th><th>Rain mm</th><th>Wind</th><th>Soil °C</th><th>RH %</th><th>Source</th></tr></thead><tbody id="rows"></tbody></table></div>
       <div class="toolbar"><button id="prev">&laquo; Previous</button><button id="next">Next &raquo;</button><span id="pageinfo" class="meta"></span></div>
     </div>
+__OBSERVATION_LOG__
     <h2>📝 Log Field Observation</h2>
     <div class="card">
       <form id="logform">
@@ -1277,6 +1284,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
   (function () {
     var D = JSON.parse(document.getElementById('porcini-data').textContent);
     var LOG_KEY = 'porcini_logs_v1', PAGE = 15;
+    var LABELS = { small: 'Small', medium: 'Medium', large: 'Large', buttons_young: 'Buttons / young', prime: 'Prime', old_overripe: 'Old / overripe' };
     function $(id) { return document.getElementById(id); }
     function loadLogs() { try { return JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); } catch (e) { return []; } }
     function saveLogs(l) { try { localStorage.setItem(LOG_KEY, JSON.stringify(l)); } catch (e) { alert('Could not save: storage unavailable'); } }
@@ -1570,11 +1578,24 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
       }
       logs.push(entry); saveLogs(logs); this.reset(); draw();
       toggleHarvestFields();
-      var q = new URLSearchParams({ template: 'harvest.yml', title: 'Observation: ' + entry.location + ' ' + fmtDate(entry.date), labels: 'harvest', location: entry.location, date: entry.date, observation_type: entry.observation_type, yield_tier: entry.yield_tier || '', cap_stage: entry.cap_stage || '', weight_g: entry.weight_g || '', notes: entry.notes });
+      var q = new URLSearchParams({ template: 'harvest.yml', title: 'Observation: ' + entry.location + ' ' + fmtDate(entry.date), labels: 'harvest', location: entry.location, date: entry.date, observation_type: entry.observation_type === 'harvest' ? 'Found mushrooms' : 'No mushrooms found', yield_tier: LABELS[entry.yield_tier] || '', cap_stage: LABELS[entry.cap_stage] || '', weight_g: entry.weight_g || '', notes: entry.notes });
       window.open('https://github.com/' + D.repo + '/issues/new?' + q.toString(), '_blank', 'noopener');
     };
     $('export').onclick = function () { var pre = $('exported'); pre.style.display = 'block'; pre.textContent = JSON.stringify(loadLogs(), null, 2); };
     $('clearlogs').onclick = function () { if (confirm('Delete all drafts stored in this browser?')) { saveLogs([]); draw(); } };
+    (function () {
+      var lf = $('log-loc'), tf = $('log-type');
+      if (!lf || !tf) return;
+      function filterLog() {
+        var shown = 0;
+        document.querySelectorAll('#log-rows tr').forEach(function (tr) {
+          var ok = (!lf.value || tr.dataset.location === lf.value) && (!tf.value || tr.dataset.type === tf.value);
+          tr.hidden = !ok; if (ok) shown++;
+        });
+        $('log-count').textContent = shown + ' shown';
+      }
+      lf.onchange = filterLog; tf.onchange = filterLog; filterLog();
+    })();
     refresh();
   })();
   </script>
@@ -1606,7 +1627,60 @@ def dashboard_payload(cfg: Dict[str, Any], analysis: List[Dict[str, Any]], mode:
     return {"mode": mode, "threshold": threshold, "repo": repo, "locations": locations}
 
 
-def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]], alert_message: str = "", alert_will_send: bool = False, mode: str = MODE_DEFAULT) -> str:
+_TIER_LABELS = {"small": "Small", "medium": "Medium", "large": "Large"}
+_STAGE_LABELS = {"buttons_young": "Buttons / young", "prime": "Prime", "old_overripe": "Old / overripe"}
+
+
+def render_observation_log(entries: List[Dict[str, Any]], repo: str) -> str:
+    """Static HTML overview of every recorded input (config + harvest_log.json), newest first."""
+    esc = lambda v: html.escape(str(v))
+
+    def show_date(value: Any) -> str:
+        try:
+            return format_display_date(value)
+        except ValueError:
+            return str(value)
+
+    summary = summarize_observations(entries)
+    total_g = sum(r["weight_g"] for r in summary)
+    chips = [f"<div class='chip'><strong>{len(entries)}</strong>observations</div>",
+             f"<div class='chip'><strong>{sum(r['harvests'] for r in summary)}</strong>harvests</div>",
+             f"<div class='chip'><strong>{sum(r['no_mushrooms'] for r in summary)}</strong>no-mushroom visits</div>",
+             f"<div class='chip'><strong>{total_g:g} g</strong>recorded weight</div>"]
+    summary_rows = "".join(
+        f"<tr><td>{esc(r['location'])}</td><td class='num'>{r['harvests']}</td><td class='num'>{r['no_mushrooms']}</td>"
+        f"<td class='num'>{r['weight_g']:g}</td><td>{esc(show_date(r['last_date']))}</td></tr>"
+        for r in summary if r["last_date"])
+    rows = []
+    for e in entries:
+        none = e.get("observation_type") == "no_mushrooms"
+        issue = e.get("issue")
+        link = f"<a href='https://github.com/{esc(repo)}/issues/{esc(issue)}' rel='noopener'>#{esc(issue)}</a>" if isinstance(issue, int) and not isinstance(issue, bool) else "—"
+        weight = e.get("weight_g")
+        rows.append(
+            f"<tr data-location=\"{esc(e.get('location'))}\" data-type=\"{'no_mushrooms' if none else 'harvest'}\">"
+            f"<td>{esc(show_date(e['date']))}</td><td>{esc(e.get('location'))}</td>"
+            f"<td class='{'type-none' if none else 'type-found'}'>{'❌ No mushrooms' if none else '🍄 Harvest'}</td>"
+            f"<td>{esc(_TIER_LABELS.get(e.get('yield_tier'), e.get('yield_tier') or '—'))}</td>"
+            f"<td>{esc(_STAGE_LABELS.get(e.get('cap_stage'), e.get('cap_stage') or '—'))}</td>"
+            f"<td class='num'>{esc(weight) if weight not in (None, '') else '—'}</td>"
+            f"<td class='notes'>{esc(e.get('notes') or '—')}</td><td>{esc(e.get('origin', ''))}</td><td>{link}</td></tr>")
+    locations = sorted({str(e.get("location")) for e in entries})
+    options = "".join(f"<option value=\"{esc(l)}\">{esc(l)}</option>" for l in locations)
+    if not entries:
+        return ("    <h2 id='observation-log'>📒 Observation Log</h2>\n    <div class='card'><div class='meta'>No observations recorded yet.</div></div>")
+    return f"""    <h2 id="observation-log">📒 Observation Log</h2>
+    <div class="card">
+      <div class="log-summary">{''.join(chips)}</div>
+      <details><summary>Counts per location</summary><div class="table-wrap"><table class="log-table"><thead><tr><th>Location</th><th class="num">Harvests</th><th class="num">No mushrooms</th><th class="num">Total g</th><th>Last visit</th></tr></thead><tbody>{summary_rows}</tbody></table></div></details>
+      <div class="toolbar"><label for="log-loc">Location<select id="log-loc"><option value="">All locations</option>{options}</select></label>
+      <label for="log-type">Type<select id="log-type"><option value="">All types</option><option value="harvest">Harvest</option><option value="no_mushrooms">No mushrooms</option></select></label>
+      <span id="log-count" class="meta"></span></div>
+      <div class="table-wrap"><table class="log-table"><thead><tr><th>Date</th><th>Location</th><th>Type</th><th>Yield</th><th>Cap stage</th><th class="num">Weight g</th><th>Notes</th><th>Source</th><th>Issue</th></tr></thead><tbody id="log-rows">{''.join(rows)}</tbody></table></div>
+    </div>"""
+
+
+def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]], alert_message: str = "", alert_will_send: bool = False, mode: str = MODE_DEFAULT, harvest_log: Optional[Dict[str, Any]] = None) -> str:
     """Self-contained dashboard (inline CSS/JS/data, no CDN). Static hosting only; harvests come from harvest_log.json via the issue workflow."""
     threshold = int(cfg.get("ALERT_THRESHOLD", 65))
     cards = []
@@ -1640,7 +1714,9 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]],
       <pre class="alert">{html.escape(alert_message)}</pre>
       <div class="meta">Fields sent per ranked spot (top 3): rank, location name, best weekend score (%), best day, status. The final line is the dashboard link.</div>
     </div>"""
-    data = json.dumps(dashboard_payload(cfg, analysis, mode), ensure_ascii=False).replace("</", "<\\/")
+    payload = dashboard_payload(cfg, analysis, mode)
+    observation_log = render_observation_log(build_observation_log(cfg.get("LOCATIONS", []), harvest_log), payload["repo"])
+    data = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
     return (
         DASHBOARD_TEMPLATE
         .replace("__MODE_LABEL__", html.escape(MODE_LABELS.get(mode, MODE_LABELS[MODE_DEFAULT])))
@@ -1648,6 +1724,7 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]],
         .replace("__CARDS__", "".join(cards))
         .replace("__ALERT__", alert_section)
         .replace("__DATA__", data)
+        .replace("__OBSERVATION_LOG__", observation_log)
     )
 
 
@@ -1785,7 +1862,7 @@ def main() -> int:
     # Without a queued alert the ranking is only a preview on the dashboard (nothing is sent).
     alert_results = alert_queue or [(a["name"], a["best_score"], a["best_day"], a["status"], a["explanation"]) for a in analyses if a["best_day"] != "N/A"]
     message = build_alert_message(alert_results, dashboard_url, mode, threshold) if alert_results else ""
-    report_html = generate_dashboard_html(cfg, analyses, message, bool(alert_queue), mode)
+    report_html = generate_dashboard_html(cfg, analyses, message, bool(alert_queue), mode, harvest_log)
     REPORT_PATH.write_text(report_html, encoding="utf-8")
     inject_alert_into_index(message, bool(alert_queue))
 

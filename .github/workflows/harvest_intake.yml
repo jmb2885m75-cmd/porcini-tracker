@@ -41,6 +41,7 @@ jobs:
           ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
           ISSUE_AUTHOR_ASSOCIATION: ${{ github.event.issue.author_association }}
           REPO_OWNER: ${{ github.repository_owner }}
+          HARVEST_ERROR_FILE: ${{ runner.temp }}/harvest_error.md
         run: python harvest.py
 
       - name: Rescore and rebuild dashboard
@@ -49,13 +50,18 @@ jobs:
           pip install requests
           python porcini.py
 
+      - name: Refresh issue form location list
+        if: steps.ingest.outcome == 'success'
+        continue-on-error: true
+        run: python harvest.py --sync-form
+
       - name: Commit updated data
         if: steps.ingest.outcome == 'success'
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           touch alert_state.json
-          git add harvest_log.json porcini_db.json index.html porcini_report.html alert_state.json
+          git add harvest_log.json porcini_db.json index.html porcini_report.html alert_state.json .github/ISSUE_TEMPLATE/harvest.yml
           if ! git diff --cached --quiet; then
             git commit -m "🍄 Record harvest from issue #${{ github.event.issue.number }} [skip ci]"
             git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
@@ -67,10 +73,30 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           OUTCOME: ${{ steps.ingest.outcome }}
+          ERROR_FILE: ${{ runner.temp }}/harvest_error.md
+          ISSUE: ${{ github.event.issue.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           if [ "$OUTCOME" = "success" ]; then
-            gh issue comment ${{ github.event.issue.number }} --repo "$GITHUB_REPOSITORY" --body "Observation recorded in harvest_log.json; scores and dashboard updated."
-            gh issue close ${{ github.event.issue.number }} --repo "$GITHUB_REPOSITORY"
+            gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body "Observation recorded in harvest_log.json; scores and dashboard updated."
+            gh issue close "$ISSUE" --repo "$GITHUB_REPOSITORY"
           else
-            gh issue comment ${{ github.event.issue.number }} --repo "$GITHUB_REPOSITORY" --body "Harvest was not recorded (validation or ingest failed). See the workflow log, fix the issue and open a new one."
+            BODY="$RUNNER_TEMP/comment.md"
+            {
+              echo "### ❌ Observation was not recorded"
+              echo
+              if [ -s "$ERROR_FILE" ]; then
+                echo "Please fix the following:"
+                echo
+                cat "$ERROR_FILE"
+              else
+                echo "The intake workflow failed before the observation could be validated (see the [workflow run]($RUN_URL))."
+              fi
+              echo
+              echo "**How to fix:** open a new observation (the dashboard's *Log Field Observation* form pre-fills it) with the corrections above."
+              echo "Tips: leave *Date* empty for today; for *No mushrooms found* only the location is needed; for *Found mushrooms* also choose a yield tier and cap stage."
+              echo
+              echo "[Workflow run]($RUN_URL)"
+            } > "$BODY"
+            gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body-file "$BODY"
           fi

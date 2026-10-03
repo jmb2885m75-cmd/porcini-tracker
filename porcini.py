@@ -110,7 +110,7 @@ SCHEMA_VERSION = 3
 # Bump when the scoring rules change; forces every stored daily score to be recomputed.
 # Score penalty applied 1..N days after a visit that found nothing (flush not started yet)
 NO_FIND_PENALTY = (25, 20, 15, 10, 5)
-MODEL_VERSION = 8  # 8: score uses 20-day temperature and 26-day rainfall; removes calendar/lunar bonuses
+MODEL_VERSION = 9  # 9: preceding-day windows and a historical 90-day drought signal
 ARCHIVE_LAG_DAYS = 5
 SOURCE_ARCHIVE = "archive"
 SOURCE_FORECAST = "forecast"
@@ -139,16 +139,20 @@ AFFINITY_LOOKBACK_DAYS = 730  # "proven spot affinity" only counts harvests from
 RUNOFF_MIN_DAY_MM = 15.0
 FLUSH_RAIN_WINDOW_DAYS = 26
 FLUSH_TEMPERATURE_WINDOW_DAYS = 20
+LONG_TERM_RAIN_WINDOW_DAYS = 90
+LONG_TERM_RAIN_SEASON_RADIUS_DAYS = 15
+LONG_TERM_RAIN_MIN_SAMPLES = 20
 FLUSH_RAIN_SCORE_MAX = 30
 FLUSH_TEMPERATURE_SCORE_MAX = 20
+DROUGHT_SCORE_PENALTY_MAX = 10
 VERDICT_LOW_TIERS = (
     (25, "🚫 Not worth it"),
     (45, "😐 Unlikely"),
     (60, "🤔 Long shot"),
 )
 VERDICT_WORTH_LOOK = "👀 Worth a look"
-VERDICT_GO = "👍 Good chance – go"
-VERDICT_DEFINITE_GO = "🔥 Definitely go for it"
+VERDICT_GO = "👍 Favourable conditions"
+VERDICT_DEFINITE_GO = "🔥 Very favourable conditions"
 VERDICT_SPECIAL_TAGS = {
     "terminated": "❄️ Season over",
     "off_season": "🍂 Off season",
@@ -541,8 +545,8 @@ def _precip(rec: Optional[Dict[str, Any]]) -> float:
 
 
 def observed_rainfall_total(hist: History, day: date, days: int) -> Optional[float]:
-    """Return a rolling rain total only when at least 80% of its daily values are present."""
-    records = hist.window(day, days)
+    """Return the total from the `days` complete days before `day` with at least 80% coverage."""
+    records = hist.window(day - timedelta(days=1), days)
     values = [r.get("precipitation_sum") for r in records if r.get("precipitation_sum") is not None]
     if len(values) < math.ceil(days * 0.8):
         return None
@@ -550,8 +554,8 @@ def observed_rainfall_total(hist: History, day: date, days: int) -> Optional[flo
 
 
 def mean_air_temperature(hist: History, day: date, days: int) -> Optional[float]:
-    """Mean daily air temperature, using (max + min) / 2 when at least 80% of days are complete."""
-    records = hist.window(day, days)
+    """Mean air temperature for the `days` complete days before `day`, with at least 80% coverage."""
+    records = hist.window(day - timedelta(days=1), days)
     values = [
         (float(r["temperature_2m_max"]) + float(r["temperature_2m_min"])) / 2
         for r in records
@@ -562,16 +566,55 @@ def mean_air_temperature(hist: History, day: date, days: int) -> Optional[float]
     return sum(values) / len(values)
 
 
+def historical_rainfall_percentile(hist: History, day: date) -> Optional[float]:
+    """Compare preceding 90-day rain with prior-year, seasonally comparable windows.
+
+    Requires at least 20 valid daily comparison windows from earlier calendar years.
+    This data-derived signal is omitted when the local archive is too short or incomplete.
+    """
+    target_day_of_year = day.timetuple().tm_yday
+    comparable_totals = []
+    for record in hist.records:
+        try:
+            candidate_day = parse_date(record["date"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if candidate_day.year >= day.year:
+            continue
+        day_distance = abs(candidate_day.timetuple().tm_yday - target_day_of_year)
+        day_distance = min(day_distance, 366 - day_distance)
+        if day_distance > LONG_TERM_RAIN_SEASON_RADIUS_DAYS:
+            continue
+        total = observed_rainfall_total(hist, candidate_day, LONG_TERM_RAIN_WINDOW_DAYS)
+        if total is not None:
+            comparable_totals.append(total)
+    if len(comparable_totals) < LONG_TERM_RAIN_MIN_SAMPLES:
+        return None
+
+    current_total = observed_rainfall_total(hist, day, LONG_TERM_RAIN_WINDOW_DAYS)
+    if current_total is None:
+        return None
+    below = sum(total < current_total for total in comparable_totals)
+    tied = sum(total == current_total for total in comparable_totals)
+    return (below + tied / 2) / len(comparable_totals)
+
+
 def has_runoff(hist: History, day: date) -> bool:
-    """Heavy-rain runoff: a day (last 3) with >= 15 mm where >50% fell in its busiest 2 hours.
+    """Heavy-rain runoff: a day (last 3 complete days) with >= 15 mm where >50% fell in its busiest 2 hours.
 
     Needs hourly data (precip_peak_2h_mm); records without it (not yet backfilled, see backfill_runoff_data) get no penalty.
     """
-    for rec in hist.window(day, 3):
+    for rec in hist.window(day - timedelta(days=1), 3):
         total, peak = _precip(rec), rec.get("precip_peak_2h_mm")
         if peak is not None and total >= RUNOFF_MIN_DAY_MM and float(peak) > 0.5 * total:
             return True
     return False
+
+
+def rainfall_score(rainfall: float) -> int:
+    """Give up to 30 points for recent rain, saturating at 100 mm without an uncalibrated wet penalty."""
+    scaled = max(0.0, min(FLUSH_RAIN_SCORE_MAX, rainfall * FLUSH_RAIN_SCORE_MAX / 100))
+    return round(scaled)
 
 
 def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], historical: Any, past_harvests: List[Dict[str, Any]]) -> Tuple[int, str, str]:
@@ -591,7 +634,13 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
 
     rainfall = observed_rainfall_total(hist, d, FLUSH_RAIN_WINDOW_DAYS)
     if rainfall is not None:
-        score += round(min(FLUSH_RAIN_SCORE_MAX, rainfall * FLUSH_RAIN_SCORE_MAX / 100))
+        score += rainfall_score(rainfall)
+
+    long_term_rainfall_percentile = historical_rainfall_percentile(hist, d)
+    if long_term_rainfall_percentile is not None and long_term_rainfall_percentile < 0.5:
+        score -= round(
+            DROUGHT_SCORE_PENALTY_MAX * (0.5 - long_term_rainfall_percentile) / 0.5
+        )
 
     average_temperature = mean_air_temperature(hist, d, FLUSH_TEMPERATURE_WINDOW_DAYS)
     if average_temperature is not None:
@@ -647,8 +696,8 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
     if positive >= 2:
         score += 5
 
-    # Quality / risk uses the 7-day average of daily max temperature.
-    temps = [float(r["temperature_2m_max"]) for r in hist.window(d, 7) if r.get("temperature_2m_max") is not None]
+    # Harvest quality / risk is separate from the 20-day flush-favourability temperature signal.
+    temps = [float(r["temperature_2m_max"]) for r in hist.window(d - timedelta(days=1), 7) if r.get("temperature_2m_max") is not None]
     if temps:
         avg_max = sum(temps) / len(temps)
         if avg_max > 18:
@@ -702,25 +751,52 @@ def update_daily_scores(location: Dict[str, Any], records: List[Dict[str, Any]],
     return updated
 
 
-def backtest_accuracy(daily_scores: Dict[str, Any], harvests: List[Dict[str, Any]], threshold: int) -> Dict[str, Any]:
-    """Compare stored scores with logged medium/large harvests (hit = score >= threshold on the harvest date).
+def backtest_accuracy(location: Dict[str, Any], records: List[Dict[str, Any]],
+                      harvests: List[Dict[str, Any]], threshold: int) -> Dict[str, Any]:
+    """Compare scores only with dated visits; unvisited days are unknown, not failures.
 
-    Only as good as the harvest log. TODO: calibrate weights from this output and, if a remote
-    observation store is ever added, pull its harvests here (no live remote DB integration exists today).
+    The score for a visit date is recomputed without that date's observation to avoid
+    evaluating a no-find against a score that the same no-find already capped.
     """
-    in_season = [v["score"] for v in daily_scores.values() if not str(v.get("status", "")).startswith("❌")]
-    on_harvest = [
-        daily_scores[h["date"]]["score"] for h in harvests
-        if h.get("yield_tier") in {"medium", "large"} and h.get("date") in daily_scores
-    ]
-    hits = sum(1 for s in on_harvest if s >= threshold)
+    hist = History(records)
+    outcomes: Dict[str, bool] = {}
+    for observation in harvests:
+        day = observation.get("date")
+        if not valid_date_string(day):
+            continue
+        observation_type = observation.get("observation_type")
+        if observation_type == "no_mushrooms":
+            outcomes.setdefault(day, False)
+        elif observation_type in (None, "harvest") and observation.get("yield_tier") in {"small", "medium", "large"}:
+            outcomes[day] = True
+
+    evaluated = []
+    for day, found in outcomes.items():
+        daily = hist.get(parse_date(day))
+        if daily is None:
+            continue
+        prior_observations = [
+            observation for observation in harvests
+            if valid_date_string(observation.get("date")) and observation["date"] != day
+        ]
+        score, _, _ = calculate_score_for_day(location, daily, hist, prior_observations)
+        evaluated.append((score, found))
+
+    finds = [score for score, found in evaluated if found]
+    no_finds = [score for score, found in evaluated if not found]
+    finds_above = sum(score >= threshold for score in finds)
+    no_finds_above = sum(score >= threshold for score in no_finds)
     return {
         "threshold": threshold,
-        "evaluated_harvests": len(on_harvest),
-        "hits": hits,
-        "hit_rate": round(hits / len(on_harvest), 3) if on_harvest else None,
-        "mean_score_on_harvest_days": round(sum(on_harvest) / len(on_harvest), 1) if on_harvest else None,
-        "mean_score_in_season": round(sum(in_season) / len(in_season), 1) if in_season else None,
+        "observed_days": len(evaluated),
+        "find_days": len(finds),
+        "no_find_days": len(no_finds),
+        "finds_above_threshold": finds_above,
+        "no_finds_above_threshold": no_finds_above,
+        "find_hit_rate": round(finds_above / len(finds), 3) if finds else None,
+        "no_find_above_threshold_rate": round(no_finds_above / len(no_finds), 3) if no_finds else None,
+        "mean_score_on_find_days": round(sum(finds) / len(finds), 1) if finds else None,
+        "mean_score_on_no_find_days": round(sum(no_finds) / len(no_finds), 1) if no_finds else None,
     }
 
 
@@ -763,12 +839,18 @@ def explain_score(location: Dict[str, Any], records: List[Dict[str, Any]], best_
     else:
         rainfall = observed_rainfall_total(hist, day, FLUSH_RAIN_WINDOW_DAYS)
         if rainfall is not None:
-            signals.append(f"{rainfall:.0f} mm of rain over the preceding {FLUSH_RAIN_WINDOW_DAYS} days")
+            signals.append(f"{rainfall:.0f} mm of rain during the {FLUSH_RAIN_WINDOW_DAYS} complete days before this date")
 
         average_temperature = mean_air_temperature(hist, day, FLUSH_TEMPERATURE_WINDOW_DAYS)
         if average_temperature is not None:
             signals.append(
-                f"mean air temperature of {average_temperature:.1f}°C over the preceding {FLUSH_TEMPERATURE_WINDOW_DAYS} days"
+                f"mean air temperature of {average_temperature:.1f}°C during the {FLUSH_TEMPERATURE_WINDOW_DAYS} complete days before this date"
+            )
+
+        rainfall_percentile = historical_rainfall_percentile(hist, day)
+        if rainfall_percentile is not None:
+            signals.append(
+                f"90-day rainfall is at the {rainfall_percentile * 100:.0f}th percentile of comparable prior-year periods"
             )
 
         soil_moisture = daily.get("soil_moisture_0_to_7cm_mean")
@@ -965,7 +1047,7 @@ def build_alert_message(results: List[Tuple[str, int, str, str]], dashboard_url:
         name, score, best_day, status = result[:4]
         verdict = f"{'GO' if score >= threshold else 'NO-GO'} - " if mode == MODE_FINAL else ""
         tag = score_verdict_tag(score, status, threshold)
-        lines.append(f"{index}. {name} - {verdict}{score}% – {tag} ({best_day}) | {status}")
+        lines.append(f"{index}. {name} - {verdict}{score}/100 index – {tag} ({best_day}) | {status}")
         if len(result) > 4 and result[4]:
             lines.append(f"   Why: {result[4]}")
     lines.append("")
@@ -1081,10 +1163,10 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     <h2>📈 Daily Score History &amp; Field Observations <button class="info-button" type="button" data-info="score" aria-label="How the forecast score is calculated" aria-haspopup="dialog" aria-controls="info-dialog">ⓘ</button></h2>
     <div class="card">
       <div class="toolbar"><label for="range">Date range<select id="range"></select></label><button type="button" id="seasonOnly" class="season-toggle" aria-pressed="false" title="Show only Aug 15 – Dec 1">Season Only</button></div>
-      <div id="chartbox"><svg id="chart" viewBox="0 0 900 320" role="img" aria-label="Daily favourability score with optional rain and temperature trends"></svg><div id="tip"></div></div>
-      <div class="meta">Hover or tap for daily details. Dashed line marks the alert threshold.</div>
+      <div id="chartbox"><svg id="chart" viewBox="0 0 900 320" role="img" aria-label="Daily favourability index with optional rain and temperature trends"></svg><div id="tip"></div></div>
+      <div class="meta">Favourability index (0–100; not a probability). Hover or tap for daily details. Dashed line marks the alert threshold.</div>
       <div class="legend" aria-label="Chart and timeline legend">
-        <span class="legend-chip"><span class="line-key line-score"></span>Score %</span>
+        <span class="legend-chip"><span class="line-key line-score"></span>Favourability index</span>
         <label class="legend-chip"><input id="rain-toggle" type="checkbox" checked> <span class="line-key line-rain"></span>Rain</label>
         <label class="legend-chip"><input id="temp-toggle" type="checkbox" checked> <span class="line-key line-temp"></span>Temperature</label>
         <span class="legend-chip">🍄 Found</span><span class="legend-chip">❌ No find</span>
@@ -1108,7 +1190,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     <div class="card">
       <div class="toolbar"><label for="q">Date filter<input id="q" placeholder="ISO prefix, e.g. 2025-09" /></label>
       <label for="src">Weather source<select id="src"><option value="">All sources</option><option>archive</option><option>forecast</option></select></label></div>
-      <div class="table-wrap"><table class="observation-table"><thead><tr><th>Date</th><th>Score</th><th>Tmax</th><th>Rain mm</th><th>Wind</th><th>Soil °C</th><th>RH %</th><th>Source</th></tr></thead><tbody id="rows"></tbody></table></div>
+      <div class="table-wrap"><table class="observation-table"><thead><tr><th>Date</th><th>Index</th><th>Tmax</th><th>Rain mm</th><th>Wind</th><th>Soil °C</th><th>RH %</th><th>Source</th></tr></thead><tbody id="rows"></tbody></table></div>
       <div class="toolbar"><button id="prev">&laquo; Previous</button><button id="next">Next &raquo;</button><span id="pageinfo" class="meta"></span></div>
     </div>
 __OBSERVATION_LOG__
@@ -1161,19 +1243,20 @@ __OBSERVATION_LOG__
     var INFO = {
       weather: ['Weather indicators', [
         'Daily high and low are averaged to form a 20-day mean air temperature signal. A value near 13°C contributes most to the heuristic score; this is based on one regional porcini study, not a universal optimum.',
-        'The main rain signal is the total over the preceding 26 days. That window reflects a regional porcini preprint; its point conversion is an uncalibrated index, not a yield prediction.',
+        'The main rain signal is the total over the 26 complete days before the scored date. It adds points up to a 100 mm plateau; there is no extra uncalibrated penalty for sustained high totals.',
+        'A 90-day rainfall comparison can apply a modest drought penalty when rain is unusually low against seasonally comparable prior-year periods. It is omitted until enough local archive data is available.',
         'Measured 0–7 cm soil moisture is a smaller supporting signal. Soil texture and local calibration affect what a given volumetric moisture value means; soil temperature and air humidity do not directly add score points.',
-        'Concentrated heavy rain can apply a small runoff penalty. Temperature shocks, assumed slope/canopy rain-retention adjustments, and 120-day rainfall cutoffs are not used.',
+        'Concentrated heavy rain can apply a small runoff penalty. No new high-rain cutoff is assumed without local observations. Aspect/canopy rain-retention adjustments are not used.',
         'Weather source “archive” means recorded past weather; “forecast” means weather-model data. Weather inputs guide the score; they do not confirm mushrooms are present.'
       ]],
       score: ['How the forecast score works', [
         'The weather feed supplies 7 forecast days in total (including today) and the previous 7 days of recent weather. That means it can score up to 6 calendar days after today; beyond that, this dashboard has no forward weather forecast. Older observed weather is kept in the archive.',
-        'For each scored day, the model uses the preceding 26-day rainfall total and preceding 20-day mean air temperature when enough daily weather values are available. The score also includes measured soil moisture, a modest host-tree/site signal, and field observations.',
+        'For each scored day, the model uses rain from the 26 complete days before that date and mean air temperature from the 20 complete days before it, when at least 80% of daily values are present. Forecast rain/temperature on the scored date itself do not count. A seasonally matched 90-day rainfall comparison adds a modest drought penalty when enough prior-year records exist. The score also includes measured soil moisture, a modest host-tree/site signal, and field observations.',
         'The score does not vary by weekday or lunar phase. The cited preprint found associations in one central European beech-forest setting; applying it elsewhere needs local validation. No-find observations cap that date at 20 and reduce scores for five following days.',
-        'The displayed percentage is a 0–100 favourability score, not a measured chance that mushrooms will be found. For example, 60% means the model rates conditions as fairly favourable; it does not mean a 60-in-100 guarantee. The usual alert threshold is 65.',
-        'Verdict guide at the default 65 threshold: below 25 Not worth it; 25–44 Unlikely; 45–59 Long shot; 60–64 Worth a look; 65–74 Good chance – go; 75+ Definitely go for it. The go boundary follows the configured ALERT_THRESHOLD. Tags provide meaning in addition to the red-to-green score colour.',
+        'The displayed 0–100 value is a favourability index, not a measured chance of finding mushrooms or a probability. The usual alert threshold is 65 index points; the index and its thresholds are not locally calibrated.',
+        'Verdict guide at the default 65 index-point threshold: below 25 Not worth it; 25–44 Unlikely; 45–59 Long shot; 60–64 Worth a look; 65–74 Favourable conditions; 75+ Very favourable conditions. The alert boundary follows ALERT_THRESHOLD.',
         'The chart’s light rain and temperature lines add weather context on their own visible-range scales; missing readings leave gaps, and the score line remains the main signal.',
-        'Quality notes are separate from the score: they use recent average high temperatures to flag possible maggot risk or prime-quality conditions.',
+        'Harvest-quality notes are separate from flush favorability: recent average highs flag possible maggot risk or prime-quality conditions and do not change the score.',
         'Scores are estimates and become less dependable further into the 7-day weather forecast. Conditions and local growing spots can differ from the weather grid.'
       ]],
       observations: ['How observations affect the forecast', [
@@ -1266,7 +1349,7 @@ __OBSERVATION_LOG__
       $('selected-label').textContent = selectedDate ? 'Selected: ' + fmtDate(selectedDate) : 'No score dates available';
       $('selected-date').value = selectedDate;
       var lines = selectedDate ? [fmtDate(selectedDate)] : [];
-      if (sm) lines.push('Model score: ' + sm[1] + '% — ' + sm[4] + ' — ' + sm[2], 'Weather: ' + (rm && rm[8] === 'forecast' ? 'forecast' : 'recorded'));
+      if (sm) lines.push('Favourability index: ' + sm[1] + '/100 — ' + sm[4] + ' — ' + sm[2], 'Weather: ' + (rm && rm[8] === 'forecast' ? 'forecast' : 'recorded'));
       else if (selectedDate) lines.push('No score is available for this day.');
       hs.forEach(function (h) { lines.push((h.observation_type === 'no_mushrooms' ? '❌ Visited, no mushrooms found' : '🍄 Mushrooms found') + (h.origin === 'draft (unsynced)' ? ' (unsynced draft)' : '')); });
       setLines($('selected-day'), lines);
@@ -1302,7 +1385,7 @@ __OBSERVATION_LOG__
         var bar = document.createElement('span'), score = row ? row[1] : 0;
         bar.style.width = Math.max(0, Math.min(100, score)) + '%'; bar.style.background = row ? row[5] : '';
         heat.appendChild(bar); day.appendChild(heat);
-        day.title = fmtDate(d) + (row ? ', score ' + score + '%' : '') + (observations.length ? ', ' + observations.map(function (h) { return h.observation_type === 'no_mushrooms' ? 'no mushrooms found' : 'mushrooms found'; }).join(', ') : '');
+        day.title = fmtDate(d) + (row ? ', favourability index ' + score + ' of 100' : '') + (observations.length ? ', ' + observations.map(function (h) { return h.observation_type === 'no_mushrooms' ? 'no mushrooms found' : 'mushrooms found'; }).join(', ') : '');
         day.setAttribute('aria-label', day.title);
         day.addEventListener('click', function () { selectedDate = d; renderTimeline(); var button = Array.prototype.find.call($('timeline').children, function (item) { return item.getAttribute('aria-label').indexOf(fmtDate(d)) === 0; }); if (button) button.focus(); });
         timeline.appendChild(day);
@@ -1403,7 +1486,7 @@ __OBSERVATION_LOG__
     }
     function backtest() {
       var b = loc.backtest || {};
-      $('backtest').textContent = b.evaluated_harvests ? 'Backtest: ' + b.hits + '/' + b.evaluated_harvests + ' medium/large harvests fell on days scoring >= ' + b.threshold + ' (mean score on harvest days ' + b.mean_score_on_harvest_days + ' vs in-season mean ' + b.mean_score_in_season + '). Small sample; indicative only.' : 'Backtest: no medium/large harvests with a stored score yet.';
+      $('backtest').textContent = b.observed_days ? 'Observed visits only (unvisited days are unknown): ' + b.finds_above_threshold + '/' + b.find_days + ' find-days and ' + b.no_finds_above_threshold + '/' + b.no_find_days + ' no-find days scored at least ' + b.threshold + '/100. Scores exclude the same-day observation. Small, potentially biased sample; not calibrated.' : 'Backtest: no recorded visit days with a stored weather record yet.';
     }
     function refresh() { fillRange(); draw(); rows(); backtest(); weatherOverview(); renderTimeline(); }
     function showLocation(index) {
@@ -1565,7 +1648,7 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]],
         score_display = "N/A"
         if available:
             score_display = (
-                f"<span class='score' style='color:{score_color(score)}'>{score}%</span>"
+                f"<span class='score' style='color:{score_color(score)}'>{score}/100</span>"
                 f"<span class='verdict-tag'>{html.escape(score_verdict_tag(score, item['status'], threshold))}</span>"
             )
         if mode == MODE_FINAL and available:
@@ -1586,7 +1669,7 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]],
     <div class="card">
       <div class="meta">{html.escape(alert_status)}</div>
       <pre class="alert">{html.escape(alert_message)}</pre>
-      <div class="meta">Fields sent per ranked spot (top 3): rank, location name, best weekend score (%), best day, status. The final line is the dashboard link.</div>
+      <div class="meta">Fields sent per ranked spot (top 3): rank, location name, best weekend favourability index (0–100), best day, status. The final line is the dashboard link.</div>
     </div>"""
     payload = dashboard_payload(cfg, analysis, mode)
     observation_log = render_observation_log(build_observation_log(cfg.get("LOCATIONS", []), harvest_log), payload["repo"])
@@ -1687,7 +1770,7 @@ def main() -> int:
         records = ensure_location_history(name, db, latitude, longitude, elevation, today)
         loc_store = db["locations"][name]
         update_daily_scores(dict(location, past_harvests=harvests), records, loc_store)
-        loc_store["backtest"] = backtest_accuracy(loc_store["daily_scores"], harvests, threshold)
+        loc_store["backtest"] = backtest_accuracy(location, records, harvests, threshold)
 
         best_score, best_day, status, quality = find_weekend_best(location, records, harvests, loc_store["daily_scores"], today)
         moisture = 0.0
@@ -1742,7 +1825,7 @@ def main() -> int:
 
     print("\n### Porcini Summary")
     for item in analyses:
-        print(f"- {item['name']}: {item['best_score']}% on {item['best_day']} | {item['status']} | moisture {item['soil_moisture']:.2f} m³/m³")
+        print(f"- {item['name']}: index {item['best_score']}/100 on {item['best_day']} | {item['status']} | moisture {item['soil_moisture']:.2f} m³/m³")
 
     if alert_queue:
         print("\n[INFO] Dispatching alert message")

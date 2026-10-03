@@ -13,7 +13,7 @@ import os
 import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
@@ -618,9 +618,6 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
     if str(location.get("soil_pH", "")).strip().lower() == "alkaline":
         score -= 5
 
-    if rainfall is not None and rainfall < 20 and status == "🟡 Monitoring":
-        status = "TOO DRY - LOW RECENT RAIN"
-
     for harvest in past_harvests:
         harvest_date = harvest.get("date")
         if not valid_date_string(harvest_date):
@@ -641,7 +638,7 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
             score -= 10
             status = "🍂 EXHAUSTION / POST-FLUSH COOLING OFF"
 
-    # Proven spot affinity: >=2 medium/large harvests in the 2 years BEFORE the scored day -> +10.
+    # Prior medium/large finds at this site add a modest affinity signal.
     positive = sum(
         1 for h in past_harvests
         if h.get("yield_tier") in {"medium", "large"} and valid_date_string(h.get("date"))
@@ -669,7 +666,7 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
 
 def location_signature(location: Dict[str, Any]) -> str:
     """Fingerprint of the config fields that influence scores; a change recomputes the stored series."""
-    keys = ("tree_species", "tree_density", "aspect", "soil_pH", "past_harvests", "last_seen_fly_agaric")
+    keys = ("tree_species", "soil_pH", "past_harvests")
     blob = json.dumps({k: location.get(k) for k in keys}, sort_keys=True, default=str)
     return f"{MODEL_VERSION}:{hashlib.sha1(blob.encode('utf-8')).hexdigest()[:12]}"
 
@@ -1164,7 +1161,7 @@ __OBSERVATION_LOG__
     var INFO = {
       weather: ['Weather indicators', [
         'Daily high and low are averaged to form a 20-day mean air temperature signal. A value near 13°C contributes most to the heuristic score; this is based on one regional porcini study, not a universal optimum.',
-        'The main rain signal is the total over the preceding 26 days. That window reflects a published porcini field study; its point conversion is an uncalibrated index, not a yield prediction.',
+        'The main rain signal is the total over the preceding 26 days. That window reflects a regional porcini preprint; its point conversion is an uncalibrated index, not a yield prediction.',
         'Measured 0–7 cm soil moisture is a smaller supporting signal. Soil texture and local calibration affect what a given volumetric moisture value means; soil temperature and air humidity do not directly add score points.',
         'Concentrated heavy rain can apply a small runoff penalty. Temperature shocks, assumed slope/canopy rain-retention adjustments, and 120-day rainfall cutoffs are not used.',
         'Weather source “archive” means recorded past weather; “forecast” means weather-model data. Weather inputs guide the score; they do not confirm mushrooms are present.'
@@ -1172,7 +1169,7 @@ __OBSERVATION_LOG__
       score: ['How the forecast score works', [
         'The weather feed supplies 7 forecast days in total (including today) and the previous 7 days of recent weather. That means it can score up to 6 calendar days after today; beyond that, this dashboard has no forward weather forecast. Older observed weather is kept in the archive.',
         'For each scored day, the model uses the preceding 26-day rainfall total and preceding 20-day mean air temperature when enough daily weather values are available. The score also includes measured soil moisture, a modest host-tree/site signal, and field observations.',
-        'The score does not vary by weekday or lunar phase. The reported study found associations in one central European beech-forest setting; applying it elsewhere needs local validation. No-find observations cap that date at 20 and reduce scores for five following days.',
+        'The score does not vary by weekday or lunar phase. The cited preprint found associations in one central European beech-forest setting; applying it elsewhere needs local validation. No-find observations cap that date at 20 and reduce scores for five following days.',
         'The displayed percentage is a 0–100 favourability score, not a measured chance that mushrooms will be found. For example, 60% means the model rates conditions as fairly favourable; it does not mean a 60-in-100 guarantee. The usual alert threshold is 65.',
         'Verdict guide at the default 65 threshold: below 25 Not worth it; 25–44 Unlikely; 45–59 Long shot; 60–64 Worth a look; 65–74 Good chance – go; 75+ Definitely go for it. The go boundary follows the configured ALERT_THRESHOLD. Tags provide meaning in addition to the red-to-green score colour.',
         'The chart’s light rain and temperature lines add weather context on their own visible-range scales; missing readings leave gaps, and the score line remains the main signal.',

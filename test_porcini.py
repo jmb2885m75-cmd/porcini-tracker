@@ -244,7 +244,7 @@ class ScoringTests(unittest.TestCase):
         self.assertIsNone(p.observed_rainfall_total(h, day, 26))
         self.assertIsNone(p.mean_air_temperature(h, day, 20))
 
-    def test_score_explanation_mentions_recent_rain_and_cooling_in_dashboard_and_alert(self):
+    def test_score_explanation_uses_supported_weather_windows_in_dashboard_and_alert(self):
         target = date(2025, 10, 4)
         recs = series(date(2025, 9, 1), 40, temperature_2m_max=20.0)
         trigger = target - timedelta(days=8)
@@ -268,7 +268,8 @@ class ScoringTests(unittest.TestCase):
               "harvests": [], "backtest": {}}],
         )
         self.assertIn("score-explanation", report)
-        self.assertIn("rain and a sharp temperature drop", report)
+        self.assertIn("preceding 26 days", report)
+        self.assertIn("mean air temperature", report)
 
     def test_air_humidity_is_not_a_scoring_input(self):
         recs = series(date(2025, 8, 20), 60, precipitation_sum=3.0)

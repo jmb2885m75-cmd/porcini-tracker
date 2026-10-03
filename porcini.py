@@ -1205,12 +1205,13 @@ __OBSERVATION_LOG__
           <label class="field" for="lweight">Weight (g)<input type="number" id="lweight" min="0" /></label>
         </span>
         <label class="field" for="lnotes">Notes<input id="lnotes" placeholder="Optional notes" /></label>
-        <button type="submit">Submit via GitHub issue</button>
-        <p id="draft-status" class="note" aria-live="polite">Drafts are saved only in this browser until you submit the GitHub issue and intake succeeds.</p>
-        <a id="draft-issue-link" hidden target="_blank" rel="noopener">Open prefilled GitHub issue</a>
+        <label class="field" for="lkey">API key / GitHub token (if required)<input type="password" id="lkey" autocomplete="off" /></label>
+        <button type="submit" id="lsubmit">Submit observation</button>
+        <button type="button" id="lsavedraft">Save as draft</button>
+        <p id="draft-status" class="note" aria-live="polite">Observations are submitted directly to the shared log. If you are offline, save a draft in this browser instead.</p>
       </form>
-      <details><summary>How observations are submitted and saved</summary><p class="note">Save a draft, open the prefilled GitHub issue, then click GitHub's Submit new issue button. Opening the issue page does not save the observation. Only issues from the repository owner or collaborators are accepted. The shared log updates after intake succeeds; browser drafts stay local until cleared here. A no-find report caps that day's score at 20.</p></details>
-      <div class="toolbar"><button id="export">Export drafts (JSON)</button><button id="clearlogs">Clear drafts</button></div>
+      <details><summary>How observations are submitted and saved</summary><p class="note">Submit sends the observation straight to the server, which validates it and appends it to harvest_log.json; it appears here immediately marked synced. If the server is unreachable or rejects the entry, nothing is lost: fix the form or use Save as draft, which stays only in this browser. A no-find report caps that day's score at 20.</p></details>
+      <div class="toolbar"><button id="export">Export drafts (JSON)</button><button id="clearlogs">Clear drafts</button><button id="clearsynced">Clear synced observations</button></div>
       <pre id="exported" class="alert" style="display:none"></pre>
     </div>
   </div>
@@ -1223,11 +1224,14 @@ __OBSERVATION_LOG__
   <script>
   (function () {
     var D = JSON.parse(document.getElementById('porcini-data').textContent);
-    var LOG_KEY = 'porcini_logs_v1', PAGE = 15;
+    var LOG_KEY = 'porcini_logs_v1', SYNCED_KEY = 'porcini_synced_v1', KEY_KEY = 'porcini_api_key', PAGE = 15;
+    var API_URL = D.api_url || '/api/submit-observation';
     var LABELS = { small: 'Small', medium: 'Medium', large: 'Large', buttons_young: 'Buttons / young', prime: 'Prime', old_overripe: 'Old / overripe' };
     function $(id) { return document.getElementById(id); }
     function loadLogs() { try { return JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); } catch (e) { return []; } }
     function saveLogs(l) { try { localStorage.setItem(LOG_KEY, JSON.stringify(l)); } catch (e) { alert('Could not save: storage unavailable'); } }
+    function loadSynced() { try { return JSON.parse(localStorage.getItem(SYNCED_KEY) || '[]'); } catch (e) { return []; } }
+    function saveSynced(l) { try { localStorage.setItem(SYNCED_KEY, JSON.stringify(l)); } catch (e) { /* display cache only */ } }
     var MONTHS = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'Jun.', 'Jul.', 'Aug.', 'Sep.', 'Oct.', 'Nov.', 'Dec.'];
     var WEEKDAYS = ['Sun.', 'Mon.', 'Tue.', 'Wed.', 'Thu.', 'Fri.', 'Sat.'];
     function fmtDate(s) {
@@ -1263,7 +1267,7 @@ __OBSERVATION_LOG__
         'A visit with no mushrooms is valid evidence, not missing data. On that date it caps the score at 20, even if weather or other bonuses would have made it higher.',
         'A no-find observation also lowers scores on the next five days (the effect fades from day to day). It does not change unrelated dates.',
         'A recent button-stage find modestly raises scores for a few days; an old/overripe find modestly lowers them. Repeated medium or large finds can add a small site-familiarity bonus. These weights are heuristic, not calibrated.',
-        '🍄 marks a recorded find and ❌ marks a visit where none were found. Draft observations stay in this browser until submitted and accepted.'
+        '🍄 marks a recorded find and ❌ marks a visit where none were found. Draft observations stay in this browser until submitted; synced ones are already in the shared log.'
       ]]
     };
     var infoDialog = $('info-dialog');
@@ -1295,6 +1299,7 @@ __OBSERVATION_LOG__
     function inRange(d) { if ($('seasonOnly').getAttribute('aria-pressed') === 'true' && !inSeason(d)) return false; var r = $('range').value || 'all'; if (r === 'all') return true; if (r === '365') return Date.parse(d) >= Date.now() - 365 * 864e5; return d.slice(0, 4) === r; }
     function harvestsFor() {
       var h = (loc.harvests || []).map(function (x) { return Object.assign({}, x, { origin: x.origin === 'log' ? 'harvest_log.json' : 'config' }); });
+      loadSynced().filter(function (x) { return x.location === loc.name; }).forEach(function (x) { h.push(Object.assign({ origin: 'synced' }, x)); });
       loadLogs().filter(function (x) { return x.location === loc.name; }).forEach(function (x) { h.push(Object.assign({ origin: 'draft (unsynced)' }, x)); });
       return h;
     }
@@ -1351,7 +1356,7 @@ __OBSERVATION_LOG__
       var lines = selectedDate ? [fmtDate(selectedDate)] : [];
       if (sm) lines.push('Favourability index: ' + sm[1] + '/100 — ' + sm[4] + ' — ' + sm[2], 'Weather: ' + (rm && rm[8] === 'forecast' ? 'forecast' : 'recorded'));
       else if (selectedDate) lines.push('No score is available for this day.');
-      hs.forEach(function (h) { lines.push((h.observation_type === 'no_mushrooms' ? '❌ Visited, no mushrooms found' : '🍄 Mushrooms found') + (h.origin === 'draft (unsynced)' ? ' (unsynced draft)' : '')); });
+      hs.forEach(function (h) { lines.push((h.observation_type === 'no_mushrooms' ? '❌ Visited, no mushrooms found' : '🍄 Mushrooms found') + (h.origin === 'draft (unsynced)' ? ' (unsynced draft)' : h.origin === 'synced' ? ' (synced)' : '')); });
       setLines($('selected-day'), lines);
     }
     function renderTimeline() {
@@ -1516,24 +1521,43 @@ __OBSERVATION_LOG__
     toggleHarvestFields();
     function setObservationDate() { if (!$('ldate').value) $('ldate').value = localToday(); }
     setObservationDate();
-    $('logform').onsubmit = function (e) {
-      e.preventDefault(); var logs = loadLogs();
+    function readEntry() {
       var entry = { location: loc.name, date: $('ldate').value, observation_type: $('lobservation').value, notes: $('lnotes').value };
       if (entry.observation_type === 'harvest') {
         entry.yield_tier = $('ltier').value; entry.cap_stage = $('lstage').value;
         entry.weight_g = $('lweight').value === '' ? undefined : +$('lweight').value;
       }
-      logs.push(entry); saveLogs(logs); this.reset(); draw();
-      toggleHarvestFields();
-      var q = new URLSearchParams({ template: 'harvest.yml', title: 'Observation: ' + entry.location + ' ' + fmtDate(entry.date), labels: 'harvest', location: entry.location, date: entry.date, observation_type: entry.observation_type === 'harvest' ? 'Found mushrooms' : 'No mushrooms found', yield_tier: LABELS[entry.yield_tier] || '', cap_stage: LABELS[entry.cap_stage] || '', weight_g: entry.weight_g || '', notes: entry.notes });
-      var issueLink = $('draft-issue-link');
-      issueLink.href = 'https://github.com/' + D.repo + '/issues/new?' + q.toString();
-      issueLink.hidden = false;
-      $('draft-status').textContent = 'Draft saved in this browser only. Open the issue link and submit it on GitHub; it will not enter the shared log until intake succeeds.';
-      setObservationDate();
+      return entry;
+    }
+    function resetForm() { $('logform').reset(); toggleHarvestFields(); setObservationDate(); }
+    function setStatus(t) { $('draft-status').textContent = t; }
+    $('lsavedraft').onclick = function () {
+      var logs = loadLogs(); logs.push(readEntry()); saveLogs(logs); resetForm(); draw();
+      setStatus('Draft saved in this browser only. It is not in the shared log.');
+    };
+    $('lkey').value = (function () { try { return localStorage.getItem(KEY_KEY) || ''; } catch (e) { return ''; } })();
+    $('logform').onsubmit = function (e) {
+      e.preventDefault();
+      var entry = readEntry(), key = $('lkey').value.trim(), headers = { 'Content-Type': 'application/json' };
+      try { if (key) localStorage.setItem(KEY_KEY, key); } catch (err) { /* optional */ }
+      if (key) headers.Authorization = 'Bearer ' + key;
+      $('lsubmit').disabled = true; setStatus('Submitting…');
+      fetch(API_URL, { method: 'POST', headers: headers, body: JSON.stringify(entry) })
+        .then(function (r) { return r.json().catch(function () { return { success: false, message: 'Unexpected server response (' + r.status + ').' }; }); })
+        .then(function (res) {
+          if (res.success) {
+            var synced = loadSynced(); synced.push(res.entry || entry); saveSynced(synced);
+            resetForm(); draw(); setStatus('✅ Saved to the shared log (synced).');
+          } else {
+            setStatus('❌ ' + (res.message || 'Submission failed.') + ' Correct the form and retry, or use Save as draft.');
+          }
+        })
+        .catch(function () { setStatus('❌ Could not reach the server. Use Save as draft to keep this observation in this browser.'); })
+        .then(function () { $('lsubmit').disabled = false; });
     };
     $('export').onclick = function () { var pre = $('exported'); pre.style.display = 'block'; pre.textContent = JSON.stringify(loadLogs(), null, 2); };
     $('clearlogs').onclick = function () { if (confirm('Delete all drafts stored in this browser?')) { saveLogs([]); draw(); } };
+    $('clearsynced').onclick = function () { if (confirm('Clear synced observations shown from this browser? They stay in the shared log and reappear when the report is regenerated.')) { saveSynced([]); draw(); } };
     (function () {
       var lf = $('log-loc'), tf = $('log-type');
       if (!lf || !tf) return;
@@ -1575,7 +1599,7 @@ def dashboard_payload(cfg: Dict[str, Any], analysis: List[Dict[str, Any]], mode:
             "backtest": item.get("backtest", {}),
         })
     repo = os.environ.get("GITHUB_REPOSITORY") or cfg.get("GITHUB_REPOSITORY") or "jmb2885m75-cmd/porcini-tracker"
-    return {"mode": mode, "threshold": threshold, "repo": repo, "locations": locations}
+    return {"mode": mode, "threshold": threshold, "repo": repo, "api_url": str(cfg.get("OBSERVATION_API_URL", "")), "locations": locations}
 
 
 _TIER_LABELS = {"small": "Small", "medium": "Medium", "large": "Large"}
@@ -1623,7 +1647,7 @@ def render_observation_log(entries: List[Dict[str, Any]], repo: str) -> str:
     locations = sorted({str(e.get("location")) for e in entries})
     options = "".join(f"<option value=\"{esc(l)}\">{esc(l)}</option>" for l in locations)
     if not entries:
-        return ("    <h2 id='observation-log'>📒 Observation Log</h2>\n    <div class='card'><div class='meta'>No observations recorded yet. This overview includes configured past harvests and accepted issue submissions; browser-local drafts are not shared or listed here.</div></div>")
+        return ("    <h2 id='observation-log'>📒 Observation Log</h2>\n    <div class='card'><div class='meta'>No observations recorded yet. This overview includes configured past harvests and submitted observations; browser-local drafts are not shared or listed here.</div></div>")
     return f"""    <h2 id="observation-log">📒 Observation Log</h2>
     <div class="card">
       <div class="log-summary">{''.join(chips)}</div>
@@ -1638,7 +1662,7 @@ def render_observation_log(entries: List[Dict[str, Any]], repo: str) -> str:
 
 
 def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]], alert_message: str = "", alert_will_send: bool = False, mode: str = MODE_DEFAULT, harvest_log: Optional[Dict[str, Any]] = None) -> str:
-    """Self-contained dashboard (inline CSS/JS/data, no CDN). Static hosting only; harvests come from harvest_log.json via the issue workflow."""
+    """Self-contained dashboard (inline CSS/JS/data, no CDN). Static hosting; observations are POSTed to api.py and stored in harvest_log.json."""
     threshold = int(cfg.get("ALERT_THRESHOLD", 65))
     cards = []
     for item in analysis:

@@ -251,8 +251,9 @@ class StoreMergeTests(unittest.TestCase):
         self.assertIn("unsynced draft", html_out)
         self.assertIn("Visited, found no mushrooms", html_out)
         self.assertIn("function localToday()", html_out)
-        self.assertIn("Open prefilled GitHub issue", html_out)
-        self.assertIn("click GitHub's Submit new issue button", html_out)
+        self.assertIn("/api/submit-observation", html_out)
+        self.assertIn("Clear synced observations", html_out)
+        self.assertIn("Save as draft", html_out)
 
 
 if __name__ == "__main__":

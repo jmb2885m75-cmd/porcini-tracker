@@ -1209,7 +1209,10 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     <div class="grid">__CARDS__</div>__ALERT__
     <h2>🌦 Rain &amp; Temperature Overview <button class="info-button" type="button" data-info="weather" aria-label="How to read the weather factors" aria-haspopup="dialog" aria-controls="info-dialog">ⓘ</button></h2>
     <div class="card">
-      <div class="toolbar"><label for="loc">Location<select id="loc"></select></label></div>
+      <div class="toolbar"><label for="loc">Location<select id="loc"></select></label>
+        <button type="button" id="prev-loc">◀ Previous Location</button>
+        <button type="button" id="next-loc">Next Location ▶</button>
+        <strong id="loc-indicator" aria-live="polite"></strong></div>
       <div id="weather-label" class="meta"></div>
       <div class="table-wrap"><table class="weather-table"><thead><tr><th>Date</th><th>High °C</th><th>Low °C</th><th>Rain mm</th></tr></thead><tbody id="weather-rows"></tbody></table></div>
     </div>
@@ -1533,7 +1536,16 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
       $('backtest').textContent = b.evaluated_harvests ? 'Backtest: ' + b.hits + '/' + b.evaluated_harvests + ' medium/large harvests fell on days scoring >= ' + b.threshold + ' (mean score on harvest days ' + b.mean_score_on_harvest_days + ' vs in-season mean ' + b.mean_score_in_season + '). Small sample; indicative only.' : 'Backtest: no medium/large harvests with a stored score yet.';
     }
     function refresh() { fillRange(); draw(); rows(); backtest(); weatherOverview(); renderTimeline(); }
-    $('loc').onchange = function () { loc = D.locations[+this.value]; pinned = []; page = 0; selectedDate = initialDate(); renderPins(); refresh(); };
+    function showLocation(index) {
+      var n = D.locations.length, i = ((index % n) + n) % n;
+      loc = D.locations[i]; $('loc').value = i; pinned = []; page = 0; selectedDate = initialDate();
+      $('loc-indicator').textContent = loc.name + ' (Location ' + (i + 1) + ' of ' + n + ')';
+      renderPins(); refresh();
+    }
+    $('loc').onchange = function () { showLocation(+this.value); };
+    $('prev-loc').onclick = function () { showLocation(+$('loc').value - 1); };
+    $('next-loc').onclick = function () { showLocation(+$('loc').value + 1); };
+    $('loc-indicator').textContent = loc.name + ' (Location 1 of ' + D.locations.length + ')';
     $('seasonOnly').onclick = function () { this.setAttribute('aria-pressed', this.getAttribute('aria-pressed') === 'true' ? 'false' : 'true'); page = 0; draw(); rows(); };
     $('range').onchange = function () { page = 0; draw(); rows(); };
     $('rain-toggle').onchange = $('temp-toggle').onchange = draw;

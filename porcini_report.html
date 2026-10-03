@@ -86,11 +86,11 @@
 <body>
   <div class="wrap">
     <h1>🍄 Porcini Tracker Dashboard</h1>
-    <div class="meta"><span class="badge">Daily run</span> Generated Sat. 03 Oct. 2026 10:46 UTC</div>
+    <div class="meta"><span class="badge">Daily run</span> Generated Sat. 03 Oct. 2026 10:56 UTC</div>
     <div class="grid"><div class='card'><div class='score-line'><span class='score' style='color:hsl(120 80% 58%)'>82%</span><span class='verdict-tag'>🔥 Definitely go for it</span></div><div class='name'>Fangschleuse</div><div class='meta best-day'>Best day<strong>Fri. 09 Oct. 2026</strong></div><div class='meta'>Status: ✅ Viable conditions</div><div class='meta score-explanation'>Key signals: a sharp temperature drop on Fri. 02 Oct. 2026 (7 days before); soil temperature is favourable at 13.7°C. The score also reflects local habitat and logged field observations.</div><div class='meta'>⚠️ HIGH MAGGOT RISK - Harvest early while small.</div><div class='meta'>Moisture: 0.23 m³/m³</div></div><div class='card'><div class='score-line'><span class='score' style='color:hsl(120 80% 58%)'>82%</span><span class='verdict-tag'>🔥 Definitely go for it</span></div><div class='name'>Zosse</div><div class='meta best-day'>Best day<strong>Sat. 03 Oct. 2026</strong></div><div class='meta'>Status: ✅ Viable conditions</div><div class='meta score-explanation'>Key signals: heavy rain on Thu. 24 Sep. 2026 (9 days before); soil temperature is favourable at 15.1°C. The score also reflects local habitat and logged field observations.</div><div class='meta'>⚠️ HIGH MAGGOT RISK - Harvest early while small.</div><div class='meta'>Moisture: 0.18 m³/m³</div></div></div>
     <h2>📨 Alert Preview</h2>
     <div class="card">
-      <div class="meta">This message will be sent with this run.</div>
+      <div class="meta">Preview only: no alert is triggered by this run.</div>
       <pre class="alert">🍄 Weekend Porcini Forecast (Ranked):
 1. Fangschleuse - 82% – 🔥 Definitely go for it (Fri. 09 Oct. 2026) | ✅ Viable conditions
    Why: Key signals: a sharp temperature drop on Fri. 02 Oct. 2026 (7 days before); soil temperature is favourable at 13.7°C. The score also reflects local habitat and logged field observations.
@@ -102,7 +102,10 @@
     </div>
     <h2>🌦 Rain &amp; Temperature Overview <button class="info-button" type="button" data-info="weather" aria-label="How to read the weather factors" aria-haspopup="dialog" aria-controls="info-dialog">ⓘ</button></h2>
     <div class="card">
-      <div class="toolbar"><label for="loc">Location<select id="loc"></select></label></div>
+      <div class="toolbar"><label for="loc">Location<select id="loc"></select></label>
+        <button type="button" id="prev-loc">◀ Previous Location</button>
+        <button type="button" id="next-loc">Next Location ▶</button>
+        <strong id="loc-indicator" aria-live="polite"></strong></div>
       <div id="weather-label" class="meta"></div>
       <div class="table-wrap"><table class="weather-table"><thead><tr><th>Date</th><th>High °C</th><th>Low °C</th><th>Rain mm</th></tr></thead><tbody id="weather-rows"></tbody></table></div>
     </div>
@@ -426,7 +429,16 @@
       $('backtest').textContent = b.evaluated_harvests ? 'Backtest: ' + b.hits + '/' + b.evaluated_harvests + ' medium/large harvests fell on days scoring >= ' + b.threshold + ' (mean score on harvest days ' + b.mean_score_on_harvest_days + ' vs in-season mean ' + b.mean_score_in_season + '). Small sample; indicative only.' : 'Backtest: no medium/large harvests with a stored score yet.';
     }
     function refresh() { fillRange(); draw(); rows(); backtest(); weatherOverview(); renderTimeline(); }
-    $('loc').onchange = function () { loc = D.locations[+this.value]; pinned = []; page = 0; selectedDate = initialDate(); renderPins(); refresh(); };
+    function showLocation(index) {
+      var n = D.locations.length, i = ((index % n) + n) % n;
+      loc = D.locations[i]; $('loc').value = i; pinned = []; page = 0; selectedDate = initialDate();
+      $('loc-indicator').textContent = loc.name + ' (Location ' + (i + 1) + ' of ' + n + ')';
+      renderPins(); refresh();
+    }
+    $('loc').onchange = function () { showLocation(+this.value); };
+    $('prev-loc').onclick = function () { showLocation(+$('loc').value - 1); };
+    $('next-loc').onclick = function () { showLocation(+$('loc').value + 1); };
+    $('loc-indicator').textContent = loc.name + ' (Location 1 of ' + D.locations.length + ')';
     $('seasonOnly').onclick = function () { this.setAttribute('aria-pressed', this.getAttribute('aria-pressed') === 'true' ? 'false' : 'true'); page = 0; draw(); rows(); };
     $('range').onchange = function () { page = 0; draw(); rows(); };
     $('rain-toggle').onchange = $('temp-toggle').onchange = draw;

@@ -9,7 +9,7 @@ and writes `porcini_report.html`. A separate GitHub issue workflow validates har
 - Keeps a multi-year weather archive per location in `porcini_db.json` (schema version 3) and a per-day score series.
 - Sends Telegram / Pushover / Twilio alerts (see below).
 - Generates `porcini_report.html`: a self-contained dashboard (no CDN) with a score chart, harvest pins, tooltips and an observation browser.
-- The dashboard includes keyboard-accessible “ⓘ” explanations, found/no-find markers, and a scrollable day-by-day timeline with date picking and previous/next controls. Its score is a favourability index, not a calibrated chance; the weather feed provides 7 forecast days including today, while rain/cooling triggers are checked 7–12 days before each scored day.
+- The dashboard includes keyboard-accessible “ⓘ” explanations, found/no-find markers, and a scrollable day-by-day timeline with date picking and previous/next controls. Its score is a favourability index, not a calibrated chance; low measured soil moisture (≤0.20 m³/m³) applies a 20-point penalty and a dry-wait status. The weather feed provides 7 forecast days including today, while rain/cooling triggers are checked 7–12 days before each scored day.
 - Harvest and no-mushrooms-found observations can be submitted as GitHub issues. A no-find observation caps that
   date's score at 20; it does not affect other dates. The intake workflow validates submissions from the
   repository owner or collaborators and stores them in `harvest_log.json`; browser drafts stay local until submitted.

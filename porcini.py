@@ -124,7 +124,7 @@ SCHEMA_VERSION = 3
 # Bump when the scoring rules change; forces every stored daily score to be recomputed.
 # Score penalty applied 1..N days after a visit that found nothing (flush not started yet)
 NO_FIND_PENALTY = (25, 20, 15, 10, 5)
-MODEL_VERSION = 6  # 6: same-day no-find cap is applied last (affinity bonus can no longer lift it); 5: no-find also lowers following days
+MODEL_VERSION = 7  # 7: low measured soil moisture penalizes the score even without same-day rain
 ARCHIVE_LAG_DAYS = 5
 SOURCE_ARCHIVE = "archive"
 SOURCE_FORECAST = "forecast"
@@ -708,8 +708,9 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
     if soil_moisture is not None:
         if soil_moisture > 0.35:
             score += 10
-        elif soil_moisture < 0.18 and (daily.get("precipitation_sum") or 0) > 5:
-            score -= 15
+        elif soil_moisture <= 0.20:
+            score -= 20
+            status = "TOO DRY - LOW SOIL MOISTURE"
 
     for tree_name, pts in HOST_TREE_SCORES.items():
         if tree_name in location.get("tree_species", []):
@@ -884,8 +885,12 @@ def explain_score(location: Dict[str, Any], records: List[Dict[str, Any]], best_
     elif "delayed by high soil temp" in status.lower():
         signals.append("the soil is too warm for the season to score")
     elif "too dry" in status.lower():
-        rain_120 = _sum_precip(hist.window(day, 120))
-        signals.append(f"only {rain_120:.0f} mm of rain fell in the past 120 days, so drought remains unbroken")
+        soil_moisture = daily.get("soil_moisture_0_to_7cm_mean")
+        if "soil moisture" in status.lower() and soil_moisture is not None:
+            signals.append(f"soil moisture is low at {float(soil_moisture):.3f} m³/m³")
+        else:
+            rain_120 = _sum_precip(hist.window(day, 120))
+            signals.append(f"only {rain_120:.0f} mm of rain fell in the past 120 days, so drought remains unbroken")
     else:
         rebound = find_drought_rebound(hist, day)
         if rebound is not None:

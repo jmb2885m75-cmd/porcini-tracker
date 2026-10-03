@@ -136,7 +136,7 @@ class IntakeUsabilityTests(unittest.TestCase):
         from unittest.mock import patch
         with tempfile.TemporaryDirectory() as d:
             cfg = Path(d) / "config.json"
-            cfg.write_text('{"LOCATIONS": [{"name": "A"}]}')
+            cfg.write_text('{"LOCATIONS": [{"name": "East Berlin Pine & Oak Ridge"}]}')
             log = Path(d) / "harvest_log.json"
             env = {"ISSUE_AUTHOR_ASSOCIATION": "OWNER", "ISSUE_BODY": BODY, "ISSUE_NUMBER": "5", "ISSUE_AUTHOR": "me"}
             with patch.dict(os.environ, env), patch.object(h, "HARVEST_LOG_PATH", log):

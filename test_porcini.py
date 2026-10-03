@@ -1,7 +1,7 @@
 """Lightweight self-checks. Run: python -m unittest test_porcini -v (no network needed)."""
 import unittest
 from datetime import date, datetime, timedelta, timezone
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import porcini as p
 
@@ -154,6 +154,40 @@ class ConfigTests(unittest.TestCase):
         with patch.dict("os.environ", {"CONFIG_JSON": "[]"}):
             with self.assertRaisesRegex(ValueError, "JSON object"):
                 p.load_config()
+
+
+class NotificationTests(unittest.TestCase):
+    def test_telegram_requires_api_success_response(self):
+        response = Mock()
+        response.json.return_value = {"ok": False, "description": "Unauthorized"}
+        with patch.object(p.requests, "post", return_value=response):
+            self.assertFalse(p.send_telegram("token", "chat", "message"))
+
+    def test_telegram_accepts_api_success_response(self):
+        response = Mock()
+        response.json.return_value = {"ok": True, "result": {"message_id": 1}}
+        with patch.object(p.requests, "post", return_value=response):
+            self.assertTrue(p.send_telegram("token", "chat", "message"))
+
+    def test_test_alert_returns_failure_when_delivery_fails(self):
+        with (
+            patch("sys.argv", ["porcini.py", "--test-alert"]),
+            patch.object(p, "load_config", return_value={}),
+            patch.object(p, "load_or_init_db", return_value={}),
+            patch.object(p, "build_alert_state", return_value={}),
+            patch.object(p, "dispatch_notification", return_value=False),
+        ):
+            self.assertEqual(p.main(), 1)
+
+    def test_test_alert_returns_success_when_delivery_succeeds(self):
+        with (
+            patch("sys.argv", ["porcini.py", "--test-alert"]),
+            patch.object(p, "load_config", return_value={}),
+            patch.object(p, "load_or_init_db", return_value={}),
+            patch.object(p, "build_alert_state", return_value={}),
+            patch.object(p, "dispatch_notification", return_value=True),
+        ):
+            self.assertEqual(p.main(), 0)
 
 
 class ScoringTests(unittest.TestCase):

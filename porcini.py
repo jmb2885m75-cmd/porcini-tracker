@@ -978,6 +978,11 @@ def send_telegram(token: str, chat_id: str, message: str) -> bool:
     try:
         response = requests.post(url, data=payload, timeout=20)
         response.raise_for_status()
+        result = response.json()
+        if not isinstance(result, dict) or result.get("ok") is not True:
+            description = result.get("description", "invalid API response") if isinstance(result, dict) else "invalid API response"
+            print(f"[WARN] Telegram alert failed: {description}")
+            return False
         return True
     except Exception as exc:
         print(f"[WARN] Telegram alert failed: {exc}")
@@ -1616,8 +1621,11 @@ def main() -> int:
     alert_state = build_alert_state()
 
     if args.test_alert:
-        dispatch_notification(cfg, "🍄 Porcini test alert: notification system is working.")
-        return 0
+        if dispatch_notification(cfg, "🍄 Porcini test alert: notification system is working."):
+            print("[INFO] Test alert delivered")
+            return 0
+        print("[WARN] Test alert was not delivered")
+        return 1
 
     now = datetime.now(timezone.utc)
     today = now.date()

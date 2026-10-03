@@ -202,26 +202,57 @@ class ScoringTests(unittest.TestCase):
         next_day = p.calculate_score_for_day(LOC, hist.get(observed + timedelta(days=1)), hist, no_find)
         self.assertGreater(next_day[0], score[0])
 
-    def test_timing_bonus_and_penalty(self):
-        # rain trigger 7-12 days before: Sat (+15) vs Mon (-20)
-        start = date(2025, 9, 1)
-        recs = series(start, 40, precipitation_sum=3.0)
-        recs[5]["precipitation_sum"] = 30.0  # 2025-09-06
+    def test_weekday_does_not_change_favourability(self):
+        recs = series(date(2025, 9, 1), 40, precipitation_sum=3.0)
         h = p.History(recs)
-        sat, mon = date(2025, 9, 13), date(2025, 9, 15)  # lags 7 and 9 after the trigger
-        s_sat = p.calculate_score_for_day(LOC, h.get(sat), h, [])[0]
-        s_mon = p.calculate_score_for_day(LOC, h.get(mon), h, [])[0]
-        self.assertGreater(s_sat, s_mon + 30)
+        saturday, monday = date(2025, 9, 13), date(2025, 9, 15)
+        sat_score = p.calculate_score_for_day(LOC, h.get(saturday), h, [])[0]
+        mon_score = p.calculate_score_for_day(LOC, h.get(monday), h, [])[0]
+        self.assertEqual(sat_score, mon_score)
 
-    def test_score_explanation_mentions_recent_rain_and_cooling_in_dashboard_and_alert(self):
+    def test_rain_score_uses_26_day_total(self):
+        recs = series(date(2025, 9, 1), 50, precipitation_sum=0.0)
+        h = p.History(recs)
+        day = date(2025, 10, 18)
+        for record in h.window(day, 26):
+            record["precipitation_sum"] = 1.0
+        wet_score = p.calculate_score_for_day(LOC, h.get(day), h, [])[0]
+        for record in h.window(day, 26):
+            record["precipitation_sum"] = 0.0
+        dry_score = p.calculate_score_for_day(LOC, h.get(day), h, [])[0]
+        self.assertEqual(wet_score - dry_score, 8)
+
+    def test_temperature_score_uses_20_day_mean_air_temperature(self):
+        recs = series(date(2025, 9, 1), 50, temperature_2m_max=20.0, temperature_2m_min=6.0)
+        h = p.History(recs)
+        day = date(2025, 10, 18)
+        optimal = p.calculate_score_for_day(LOC, h.get(day), h, [])[0]
+        for record in h.window(day, 20):
+            record["temperature_2m_max"] = 16.0
+            record["temperature_2m_min"] = 2.0
+        cooler = p.calculate_score_for_day(LOC, h.get(day), h, [])[0]
+        self.assertEqual(optimal - cooler, 8)
+
+    def test_missing_weather_coverage_omits_rolling_signal(self):
+        recs = series(date(2025, 9, 1), 50)
+        h = p.History(recs)
+        day = date(2025, 10, 18)
+        for record in h.window(day, 26)[:6]:
+            record["precipitation_sum"] = None
+        for record in h.window(day, 20)[:5]:
+            record["temperature_2m_min"] = None
+        self.assertIsNone(p.observed_rainfall_total(h, day, 26))
+        self.assertIsNone(p.mean_air_temperature(h, day, 20))
+
+    def test_score_explanation_uses_supported_weather_windows_in_dashboard_and_alert(self):
         target = date(2025, 10, 4)
         recs = series(date(2025, 9, 1), 40, temperature_2m_max=20.0)
         trigger = target - timedelta(days=8)
         trigger_record = next(r for r in recs if r["date"] == trigger.isoformat())
         trigger_record.update(precipitation_sum=12.0, temperature_2m_max=14.0)
         explanation = p.explain_score(LOC, recs, p.format_display_date(target), "✅ Viable conditions")
-        self.assertIn("rain and a sharp temperature drop", explanation)
-        self.assertIn("8 days before", explanation)
+        self.assertIn("mean air temperature", explanation)
+        self.assertIn("preceding 26 days", explanation)
 
         message = p.build_alert_message(
             [("Oak & Beech Spot", 82, p.format_display_date(target), "✅ Viable conditions", explanation)],
@@ -237,15 +268,16 @@ class ScoringTests(unittest.TestCase):
               "harvests": [], "backtest": {}}],
         )
         self.assertIn("score-explanation", report)
-        self.assertIn("rain and a sharp temperature drop", report)
+        self.assertIn("preceding 26 days", report)
+        self.assertIn("mean air temperature", report)
 
-    def test_wet_baseline_vs_humidity_penalty(self):
+    def test_air_humidity_is_not_a_scoring_input(self):
         recs = series(date(2025, 8, 20), 60, precipitation_sum=3.0)
         h = p.History(recs)
         day = recs[-1]
         base = p.calculate_score_for_day(LOC, day, h, [])[0]
         dry = series(date(2025, 8, 20), 60, precipitation_sum=3.0, relative_humidity_2m_mean=40.0)
-        self.assertEqual(base - 15, p.calculate_score_for_day(LOC, dry[-1], p.History(dry), [])[0])
+        self.assertEqual(base, p.calculate_score_for_day(LOC, dry[-1], p.History(dry), [])[0])
 
     def test_low_soil_moisture_penalizes_without_same_day_rain(self):
         recs = series(date(2025, 8, 20), 60, precipitation_sum=3.0)
@@ -253,7 +285,7 @@ class ScoringTests(unittest.TestCase):
         baseline = p.calculate_score_for_day(LOC, recs[-1], hist, [])
         dry_day = dict(recs[-1], soil_moisture_0_to_7cm_mean=0.195, precipitation_sum=0.0)
         dry = p.calculate_score_for_day(LOC, dry_day, hist, [])
-        self.assertEqual(dry[0], baseline[0] - 20)
+        self.assertEqual(dry[0], baseline[0] - 10)
         self.assertEqual(dry[1], "TOO DRY - LOW SOIL MOISTURE")
         explanation = p.explain_score(LOC, recs[:-1] + [dry_day], p.format_display_date(date(2025, 10, 18)), dry[1])
         self.assertIn("soil moisture is low at 0.195 m³/m³", explanation)
@@ -265,7 +297,7 @@ class ScoringTests(unittest.TestCase):
         recent = [{"date": "2025-05-01", "yield_tier": "large"}, {"date": "2025-06-01", "yield_tier": "medium"}]
         old = [{"date": "2022-05-01", "yield_tier": "large"}, {"date": "2022-06-01", "yield_tier": "medium"}]
         base = p.calculate_score_for_day(LOC, day, h, [])[0]
-        self.assertEqual(p.calculate_score_for_day(LOC, day, h, recent)[0], base + 10)
+        self.assertEqual(p.calculate_score_for_day(LOC, day, h, recent)[0], base + 5)
         self.assertEqual(p.calculate_score_for_day(LOC, day, h, old)[0], base)
 
     def test_quality_flags(self):
@@ -274,9 +306,15 @@ class ScoringTests(unittest.TestCase):
         self.assertIn("MAGGOT", p.calculate_score_for_day(LOC, hot[-1], p.History(hot), [])[2])
         self.assertIn("PRIME", p.calculate_score_for_day(LOC, cool[-1], p.History(cool), [])[2])
 
-    def test_microclimate_window(self):
-        self.assertEqual(p.moisture_retention_days({"aspect": "north"}), 10)
-        self.assertEqual(p.moisture_retention_days({"aspect": "south"}), 5)
+    def test_duplicate_host_labels_do_not_stack_and_additional_hosts_are_supported(self):
+        recs = series(date(2025, 8, 20), 60, precipitation_sum=3.0)
+        h = p.History(recs)
+        day = recs[-1]
+        base = p.calculate_score_for_day(LOC, day, h, [])[0]
+        duplicate_spruce = dict(LOC, tree_species=["Spruce", "Norway Spruce"])
+        birch_chestnut = dict(LOC, tree_species=["Birch", "Chestnut"])
+        self.assertEqual(p.calculate_score_for_day(duplicate_spruce, day, h, [])[0], base)
+        self.assertEqual(p.calculate_score_for_day(birch_chestnut, day, h, [])[0], base)
 
     def test_daily_scores_incremental(self):
         recs = series(date(2025, 9, 1), 20)

@@ -46,7 +46,6 @@ jobs:
           ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
           ISSUE_AUTHOR_ASSOCIATION: ${{ github.event.issue.author_association }}
           REPO_OWNER: ${{ github.repository_owner }}
-          ISSUE_HAS_HARVEST_LABEL: ${{ contains(github.event.issue.labels.*.name, 'harvest') }}
           HARVEST_ERROR_FILE: ${{ runner.temp }}/harvest_error.md
         run: python harvest.py
 

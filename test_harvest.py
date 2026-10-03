@@ -126,23 +126,22 @@ class IntakeUsabilityTests(unittest.TestCase):
             err = Path(d) / "err.md"
             cfg = Path(d) / "config.json"
             cfg.write_text('{"LOCATIONS": [{"name": "A"}]}')
-            env = {"ISSUE_AUTHOR_ASSOCIATION": "OWNER", "ISSUE_HAS_HARVEST_LABEL": "true", "ISSUE_BODY": "### Location / spot\n\nB\n", "ISSUE_NUMBER": "5", "HARVEST_ERROR_FILE": str(err)}
+            env = {"ISSUE_AUTHOR_ASSOCIATION": "OWNER", "ISSUE_BODY": "### Location / spot\n\nB\n", "ISSUE_NUMBER": "5", "HARVEST_ERROR_FILE": str(err)}
             with patch.dict(os.environ, env):
                 self.assertEqual(h.main(["--config", str(cfg)]), 1)
             self.assertIn("Unknown location 'B'", err.read_text())
 
-    def test_main_reports_missing_label(self):
+    def test_main_accepts_trusted_issue_without_label(self):
         import os
         from unittest.mock import patch
         with tempfile.TemporaryDirectory() as d:
             cfg = Path(d) / "config.json"
             cfg.write_text('{"LOCATIONS": [{"name": "A"}]}')
-            err = Path(d) / "err.md"
-            env = {"ISSUE_AUTHOR_ASSOCIATION": "OWNER", "ISSUE_HAS_HARVEST_LABEL": "false", "ISSUE_BODY": BODY,
-                   "ISSUE_NUMBER": "5", "HARVEST_ERROR_FILE": str(err)}
-            with patch.dict(os.environ, env):
-                self.assertEqual(h.main(["--config", str(cfg)]), 1)
-            self.assertIn("missing the 'harvest' label", err.read_text())
+            log = Path(d) / "harvest_log.json"
+            env = {"ISSUE_AUTHOR_ASSOCIATION": "OWNER", "ISSUE_BODY": BODY, "ISSUE_NUMBER": "5", "ISSUE_AUTHOR": "me"}
+            with patch.dict(os.environ, env), patch.object(h, "HARVEST_LOG_PATH", log):
+                self.assertEqual(h.main(["--config", str(cfg)]), 0)
+            self.assertEqual(h.load_harvest_log(log)["harvests"][0]["issue"], 5)
 
     def test_sync_issue_form_switches_location_to_dropdown(self):
         with tempfile.TemporaryDirectory() as d:

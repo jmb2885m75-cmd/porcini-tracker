@@ -1268,8 +1268,10 @@ __OBSERVATION_LOG__
         </span>
         <label class="field" for="lnotes">Notes<input id="lnotes" placeholder="Optional notes" /></label>
         <button type="submit">Submit via GitHub issue</button>
+        <p id="draft-status" class="note" aria-live="polite">Drafts are saved only in this browser until you submit the GitHub issue and intake succeeds.</p>
+        <a id="draft-issue-link" hidden target="_blank" rel="noopener">Open prefilled GitHub issue</a>
       </form>
-      <details><summary>How observations are submitted and saved</summary><p class="note">Submitting opens a pre-filled GitHub issue (sign-in required). Only issues from the repository owner or collaborators are accepted. Accepted observations update <code>harvest_log.json</code> and the dashboard. Until then, drafts stay in this browser's localStorage. A no-find report caps that day's score at 20 and lowers the next five days.</p></details>
+      <details><summary>How observations are submitted and saved</summary><p class="note">Save a draft, open the prefilled GitHub issue, then click GitHub's Submit new issue button. Opening the issue page does not save the observation. Only issues from the repository owner or collaborators are accepted. The shared log updates after intake succeeds; browser drafts stay local until cleared here. A no-find report caps that day's score at 20.</p></details>
       <div class="toolbar"><button id="export">Export drafts (JSON)</button><button id="clearlogs">Clear drafts</button></div>
       <pre id="exported" class="alert" style="display:none"></pre>
     </div>
@@ -1295,6 +1297,10 @@ __OBSERVATION_LOG__
       if (!m) return s;
       var day = new Date(s + 'T00:00:00Z');
       return isNaN(day.getTime()) ? s : WEEKDAYS[day.getUTCDay()] + ' ' + m[3] + ' ' + MONTHS[+m[2] - 1] + ' ' + m[1];
+    }
+    function localToday() {
+      var d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     }
     var INFO = {
       weather: ['Weather indicators', [
@@ -1569,17 +1575,23 @@ __OBSERVATION_LOG__
     function toggleHarvestFields() { $('harvest-fields').hidden = $('lobservation').value !== 'harvest'; }
     $('lobservation').onchange = toggleHarvestFields;
     toggleHarvestFields();
+    function setObservationDate() { if (!$('ldate').value) $('ldate').value = localToday(); }
+    setObservationDate();
     $('logform').onsubmit = function (e) {
       e.preventDefault(); var logs = loadLogs();
       var entry = { location: loc.name, date: $('ldate').value, observation_type: $('lobservation').value, notes: $('lnotes').value };
       if (entry.observation_type === 'harvest') {
         entry.yield_tier = $('ltier').value; entry.cap_stage = $('lstage').value;
-        entry.weight_g = +$('lweight').value || undefined;
+        entry.weight_g = $('lweight').value === '' ? undefined : +$('lweight').value;
       }
       logs.push(entry); saveLogs(logs); this.reset(); draw();
       toggleHarvestFields();
       var q = new URLSearchParams({ template: 'harvest.yml', title: 'Observation: ' + entry.location + ' ' + fmtDate(entry.date), labels: 'harvest', location: entry.location, date: entry.date, observation_type: entry.observation_type === 'harvest' ? 'Found mushrooms' : 'No mushrooms found', yield_tier: LABELS[entry.yield_tier] || '', cap_stage: LABELS[entry.cap_stage] || '', weight_g: entry.weight_g || '', notes: entry.notes });
-      window.open('https://github.com/' + D.repo + '/issues/new?' + q.toString(), '_blank', 'noopener');
+      var issueLink = $('draft-issue-link');
+      issueLink.href = 'https://github.com/' + D.repo + '/issues/new?' + q.toString();
+      issueLink.hidden = false;
+      $('draft-status').textContent = 'Draft saved in this browser only. Open the issue link and submit it on GitHub; it will not enter the shared log until intake succeeds.';
+      setObservationDate();
     };
     $('export').onclick = function () { var pre = $('exported'); pre.style.display = 'block'; pre.textContent = JSON.stringify(loadLogs(), null, 2); };
     $('clearlogs').onclick = function () { if (confirm('Delete all drafts stored in this browser?')) { saveLogs([]); draw(); } };
@@ -1664,19 +1676,21 @@ def render_observation_log(entries: List[Dict[str, Any]], repo: str) -> str:
             f"<td>{esc(_TIER_LABELS.get(e.get('yield_tier'), e.get('yield_tier') or '—'))}</td>"
             f"<td>{esc(_STAGE_LABELS.get(e.get('cap_stage'), e.get('cap_stage') or '—'))}</td>"
             f"<td class='num'>{esc(weight) if weight not in (None, '') else '—'}</td>"
-            f"<td class='notes'>{esc(e.get('notes') or '—')}</td><td>{esc(e.get('origin', ''))}</td><td>{link}</td></tr>")
+            f"<td class='notes'>{esc(e.get('notes') or '—')}</td><td>{esc(e.get('origin', ''))}</td>"
+            f"<td>{esc(e.get('reporter') or '—')}</td><td>{link}</td></tr>")
     locations = sorted({str(e.get("location")) for e in entries})
     options = "".join(f"<option value=\"{esc(l)}\">{esc(l)}</option>" for l in locations)
     if not entries:
-        return ("    <h2 id='observation-log'>📒 Observation Log</h2>\n    <div class='card'><div class='meta'>No observations recorded yet.</div></div>")
+        return ("    <h2 id='observation-log'>📒 Observation Log</h2>\n    <div class='card'><div class='meta'>No observations recorded yet. This overview includes configured past harvests and accepted issue submissions; browser-local drafts are not shared or listed here.</div></div>")
     return f"""    <h2 id="observation-log">📒 Observation Log</h2>
     <div class="card">
       <div class="log-summary">{''.join(chips)}</div>
+      <p class="meta">This overview contains configured past harvests and observations accepted into the shared log. Browser-local drafts are not shared or listed here.</p>
       <details><summary>Counts per location</summary><div class="table-wrap"><table class="log-table"><thead><tr><th>Location</th><th class="num">Harvests</th><th class="num">No mushrooms</th><th class="num">Total g</th><th>Last visit</th></tr></thead><tbody>{summary_rows}</tbody></table></div></details>
       <div class="toolbar"><label for="log-loc">Location<select id="log-loc"><option value="">All locations</option>{options}</select></label>
       <label for="log-type">Type<select id="log-type"><option value="">All types</option><option value="harvest">Harvest</option><option value="no_mushrooms">No mushrooms</option></select></label>
       <span id="log-count" class="meta"></span></div>
-      <div class="table-wrap"><table class="log-table"><thead><tr><th>Date</th><th>Location</th><th>Type</th><th>Yield</th><th>Cap stage</th><th class="num">Weight g</th><th>Notes</th><th>Source</th><th>Issue</th></tr></thead><tbody id="log-rows">{''.join(rows)}</tbody></table></div>
+      <div class="table-wrap"><table class="log-table"><thead><tr><th>Date</th><th>Location</th><th>Type</th><th>Yield</th><th>Cap stage</th><th class="num">Weight g</th><th>Notes</th><th>Source</th><th>Reported by</th><th>Issue</th></tr></thead><tbody id="log-rows">{''.join(rows)}</tbody></table></div>
     </div>"""
 
 

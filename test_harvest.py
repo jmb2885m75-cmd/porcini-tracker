@@ -43,6 +43,10 @@ class ParseValidateTests(unittest.TestCase):
         rec = h.validate_harvest(h.parse_issue_body(BODY), KNOWN, TODAY)
         self.assertEqual(rec, {"location": KNOWN[0], "date": "2026-09-15", "observation_type": "harvest", "yield_tier": "large", "cap_stage": "prime", "weight_g": 450})
 
+    def test_unknown_issue_form_heading_is_rejected(self):
+        with self.assertRaisesRegex(h.HarvestError, "Unrecognized issue-form field heading"):
+            h.parse_issue_body(BODY + "\n### New field\n\nvalue\n")
+
     def test_no_mushrooms_observation_needs_no_harvest_details(self):
         raw = h.parse_issue_body(BODY)
         raw["observation_type"] = "no_mushrooms"
@@ -53,10 +57,11 @@ class ParseValidateTests(unittest.TestCase):
             "location": KNOWN[0], "date": "2026-09-15", "observation_type": "no_mushrooms",
         })
 
-    def test_missing_observation_type_defaults_to_harvest(self):
+    def test_missing_observation_type_is_rejected(self):
         raw = h.parse_issue_body(BODY)
         raw.pop("observation_type")
-        self.assertEqual(h.validate_harvest(raw, KNOWN, TODAY)["observation_type"], "harvest")
+        with self.assertRaisesRegex(h.HarvestError, "Observation type is required"):
+            h.validate_harvest(raw, KNOWN, TODAY)
 
     def test_location_case_insensitive_and_unknown_rejected(self):
         raw = h.parse_issue_body(BODY)
@@ -121,10 +126,23 @@ class IntakeUsabilityTests(unittest.TestCase):
             err = Path(d) / "err.md"
             cfg = Path(d) / "config.json"
             cfg.write_text('{"LOCATIONS": [{"name": "A"}]}')
-            env = {"ISSUE_AUTHOR_ASSOCIATION": "OWNER", "ISSUE_BODY": "### Location / spot\n\nB\n", "ISSUE_NUMBER": "5", "HARVEST_ERROR_FILE": str(err)}
+            env = {"ISSUE_AUTHOR_ASSOCIATION": "OWNER", "ISSUE_HAS_HARVEST_LABEL": "true", "ISSUE_BODY": "### Location / spot\n\nB\n", "ISSUE_NUMBER": "5", "HARVEST_ERROR_FILE": str(err)}
             with patch.dict(os.environ, env):
                 self.assertEqual(h.main(["--config", str(cfg)]), 1)
             self.assertIn("Unknown location 'B'", err.read_text())
+
+    def test_main_reports_missing_label(self):
+        import os
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as d:
+            cfg = Path(d) / "config.json"
+            cfg.write_text('{"LOCATIONS": [{"name": "A"}]}')
+            err = Path(d) / "err.md"
+            env = {"ISSUE_AUTHOR_ASSOCIATION": "OWNER", "ISSUE_HAS_HARVEST_LABEL": "false", "ISSUE_BODY": BODY,
+                   "ISSUE_NUMBER": "5", "HARVEST_ERROR_FILE": str(err)}
+            with patch.dict(os.environ, env):
+                self.assertEqual(h.main(["--config", str(cfg)]), 1)
+            self.assertIn("missing the 'harvest' label", err.read_text())
 
     def test_sync_issue_form_switches_location_to_dropdown(self):
         with tempfile.TemporaryDirectory() as d:
@@ -165,6 +183,8 @@ class ObservationLogTests(unittest.TestCase):
         out = p.generate_dashboard_html({"ALERT_THRESHOLD": 65, "LOCATIONS": self.LOCS}, [], harvest_log=self.LOG)
         self.assertIn('id="observation-log"', out)
         self.assertIn("/issues/13", out)
+        self.assertIn("Reported by", out)
+        self.assertIn("Browser-local drafts are not shared", out)
         self.assertIn("&lt;b&gt;x&lt;/b&gt;", out)
         self.assertNotIn("<b>x</b>", out)
         self.assertIn("Retired", out)
@@ -183,6 +203,10 @@ class StoreMergeTests(unittest.TestCase):
         self.assertTrue(h.append_harvest(log, rec, 7, "me"))
         self.assertFalse(h.append_harvest(log, rec, 7, "me"))
         self.assertEqual(len(log["harvests"]), 1)
+        revised = dict(rec, date="2026-09-16")
+        self.assertTrue(h.append_harvest(log, revised, 7, "me"))
+        self.assertEqual(len(log["harvests"]), 1)
+        self.assertEqual(log["harvests"][0]["date"], "2026-09-16")
 
     def test_save_load_roundtrip_and_corrupt(self):
         with tempfile.TemporaryDirectory() as d:
@@ -219,6 +243,9 @@ class StoreMergeTests(unittest.TestCase):
         self.assertIn("harvest_log.json", html_out)
         self.assertIn("unsynced draft", html_out)
         self.assertIn("Visited, found no mushrooms", html_out)
+        self.assertIn("function localToday()", html_out)
+        self.assertIn("Open prefilled GitHub issue", html_out)
+        self.assertIn("click GitHub's Submit new issue button", html_out)
 
 
 if __name__ == "__main__":

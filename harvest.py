@@ -85,6 +85,7 @@ def _match_location(location: str, known: List[str]) -> Optional[str]:
 def parse_issue_body(body: str) -> Dict[str, str]:
     """Split a GitHub issue-form body ('### Label' sections) into raw field values."""
     fields: Dict[str, str] = {}
+    unknown: List[str] = []
     current: Optional[str] = None
     buf: List[str] = []
 
@@ -96,11 +97,16 @@ def parse_issue_body(body: str) -> Dict[str, str]:
     for line in (body or "").replace("\r\n", "\n").split("\n"):
         if line.startswith("### "):
             flush()
-            current = FIELD_LABELS.get(line[4:].strip().lower())
+            label = line[4:].strip()
+            current = FIELD_LABELS.get(label.lower())
+            if current is None:
+                unknown.append(label)
             buf = []
         elif current is not None:
             buf.append(line)
     flush()
+    if unknown:
+        raise HarvestError("Unrecognized issue-form field heading(s): " + ", ".join(unknown) + ".")
     return fields
 
 
@@ -146,9 +152,9 @@ def validate_harvest(raw: Dict[str, str], known_locations: Optional[Iterable[str
         problems.append(f"Date {day.isoformat()} is in the future.")
 
     type_text = raw.get("observation_type", "")
-    observation_type = _choice(type_text, OBSERVATION_ALIASES) if type_text.strip() else "harvest"
+    observation_type = _choice(type_text, OBSERVATION_ALIASES) if type_text.strip() else None
     if observation_type is None:
-        problems.append("Observation type must be 'Found mushrooms' or 'No mushrooms found'.")
+        problems.append("Observation type is required; choose 'Found mushrooms' or 'No mushrooms found'.")
 
     record: Dict[str, Any] = {}
     if observation_type == "harvest":
@@ -210,14 +216,19 @@ def save_harvest_log(log: Dict[str, Any], path: Path = HARVEST_LOG_PATH) -> None
 
 
 def append_harvest(log: Dict[str, Any], record: Dict[str, Any], issue_number: Optional[int] = None, reporter: str = "") -> bool:
-    """Append record to the log. Returns False if this issue was already ingested (idempotent)."""
-    if issue_number is not None and any(h.get("issue") == issue_number for h in log["harvests"]):
-        return False
+    """Insert or update an issue record. Returns False when the stored record is unchanged."""
     entry = dict(record)
     if issue_number is not None:
         entry["issue"] = issue_number
     if reporter:
         entry["reporter"] = reporter
+    if issue_number is not None:
+        for index, existing in enumerate(log["harvests"]):
+            if existing.get("issue") == issue_number:
+                if existing == entry:
+                    return False
+                log["harvests"][index] = entry
+                return True
     log["harvests"].append(entry)
     return True
 
@@ -320,7 +331,15 @@ def sync_issue_form(known: List[str], path: Path = FORM_PATH) -> bool:
 def _read_locations(cfg_path: Path) -> Optional[List[str]]:
     if not cfg_path.exists():
         return None
-    return [l.get("name") for l in json.loads(cfg_path.read_text(encoding="utf-8")).get("LOCATIONS", []) if l.get("name")]
+    try:
+        cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise HarvestError(f"Could not read configuration: {exc}.") from exc
+    if not isinstance(cfg, dict) or not isinstance(cfg.get("LOCATIONS"), list) or not cfg["LOCATIONS"]:
+        raise HarvestError("Configuration must be an object containing a non-empty LOCATIONS list.")
+    if any(not isinstance(location, dict) or not location.get("name") for location in cfg["LOCATIONS"]):
+        raise HarvestError("Every configured location must have a name.")
+    return [location["name"] for location in cfg["LOCATIONS"]]
 
 
 def _report_error(exc: HarvestError) -> None:
@@ -340,23 +359,25 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--sync-form", action="store_true", help="Regenerate the issue form's location dropdown from the config and exit")
     args = parser.parse_args(argv)
     if args.sync_form:
-        known = _read_locations(Path(args.config))
-        if known is None:
-            print("[HARVEST] no config; issue form unchanged")
-            return 0
         try:
+            known = _read_locations(Path(args.config))
+            if known is None:
+                raise HarvestError("Repository configuration is unavailable; confirm the CONFIG_JSON Actions secret is set.")
             changed = sync_issue_form(known)
         except (HarvestError, OSError) as exc:
             print(f"[HARVEST] could not update issue form: {exc}")
             return 1
         print("[HARVEST] issue form updated" if changed else "[HARVEST] issue form already up to date")
         return 0
-    if not is_trusted_actor(os.environ.get("ISSUE_AUTHOR_ASSOCIATION", ""), os.environ.get("ISSUE_AUTHOR", ""), os.environ.get("REPO_OWNER", "")):
-        print("[HARVEST] rejected: author is not trusted")
-        return 2
     cfg_path = Path(args.config)
-    known = _read_locations(cfg_path)
     try:
+        if os.environ.get("ISSUE_HAS_HARVEST_LABEL", "").lower() != "true":
+            raise HarvestError("This observation is missing the 'harvest' label. Add the label and edit the issue to retry intake.")
+        if not is_trusted_actor(os.environ.get("ISSUE_AUTHOR_ASSOCIATION", ""), os.environ.get("ISSUE_AUTHOR", ""), os.environ.get("REPO_OWNER", "")):
+            raise HarvestError("Only the repository owner, members, or collaborators can submit observations.")
+        known = _read_locations(cfg_path)
+        if known is None:
+            raise HarvestError("Repository configuration is unavailable. Confirm the CONFIG_JSON Actions secret is set.")
         record = validate_harvest(parse_issue_body(os.environ.get("ISSUE_BODY", "")), known)
         log = load_harvest_log()
         added = append_harvest(log, record, int(os.environ["ISSUE_NUMBER"]), os.environ.get("ISSUE_AUTHOR", ""))

@@ -14,8 +14,8 @@ and writes `porcini_report.html`. A separate GitHub issue workflow validates har
   date's score at 20; it does not affect other dates. The intake workflow validates submissions from the
   repository owner or collaborators and stores them in `harvest_log.json`; browser drafts stay local until submitted.
   Existing harvests can also be configured in `past_harvests` in the private `CONFIG_JSON` secret.
-- **Observation form:** the issue form uses friendly dropdowns (Found mushrooms / No mushrooms found, Small–Large, Buttons / young – Prime – Old / overripe). Date may be left empty (today) or `today`/`yesterday`; weight accepts `450`, `450 g` or `1.2 kg`. After each accepted observation the workflow runs `python harvest.py --sync-form`, which turns the location field into a dropdown of the configured spots. Failed submissions get a comment listing every problem found.
-- **Observation Log:** the dashboard has an Observation Log section listing every config `past_harvests` and `harvest_log.json` entry (newest first) with source and issue link, per-location counts and filters.
+- **Observation form:** the issue form uses friendly dropdowns (Found mushrooms / No mushrooms found, Small–Large, Buttons / young – Prime – Old / overripe). Date may be left empty (today) or `today`/`yesterday`; weight accepts `450`, `450 g` or `1.2 kg`. The intake workflow refreshes the location list and checks issues when opened, edited or labeled. A missing `harvest` label, untrusted author, unavailable config, or invalid field gets an explanatory issue comment; fixing the issue or adding its label retries intake. The dashboard saves a local draft and provides a link to the prefilled issue; the observation is not shared until you submit that issue on GitHub and intake succeeds.
+- **Observation Log:** the dashboard has an Observation Log section listing every config `past_harvests` and accepted `harvest_log.json` entry (newest first) with source, reporter and issue link, per-location counts and filters. Browser-local drafts are intentionally not presented as shared observations. Run the Harvest Intake workflow manually after changing `CONFIG_JSON` to refresh the issue form's location dropdown.
 - **Dates:** stored and exchanged as ISO `yyyy-MM-dd` (database, `harvest_log.json`, issue payloads); every
   user-facing date is displayed as `Ddd. dd Mon. yyyy` (e.g. `Sat. 03 Oct. 2026`; May has no period). Accepted input formats (issue form,
   `past_harvests`): `yyyy-MM-dd`, `dd.MM.yyyy`, `dd MMMM yyyy`, and the abbreviated display format with or without
@@ -58,8 +58,8 @@ Three workflows live in `.github/workflows/`:
 - `update_report.yml` – re-runs the engine when `porcini.py`, `porcini_db.json` or `harvest_log.json` changes, or
   when manually dispatched. Changes to the `CONFIG_JSON` secret do not trigger GitHub Actions automatically; run
   the workflow manually after updating it.
-- `harvest_intake.yml` – validates harvest issues submitted by repository owners/collaborators and updates the
-  harvest log and dashboard.
+- `harvest_intake.yml` – validates harvest issues submitted by repository owners/collaborators, updates the
+  harvest log and dashboard, and supports a manual run to refresh the issue form after configuration changes.
 
 All workflows share one concurrency group and rebase before pushing. Engine runs commit generated tracker data;
 harvest intake commits `harvest_log.json` and the rebuilt dashboard.

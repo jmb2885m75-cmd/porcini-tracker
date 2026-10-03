@@ -1678,6 +1678,9 @@ def render_observation_log(entries: List[Dict[str, Any]], repo: str) -> str:
             f"<td class='num'>{esc(weight) if weight not in (None, '') else '—'}</td>"
             f"<td class='notes'>{esc(e.get('notes') or '—')}</td><td>{esc(e.get('origin', ''))}</td>"
             f"<td>{esc(e.get('reporter') or '—')}</td><td>{link}</td></tr>")
+    orphans = sorted({str(e.get("location")) for e in entries if e.get("origin") == "log (location not configured)"})
+    orphan_note = (f"<p class=\"meta orphan-note\">⚠️ Observations for locations that are no longer configured are still listed here "
+                   f"but have no chart or score: {esc(', '.join(orphans))}. Add the location back to the config to see them in the Daily Score History.</p>") if orphans else ""
     locations = sorted({str(e.get("location")) for e in entries})
     options = "".join(f"<option value=\"{esc(l)}\">{esc(l)}</option>" for l in locations)
     if not entries:
@@ -1685,6 +1688,7 @@ def render_observation_log(entries: List[Dict[str, Any]], repo: str) -> str:
     return f"""    <h2 id="observation-log">📒 Observation Log</h2>
     <div class="card">
       <div class="log-summary">{''.join(chips)}</div>
+      {orphan_note}
       <p class="meta">This overview contains configured past harvests and observations accepted into the shared log. Browser-local drafts are not shared or listed here.</p>
       <details><summary>Counts per location</summary><div class="table-wrap"><table class="log-table"><thead><tr><th>Location</th><th class="num">Harvests</th><th class="num">No mushrooms</th><th class="num">Total g</th><th>Last visit</th></tr></thead><tbody>{summary_rows}</tbody></table></div></details>
       <div class="toolbar"><label for="log-loc">Location<select id="log-loc"><option value="">All locations</option>{options}</select></label>

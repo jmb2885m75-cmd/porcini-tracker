@@ -169,7 +169,7 @@ class ObservationLogTests(unittest.TestCase):
 
     def test_build_log_merges_dedupes_and_sorts_newest_first(self):
         entries = h.build_observation_log(self.LOCS, self.LOG)
-        self.assertEqual([(e["date"], e["origin"]) for e in entries], [("2026-10-02", "log"), ("2026-09-20", "log"), ("2026-09-15", "config")])
+        self.assertEqual([(e["date"], e["origin"]) for e in entries], [("2026-10-02", "log"), ("2026-09-20", "log (location not configured)"), ("2026-09-15", "config")])
         self.assertEqual(entries[0]["issue"], 13)
         self.assertEqual(entries[2]["location"], "A")
         self.assertEqual(h.build_observation_log(None, None), [])
@@ -190,6 +190,13 @@ class ObservationLogTests(unittest.TestCase):
         self.assertIn("Retired", out)
         section = out[out.index('id="observation-log"'):]
         self.assertLess(section.index("Fri. 02 Oct. 2026"), section.index("Tue. 15 Sep. 2026"))
+
+    def test_unconfigured_location_is_flagged_not_dropped(self):
+        import porcini as p
+        entries = h.build_observation_log(self.LOCS, self.LOG)
+        self.assertTrue(any(e["origin"] == "log (location not configured)" and e["location"] == "Retired" for e in entries))
+        out = p.generate_dashboard_html({"ALERT_THRESHOLD": 65, "LOCATIONS": self.LOCS}, [], harvest_log=self.LOG)
+        self.assertIn("no longer configured", out)
 
     def test_dashboard_without_observations(self):
         import porcini as p

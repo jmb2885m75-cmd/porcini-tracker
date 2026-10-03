@@ -247,6 +247,17 @@ class ScoringTests(unittest.TestCase):
         dry = series(date(2025, 8, 20), 60, precipitation_sum=3.0, relative_humidity_2m_mean=40.0)
         self.assertEqual(base - 15, p.calculate_score_for_day(LOC, dry[-1], p.History(dry), [])[0])
 
+    def test_low_soil_moisture_penalizes_without_same_day_rain(self):
+        recs = series(date(2025, 8, 20), 60, precipitation_sum=3.0)
+        hist = p.History(recs)
+        baseline = p.calculate_score_for_day(LOC, recs[-1], hist, [])
+        dry_day = dict(recs[-1], soil_moisture_0_to_7cm_mean=0.195, precipitation_sum=0.0)
+        dry = p.calculate_score_for_day(LOC, dry_day, hist, [])
+        self.assertEqual(dry[0], baseline[0] - 20)
+        self.assertEqual(dry[1], "TOO DRY - LOW SOIL MOISTURE")
+        explanation = p.explain_score(LOC, recs[:-1] + [dry_day], p.format_display_date(date(2025, 10, 18)), dry[1])
+        self.assertIn("soil moisture is low at 0.195 m³/m³", explanation)
+
     def test_affinity_limited_to_two_years(self):
         recs = series(date(2025, 8, 20), 60, precipitation_sum=3.0)
         h = p.History(recs)

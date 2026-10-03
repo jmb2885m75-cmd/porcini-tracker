@@ -13,13 +13,13 @@
     "Fangschleuse": {
       "last_alert_date": "2026-10-03",
       "last_alert_mode": "default",
-      "last_score": 82,
-      "last_status": "✅ Viable conditions"
+      "last_score": 33,
+      "last_status": "⚠️ Watch closely"
     },
     "Zosse": {
       "last_alert_date": "2026-10-03",
       "last_alert_mode": "default",
-      "last_score": 62,
+      "last_score": 25,
       "last_status": "TOO DRY - LOW SOIL MOISTURE"
     }
   }

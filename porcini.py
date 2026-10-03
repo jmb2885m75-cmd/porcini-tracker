@@ -1051,7 +1051,7 @@ def send_telegram(token: str, chat_id: str, message: str) -> bool:
             return False
         return True
     except Exception as exc:
-        print(f"[WARN] Telegram alert failed: {exc}")
+        print(f"[WARN] Telegram alert failed: {str(exc).replace(token, '***')}")
         return False
 
 

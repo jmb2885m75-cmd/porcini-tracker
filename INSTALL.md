@@ -94,3 +94,12 @@ The first run downloads ~2 years of history per location. A corrupt `porcini_db.
 - **Runoff penalty** uses hourly rain intensity over the three complete days before the scored date and applies only to days fetched after this feature was added.
 - The 26-day rain and 20-day temperature windows end the day before the scored date. Seasonally matched 90-day rainfall comparisons use prior-year archive data only and are omitted when fewer than 20 valid comparison windows are available. Aspect/canopy adjustments are not currently applied.
 - Size: roughly 365 records per location per year; there is no automatic pruning.
+
+## Direct observation submission
+
+`python api.py --config config.json --port 8080` serves `POST /api/submit-observation` (JSON: location, date,
+observation_type, yield_tier, cap_stage, weight_g, notes). It validates with the same rules as the issue intake,
+appends to `harvest_log.json` and replies `{success, message, entry}`. Set `OBSERVATION_API_KEY` and/or
+`OBSERVATION_REPO` (owner/repo; accepts a GitHub token of someone with push access) to require
+an `Authorization` header of the form `Bearer` + space + your key; the submitter is stored as `reporter`. Set `OBSERVATION_API_URL` in the
+config to point the dashboard form at the server.

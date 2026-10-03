@@ -42067,36 +42067,36 @@
         },
         "2026-10-03": {
           "score": 14,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "status": "🔎 No mushrooms found (field observation)",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         },
         "2026-10-04": {
-          "score": 14,
+          "score": 0,
           "status": "TOO DRY - LOW SOIL MOISTURE",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         },
         "2026-10-05": {
-          "score": 14,
+          "score": 0,
           "status": "TOO DRY - LOW SOIL MOISTURE",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         },
         "2026-10-06": {
-          "score": 14,
+          "score": 0,
           "status": "TOO DRY - LOW SOIL MOISTURE",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         },
         "2026-10-07": {
-          "score": 14,
+          "score": 4,
           "status": "TOO DRY - LOW SOIL MOISTURE",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         },
         "2026-10-08": {
-          "score": 14,
+          "score": 9,
           "status": "TOO DRY - LOW SOIL MOISTURE",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
@@ -42108,18 +42108,18 @@
           "source": "forecast"
         }
       },
-      "scores_signature": "9:ffb0ee8ac62b",
+      "scores_signature": "9:7c53e21d4e1c",
       "backtest": {
         "threshold": 65,
-        "observed_days": 0,
+        "observed_days": 1,
         "find_days": 0,
-        "no_find_days": 0,
+        "no_find_days": 1,
         "finds_above_threshold": 0,
         "no_finds_above_threshold": 0,
         "find_hit_rate": null,
-        "no_find_above_threshold_rate": null,
+        "no_find_above_threshold_rate": 0.0,
         "mean_score_on_find_days": null,
-        "mean_score_on_no_find_days": null
+        "mean_score_on_no_find_days": 14.0
       }
     }
   },
@@ -49032,7 +49032,7 @@
   },
   "schema_version": 3,
   "meta": {
-    "last_run_utc": "2026-10-03T17:54:24Z",
+    "last_run_utc": "2026-10-03T18:02:22Z",
     "last_run_mode": "default",
     "model_version": 9
   }

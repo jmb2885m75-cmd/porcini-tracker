@@ -251,7 +251,7 @@ class StoreMergeTests(unittest.TestCase):
         self.assertIn("unsynced draft", html_out)
         self.assertIn("Visited, found no mushrooms", html_out)
         self.assertIn("function localToday()", html_out)
-        self.assertIn("/api/submit-observation", html_out)
+        self.assertIn("submit-observation.yml/dispatches", html_out)
         self.assertIn("Clear synced observations", html_out)
         self.assertIn("Save as draft", html_out)
 

@@ -373,8 +373,6 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
     cfg_path = Path(args.config)
     try:
-        if os.environ.get("ISSUE_HAS_HARVEST_LABEL", "").lower() != "true":
-            raise HarvestError("This observation is missing the 'harvest' label. Add the label and edit the issue to retry intake.")
         if not is_trusted_actor(os.environ.get("ISSUE_AUTHOR_ASSOCIATION", ""), os.environ.get("ISSUE_AUTHOR", ""), os.environ.get("REPO_OWNER", "")):
             raise HarvestError("Only the repository owner, members, or collaborators can submit observations.")
         known = _read_locations(cfg_path)

@@ -14,6 +14,8 @@ and writes `porcini_report.html`. A separate GitHub issue workflow validates har
   date's score at 20; it does not affect other dates. The intake workflow validates submissions from the
   repository owner or collaborators and stores them in `harvest_log.json`; browser drafts stay local until submitted.
   Existing harvests can also be configured in `past_harvests` in the private `CONFIG_JSON` secret.
+- **Observation form:** the issue form uses friendly dropdowns (Found mushrooms / No mushrooms found, Small–Large, Buttons / young – Prime – Old / overripe). Date may be left empty (today) or `today`/`yesterday`; weight accepts `450`, `450 g` or `1.2 kg`. After each accepted observation the workflow runs `python harvest.py --sync-form`, which turns the location field into a dropdown of the configured spots. Failed submissions get a comment listing every problem found.
+- **Observation Log:** the dashboard has an Observation Log section listing every config `past_harvests` and `harvest_log.json` entry (newest first) with source and issue link, per-location counts and filters.
 - **Dates:** stored and exchanged as ISO `yyyy-MM-dd` (database, `harvest_log.json`, issue payloads); every
   user-facing date is displayed as `Ddd. dd Mon. yyyy` (e.g. `Sat. 03 Oct. 2026`; May has no period). Accepted input formats (issue form,
   `past_harvests`): `yyyy-MM-dd`, `dd.MM.yyyy`, `dd MMMM yyyy`, and the abbreviated display format with or without

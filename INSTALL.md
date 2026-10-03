@@ -78,6 +78,8 @@ python porcini.py --check-db              # archive integrity check (exit code 1
 python -m unittest test_porcini test_harvest -v  # offline self-checks
 ```
 
+The test-alert command exits with an error if the notification provider rejects or cannot deliver the message.
+
 The first run downloads ~2 years of history per location. A corrupt `porcini_db.json` / `alert_state.json` is moved aside as
 `*.corrupt-<timestamp>` and rebuilt, and writes are atomic.
 

@@ -6,6 +6,13 @@
       "date": "2026-10-02",
       "observation_type": "no_mushrooms",
       "issue": 13
+    },
+    {
+      "location": "Zosse",
+      "date": "2026-10-03",
+      "observation_type": "no_mushrooms",
+      "submitted_at": "2026-10-03T17:58:43Z",
+      "reporter": "jmb2885m75-cmd"
     }
   ]
 }

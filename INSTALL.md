@@ -95,11 +95,21 @@ The first run downloads ~2 years of history per location. A corrupt `porcini_db.
 - The 26-day rain and 20-day temperature windows end the day before the scored date. Seasonally matched 90-day rainfall comparisons use prior-year archive data only and are omitted when fewer than 20 valid comparison windows are available. Aspect/canopy adjustments are not currently applied.
 - Size: roughly 365 records per location per year; there is no automatic pruning.
 
-## Direct observation submission
+## Submitting observations from the report (GitHub only)
 
-`python api.py --config config.json --port 8080` serves `POST /api/submit-observation` (JSON: location, date,
-observation_type, yield_tier, cap_stage, weight_g, notes). It validates with the same rules as the issue intake,
-appends to `harvest_log.json` and replies `{success, message, entry}`. Set `OBSERVATION_API_KEY` and/or
-`OBSERVATION_REPO` (owner/repo; accepts a GitHub token of someone with push access) to require
-an `Authorization` header of the form `Bearer` + space + your key; the submitter is stored as `reporter`. Set `OBSERVATION_API_URL` in the
-config to point the dashboard form at the server.
+The report's *Submit observation* button calls the GitHub API to dispatch `.github/workflows/submit-observation.yml`.
+The workflow validates the input with the same rules as the issue intake (`harvest.py`), appends it to
+`harvest_log.json` and pushes the commit; invalid input fails the run with the reason in the log and nothing is committed.
+No server is needed. Refresh the report after the run finishes (the next dashboard rebuild shows the entry).
+
+Setup:
+1. Settings → Actions → General → Workflow permissions → *Read and write* (the workflow also declares `contents: write`).
+2. Create a fine-grained personal access token (github.com/settings/personal-access-tokens) limited to this repository with
+   **Actions: Read and write** (needed to dispatch the workflow). **Contents** permission is not needed in the browser;
+   the workflow commits with `GITHUB_TOKEN`. Only people with write access can dispatch the workflow.
+3. Paste the token into the form's token field. It is saved in the browser's `localStorage`.
+
+Security caveat: anything in `localStorage` is readable by scripts on the same origin, so use a short-lived token scoped to
+this one repository with only Actions: Read and write, and clear it on shared devices. *Save as draft* works offline and never uses the token.
+
+`api.py` (`POST /api/submit-observation`) is still available for people who prefer to self-host a server.

@@ -1205,12 +1205,12 @@ __OBSERVATION_LOG__
           <label class="field" for="lweight">Weight (g)<input type="number" id="lweight" min="0" /></label>
         </span>
         <label class="field" for="lnotes">Notes<input id="lnotes" placeholder="Optional notes" /></label>
-        <label class="field" for="lkey">API key / GitHub token (if required)<input type="password" id="lkey" autocomplete="off" /></label>
+        <label class="field" for="lkey">GitHub token (fine-grained PAT, Actions: Read and write)<input type="password" id="lkey" autocomplete="off" /></label>
         <button type="submit" id="lsubmit">Submit observation</button>
         <button type="button" id="lsavedraft">Save as draft</button>
         <p id="draft-status" class="note" aria-live="polite">Observations are submitted directly to the shared log. If you are offline, save a draft in this browser instead.</p>
       </form>
-      <details><summary>How observations are submitted and saved</summary><p class="note">Submit sends the observation straight to the server, which validates it and appends it to harvest_log.json; it appears here immediately marked synced. If the server is unreachable or rejects the entry, nothing is lost: fix the form or use Save as draft, which stays only in this browser. A no-find report caps that day's score at 20.</p></details>
+      <details><summary>How observations are submitted and saved</summary><p class="note">Submit queues a GitHub Actions workflow that validates the observation and commits it to harvest_log.json; it appears here after the workflow finishes and the report is regenerated. Your token is stored in this browser's localStorage. If GitHub rejects the request, nothing is lost: fix the form or use Save as draft, which stays only in this browser. A no-find report caps that day's score at 20.</p></details>
       <div class="toolbar"><button id="export">Export drafts (JSON)</button><button id="clearlogs">Clear drafts</button><button id="clearsynced">Clear synced observations</button></div>
       <pre id="exported" class="alert" style="display:none"></pre>
     </div>
@@ -1225,7 +1225,6 @@ __OBSERVATION_LOG__
   (function () {
     var D = JSON.parse(document.getElementById('porcini-data').textContent);
     var LOG_KEY = 'porcini_logs_v1', SYNCED_KEY = 'porcini_synced_v1', KEY_KEY = 'porcini_api_key', PAGE = 15;
-    var API_URL = D.api_url || '/api/submit-observation';
     var LABELS = { small: 'Small', medium: 'Medium', large: 'Large', buttons_young: 'Buttons / young', prime: 'Prime', old_overripe: 'Old / overripe' };
     function $(id) { return document.getElementById(id); }
     function loadLogs() { try { return JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); } catch (e) { return []; } }
@@ -1538,21 +1537,28 @@ __OBSERVATION_LOG__
     $('lkey').value = (function () { try { return localStorage.getItem(KEY_KEY) || ''; } catch (e) { return ''; } })();
     $('logform').onsubmit = function (e) {
       e.preventDefault();
-      var entry = readEntry(), key = $('lkey').value.trim(), headers = { 'Content-Type': 'application/json' };
-      try { if (key) localStorage.setItem(KEY_KEY, key); } catch (err) { /* optional */ }
-      if (key) headers.Authorization = 'Bearer ' + key;
+      var entry = readEntry(), key = $('lkey').value.trim();
+      if (!key) { setStatus('❌ Enter a GitHub token (fine-grained PAT with Actions: Read and write) to submit, or use Save as draft.'); return; }
+      try { localStorage.setItem(KEY_KEY, key); } catch (err) { /* optional */ }
+      var inputs = {
+        location: entry.location, date: entry.date || '', observation_type: entry.observation_type,
+        yield_tier: entry.yield_tier || '', cap_stage: entry.cap_stage || '',
+        weight_g: entry.weight_g === undefined ? '' : String(entry.weight_g), notes: entry.notes || ''
+      };
       $('lsubmit').disabled = true; setStatus('Submitting…');
-      fetch(API_URL, { method: 'POST', headers: headers, body: JSON.stringify(entry) })
-        .then(function (r) { return r.json().catch(function () { return { success: false, message: 'Unexpected server response (' + r.status + ').' }; }); })
-        .then(function (res) {
-          if (res.success) {
-            var synced = loadSynced(); synced.push(res.entry || entry); saveSynced(synced);
-            resetForm(); draw(); setStatus('✅ Saved to the shared log (synced).');
-          } else {
-            setStatus('❌ ' + (res.message || 'Submission failed.') + ' Correct the form and retry, or use Save as draft.');
-          }
+      fetch('https://api.github.com/repos/' + D.repo + '/actions/workflows/submit-observation.yml/dispatches', {
+        method: 'POST',
+        headers: { 'Accept': 'application/vnd.github+json', 'Authorization': 'Bearer ' + key, 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ref: D.branch || 'main', inputs: inputs })
+      })
+        .then(function (r) {
+          if (r.status === 204) { resetForm(); setStatus('✅ Submitted. GitHub workflow queued; refresh later to see synced log.'); return; }
+          return r.json().catch(function () { return {}; }).then(function (b) {
+            var hint = { 401: 'Check your token.', 403: 'The token needs Actions: Read and write on this repository.', 404: 'Repository or workflow not found, or the token cannot access it.', 422: 'GitHub rejected the request (check the branch and workflow inputs).' }[r.status] || '';
+            setStatus('❌ GitHub error ' + r.status + (b.message ? ': ' + b.message : '') + '. ' + hint + ' Correct and retry, or use Save as draft.');
+          });
         })
-        .catch(function () { setStatus('❌ Could not reach the server. Use Save as draft to keep this observation in this browser.'); })
+        .catch(function () { setStatus('❌ Could not reach GitHub. Use Save as draft to keep this observation in this browser.'); })
         .then(function () { $('lsubmit').disabled = false; });
     };
     $('export').onclick = function () { var pre = $('exported'); pre.style.display = 'block'; pre.textContent = JSON.stringify(loadLogs(), null, 2); };
@@ -1599,7 +1605,7 @@ def dashboard_payload(cfg: Dict[str, Any], analysis: List[Dict[str, Any]], mode:
             "backtest": item.get("backtest", {}),
         })
     repo = os.environ.get("GITHUB_REPOSITORY") or cfg.get("GITHUB_REPOSITORY") or "jmb2885m75-cmd/porcini-tracker"
-    return {"mode": mode, "threshold": threshold, "repo": repo, "api_url": str(cfg.get("OBSERVATION_API_URL", "")), "locations": locations}
+    return {"mode": mode, "threshold": threshold, "repo": repo, "branch": str(cfg.get("GITHUB_BRANCH", "main")), "locations": locations}
 
 
 _TIER_LABELS = {"small": "Small", "medium": "Medium", "large": "Large"}

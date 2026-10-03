@@ -92,7 +92,7 @@
 <body>
   <div class="wrap">
     <h1>🍄 Porcini Tracker Dashboard</h1>
-    <div class="meta"><span class="badge">Daily run</span> Generated Sat. 03 Oct. 2026 11:31 UTC</div>
+    <div class="meta"><span class="badge">Daily run</span> Generated Sat. 03 Oct. 2026 11:45 UTC</div>
     <div class="grid"><div class='card'><div class='score-line'><span class='score' style='color:hsl(120 80% 58%)'>82%</span><span class='verdict-tag'>🔥 Definitely go for it</span></div><div class='name'>Fangschleuse</div><div class='meta best-day'>Best day<strong>Fri. 09 Oct. 2026</strong></div><div class='meta'>Status: ✅ Viable conditions</div><div class='meta score-explanation'>Key signals: a sharp temperature drop on Fri. 02 Oct. 2026 (7 days before); soil temperature is favourable at 13.7°C. The score also reflects local habitat and logged field observations.</div><div class='meta'>⚠️ HIGH MAGGOT RISK - Harvest early while small.</div><div class='meta'>Moisture: 0.23 m³/m³</div></div><div class='card'><div class='score-line'><span class='score' style='color:hsl(120 80% 58%)'>82%</span><span class='verdict-tag'>🔥 Definitely go for it</span></div><div class='name'>Zosse</div><div class='meta best-day'>Best day<strong>Sat. 03 Oct. 2026</strong></div><div class='meta'>Status: ✅ Viable conditions</div><div class='meta score-explanation'>Key signals: heavy rain on Thu. 24 Sep. 2026 (9 days before); soil temperature is favourable at 15.1°C. The score also reflects local habitat and logged field observations.</div><div class='meta'>⚠️ HIGH MAGGOT RISK - Harvest early while small.</div><div class='meta'>Moisture: 0.18 m³/m³</div></div></div>
     <h2>📨 Alert Preview</h2>
     <div class="card">
@@ -151,11 +151,12 @@
     <h2 id="observation-log">📒 Observation Log</h2>
     <div class="card">
       <div class="log-summary"><div class='chip'><strong>1</strong>observations</div><div class='chip'><strong>0</strong>harvests</div><div class='chip'><strong>1</strong>no-mushroom visits</div><div class='chip'><strong>0 g</strong>recorded weight</div></div>
+      <p class="meta">This overview contains configured past harvests and observations accepted into the shared log. Browser-local drafts are not shared or listed here.</p>
       <details><summary>Counts per location</summary><div class="table-wrap"><table class="log-table"><thead><tr><th>Location</th><th class="num">Harvests</th><th class="num">No mushrooms</th><th class="num">Total g</th><th>Last visit</th></tr></thead><tbody><tr><td>Oak &amp; Beech Spot</td><td class='num'>0</td><td class='num'>1</td><td class='num'>0</td><td>Fri. 02 Oct. 2026</td></tr></tbody></table></div></details>
       <div class="toolbar"><label for="log-loc">Location<select id="log-loc"><option value="">All locations</option><option value="Oak &amp; Beech Spot">Oak &amp; Beech Spot</option></select></label>
       <label for="log-type">Type<select id="log-type"><option value="">All types</option><option value="harvest">Harvest</option><option value="no_mushrooms">No mushrooms</option></select></label>
       <span id="log-count" class="meta"></span></div>
-      <div class="table-wrap"><table class="log-table"><thead><tr><th>Date</th><th>Location</th><th>Type</th><th>Yield</th><th>Cap stage</th><th class="num">Weight g</th><th>Notes</th><th>Source</th><th>Issue</th></tr></thead><tbody id="log-rows"><tr data-location="Oak &amp; Beech Spot" data-type="no_mushrooms"><td>Fri. 02 Oct. 2026</td><td>Oak &amp; Beech Spot</td><td class='type-none'>❌ No mushrooms</td><td>—</td><td>—</td><td class='num'>—</td><td class='notes'>—</td><td>log</td><td><a href='https://github.com/jmb2885m75-cmd/porcini-tracker/issues/13' rel='noopener'>#13</a></td></tr></tbody></table></div>
+      <div class="table-wrap"><table class="log-table"><thead><tr><th>Date</th><th>Location</th><th>Type</th><th>Yield</th><th>Cap stage</th><th class="num">Weight g</th><th>Notes</th><th>Source</th><th>Reported by</th><th>Issue</th></tr></thead><tbody id="log-rows"><tr data-location="Oak &amp; Beech Spot" data-type="no_mushrooms"><td>Fri. 02 Oct. 2026</td><td>Oak &amp; Beech Spot</td><td class='type-none'>❌ No mushrooms</td><td>—</td><td>—</td><td class='num'>—</td><td class='notes'>—</td><td>log</td><td>—</td><td><a href='https://github.com/jmb2885m75-cmd/porcini-tracker/issues/13' rel='noopener'>#13</a></td></tr></tbody></table></div>
     </div>
     <h2>📝 Log Field Observation</h2>
     <div class="card">
@@ -169,8 +170,10 @@
         </span>
         <label class="field" for="lnotes">Notes<input id="lnotes" placeholder="Optional notes" /></label>
         <button type="submit">Submit via GitHub issue</button>
+        <p id="draft-status" class="note" aria-live="polite">Drafts are saved only in this browser until you submit the GitHub issue and intake succeeds.</p>
+        <a id="draft-issue-link" hidden target="_blank" rel="noopener">Open prefilled GitHub issue</a>
       </form>
-      <details><summary>How observations are submitted and saved</summary><p class="note">Submitting opens a pre-filled GitHub issue (sign-in required). Only issues from the repository owner or collaborators are accepted. Accepted observations update <code>harvest_log.json</code> and the dashboard. Until then, drafts stay in this browser's localStorage. A no-find report caps that day's score at 20 and lowers the next five days.</p></details>
+      <details><summary>How observations are submitted and saved</summary><p class="note">Save a draft, open the prefilled GitHub issue, then click GitHub's Submit new issue button. Opening the issue page does not save the observation. Only issues from the repository owner or collaborators are accepted. The shared log updates after intake succeeds; browser drafts stay local until cleared here. A no-find report caps that day's score at 20.</p></details>
       <div class="toolbar"><button id="export">Export drafts (JSON)</button><button id="clearlogs">Clear drafts</button></div>
       <pre id="exported" class="alert" style="display:none"></pre>
     </div>
@@ -196,6 +199,10 @@
       if (!m) return s;
       var day = new Date(s + 'T00:00:00Z');
       return isNaN(day.getTime()) ? s : WEEKDAYS[day.getUTCDay()] + ' ' + m[3] + ' ' + MONTHS[+m[2] - 1] + ' ' + m[1];
+    }
+    function localToday() {
+      var d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     }
     var INFO = {
       weather: ['Weather indicators', [
@@ -470,17 +477,23 @@
     function toggleHarvestFields() { $('harvest-fields').hidden = $('lobservation').value !== 'harvest'; }
     $('lobservation').onchange = toggleHarvestFields;
     toggleHarvestFields();
+    function setObservationDate() { if (!$('ldate').value) $('ldate').value = localToday(); }
+    setObservationDate();
     $('logform').onsubmit = function (e) {
       e.preventDefault(); var logs = loadLogs();
       var entry = { location: loc.name, date: $('ldate').value, observation_type: $('lobservation').value, notes: $('lnotes').value };
       if (entry.observation_type === 'harvest') {
         entry.yield_tier = $('ltier').value; entry.cap_stage = $('lstage').value;
-        entry.weight_g = +$('lweight').value || undefined;
+        entry.weight_g = $('lweight').value === '' ? undefined : +$('lweight').value;
       }
       logs.push(entry); saveLogs(logs); this.reset(); draw();
       toggleHarvestFields();
       var q = new URLSearchParams({ template: 'harvest.yml', title: 'Observation: ' + entry.location + ' ' + fmtDate(entry.date), labels: 'harvest', location: entry.location, date: entry.date, observation_type: entry.observation_type === 'harvest' ? 'Found mushrooms' : 'No mushrooms found', yield_tier: LABELS[entry.yield_tier] || '', cap_stage: LABELS[entry.cap_stage] || '', weight_g: entry.weight_g || '', notes: entry.notes });
-      window.open('https://github.com/' + D.repo + '/issues/new?' + q.toString(), '_blank', 'noopener');
+      var issueLink = $('draft-issue-link');
+      issueLink.href = 'https://github.com/' + D.repo + '/issues/new?' + q.toString();
+      issueLink.hidden = false;
+      $('draft-status').textContent = 'Draft saved in this browser only. Open the issue link and submit it on GitHub; it will not enter the shared log until intake succeeds.';
+      setObservationDate();
     };
     $('export').onclick = function () { var pre = $('exported'); pre.style.display = 'block'; pre.textContent = JSON.stringify(loadLogs(), null, 2); };
     $('clearlogs').onclick = function () { if (confirm('Delete all drafts stored in this browser?')) { saveLogs([]); draw(); } };

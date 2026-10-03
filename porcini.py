@@ -863,6 +863,72 @@ def find_weekend_best(location: Dict[str, Any], records: List[Dict[str, Any]], h
     return score, format_display_date(best_date), status, flag
 
 
+def explain_score(location: Dict[str, Any], records: List[Dict[str, Any]], best_day: str, status: str) -> str:
+    """Summarize the strongest weather signals behind a scored day without implying certainty."""
+    try:
+        day = parse_date(best_day)
+    except (TypeError, ValueError):
+        return "Weather context is unavailable; local habitat and field observations also affect the score."
+    hist = History(records)
+    daily = hist.get(day)
+    if not daily:
+        return "Weather context for this day is unavailable; local habitat and field observations also affect the score."
+
+    signals = []
+    if "no mushrooms found" in status.lower():
+        signals.append("a no-find field observation limits the score")
+    elif "outside mushroom season" in status.lower():
+        signals.append("this date is outside the model's mushroom season")
+    elif "terminated by frost" in status.lower():
+        signals.append("repeated frost conditions have ended the season")
+    elif "delayed by high soil temp" in status.lower():
+        signals.append("the soil is too warm for the season to score")
+    elif "too dry" in status.lower():
+        rain_120 = _sum_precip(hist.window(day, 120))
+        signals.append(f"only {rain_120:.0f} mm of rain fell in the past 120 days, so drought remains unbroken")
+    else:
+        rebound = find_drought_rebound(hist, day)
+        if rebound is not None:
+            rain = _sum_precip(hist.window(rebound, 7))
+            signals.append(f"a drought-breaking {rain:.0f} mm of rain over 7 days around {format_display_date(rebound)}")
+
+        trigger = find_flush_trigger(hist, day)
+        if trigger is not None:
+            trigger_day, kind = trigger
+            if kind == "rain+shock":
+                description = "rain and a sharp temperature drop"
+            elif kind == "rain":
+                description = "heavy rain"
+            else:
+                description = "a sharp temperature drop"
+            lag = (day - trigger_day).days
+            signals.append(f"{description} on {format_display_date(trigger_day)} ({lag} days before)")
+
+        rain_days = moisture_retention_days(location)
+        recent_rain = _sum_precip(hist.window(day, rain_days))
+        if recent_rain >= 20:
+            signals.append(f"{recent_rain:.0f} mm of recent rain in the past {rain_days} days")
+
+        soil_temp = daily.get("soil_temperature_0_to_7cm_mean")
+        if soil_temp is not None and 10 <= soil_temp <= 18:
+            signals.append(f"soil temperature is favourable at {float(soil_temp):.1f}°C")
+        soil_moisture = daily.get("soil_moisture_0_to_7cm_mean")
+        if soil_moisture is not None and soil_moisture > 0.35:
+            signals.append("soil moisture is high")
+        humidity = [
+            r["relative_humidity_2m_mean"] for r in hist.window(day, 12)
+            if r.get("relative_humidity_2m_mean") is not None
+        ]
+        if humidity and sum(humidity) / len(humidity) < 60:
+            signals.append("low humidity is slightly reducing the score")
+        if has_runoff(hist, day):
+            signals.append("concentrated heavy rain caused a runoff penalty")
+
+    if not signals:
+        signals.append("no standout recent weather signal was found")
+    return "Key signals: " + "; ".join(signals) + ". The score also reflects local habitat and logged field observations."
+
+
 def detect_run_mode(now: Optional[datetime] = None) -> str:
     """UTC schedule awareness. Windows tolerate GitHub's cron start delays.
 
@@ -1039,10 +1105,13 @@ def build_alert_message(results: List[Tuple[str, int, str, str]], dashboard_url:
         lines = ["🍄 Final Go/No-Go Confirmation (Friday):"]
     else:
         lines = ["🍄 Weekend Porcini Forecast (Ranked):"]
-    for index, (name, score, best_day, status) in enumerate(ranking, 1):
+    for index, result in enumerate(ranking, 1):
+        name, score, best_day, status = result[:4]
         verdict = f"{'GO' if score >= threshold else 'NO-GO'} - " if mode == MODE_FINAL else ""
         tag = score_verdict_tag(score, status, threshold)
         lines.append(f"{index}. {name} - {verdict}{score}% – {tag} ({best_day}) | {status}")
+        if len(result) > 4 and result[4]:
+            lines.append(f"   Why: {result[4]}")
     lines.append("")
     lines.append(f"🌐 Dashboard: {dashboard_url}")
     return "\n".join(lines)
@@ -1543,9 +1612,10 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]],
             go = score >= threshold
             verdict = f"<div><span class='badge {'go' if go else 'nogo'}'>{'GO' if go else 'NO-GO'}</span></div>"
         quality = f"<div class='meta'>{html.escape(item['quality'])}</div>" if item.get("quality") else ""
+        explanation = f"<div class='meta score-explanation'>{html.escape(item['explanation'])}</div>" if item.get("explanation") else ""
         cards.append(
             f"<div class='card'><div class='score-line'>{score_display}</div><div class='name'>{html.escape(str(item['name']))}</div>{verdict}"
-            f"<div class='meta best-day'>Best day<strong>{html.escape(str(item['best_day']))}</strong></div><div class='meta'>Status: {html.escape(str(item['status']))}</div>{quality}"
+            f"<div class='meta best-day'>Best day<strong>{html.escape(str(item['best_day']))}</strong></div><div class='meta'>Status: {html.escape(str(item['status']))}</div>{explanation}{quality}"
             f"<div class='meta'>Moisture: {item['soil_moisture']:.2f} m³/m³</div></div>"
         )
     alert_status = "This message will be sent with this run." if alert_will_send else "Preview only: no alert is triggered by this run."
@@ -1666,6 +1736,7 @@ def main() -> int:
             "best_score": best_score,
             "best_day": best_day,
             "status": (status or "Monitoring") if best_day != "N/A" else "Weather data unavailable",
+            "explanation": explain_score(location, records, best_day, status) if best_day != "N/A" else "",
             "soil_moisture": moisture,
             "quality": quality,
             "records": records,
@@ -1688,7 +1759,8 @@ def main() -> int:
                 loc_state["last_alert_date"] = iso_date(today)
                 loc_state["last_alert_mode"] = mode
         if send:
-            alert_queue.append((name, best_score, best_day, current_status))
+            explanation = explain_score(location, records, best_day, current_status)
+            alert_queue.append((name, best_score, best_day, current_status, explanation))
         if available:
             # Keep alert-crossing state unchanged when there is no score to compare.
             loc_state["last_score"] = best_score
@@ -1699,7 +1771,7 @@ def main() -> int:
     save_json(DB_PATH, db)
 
     # Without a queued alert the ranking is only a preview on the dashboard (nothing is sent).
-    alert_results = alert_queue or [(a["name"], a["best_score"], a["best_day"], a["status"]) for a in analyses if a["best_day"] != "N/A"]
+    alert_results = alert_queue or [(a["name"], a["best_score"], a["best_day"], a["status"], a["explanation"]) for a in analyses if a["best_day"] != "N/A"]
     message = build_alert_message(alert_results, dashboard_url, mode, threshold) if alert_results else ""
     report_html = generate_dashboard_html(cfg, analyses, message, bool(alert_queue), mode)
     REPORT_PATH.write_text(report_html, encoding="utf-8")

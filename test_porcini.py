@@ -213,6 +213,32 @@ class ScoringTests(unittest.TestCase):
         s_mon = p.calculate_score_for_day(LOC, h.get(mon), h, [])[0]
         self.assertGreater(s_sat, s_mon + 30)
 
+    def test_score_explanation_mentions_recent_rain_and_cooling_in_dashboard_and_alert(self):
+        target = date(2025, 10, 4)
+        recs = series(date(2025, 9, 1), 40, temperature_2m_max=20.0)
+        trigger = target - timedelta(days=8)
+        trigger_record = next(r for r in recs if r["date"] == trigger.isoformat())
+        trigger_record.update(precipitation_sum=12.0, temperature_2m_max=14.0)
+        explanation = p.explain_score(LOC, recs, p.format_display_date(target), "✅ Viable conditions")
+        self.assertIn("rain and a sharp temperature drop", explanation)
+        self.assertIn("8 days before", explanation)
+
+        message = p.build_alert_message(
+            [("Oak & Beech Spot", 82, p.format_display_date(target), "✅ Viable conditions", explanation)],
+            "https://example.test",
+        )
+        self.assertIn("Why: " + explanation, message)
+        report = p.generate_dashboard_html(
+            {"ALERT_THRESHOLD": 65},
+            [{"name": "Oak & Beech Spot", "best_score": 82, "best_day": p.format_display_date(target),
+              "status": "✅ Viable conditions", "quality": "", "soil_moisture": 0.2,
+              "explanation": explanation, "records": [],
+              "scores": {target.isoformat(): {"score": 82, "status": "✅ Viable conditions", "quality": ""}},
+              "harvests": [], "backtest": {}}],
+        )
+        self.assertIn("score-explanation", report)
+        self.assertIn("rain and a sharp temperature drop", report)
+
     def test_wet_baseline_vs_humidity_penalty(self):
         recs = series(date(2025, 8, 20), 60, precipitation_sum=3.0)
         h = p.History(recs)

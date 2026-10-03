@@ -137,11 +137,12 @@ class IntakeUsabilityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             cfg = Path(d) / "config.json"
             cfg.write_text('{"LOCATIONS": [{"name": "East Berlin Pine & Oak Ridge"}]}')
-            log = Path(d) / "harvest_log.json"
             env = {"ISSUE_AUTHOR_ASSOCIATION": "OWNER", "ISSUE_BODY": BODY, "ISSUE_NUMBER": "5", "ISSUE_AUTHOR": "me"}
-            with patch.dict(os.environ, env), patch.object(h, "HARVEST_LOG_PATH", log):
+            saved = {}
+            with patch.dict(os.environ, env), patch.object(h, "load_harvest_log", return_value={"harvests": []}), \
+                    patch.object(h, "save_harvest_log", side_effect=lambda log: saved.update(log)):
                 self.assertEqual(h.main(["--config", str(cfg)]), 0)
-            self.assertEqual(h.load_harvest_log(log)["harvests"][0]["issue"], 5)
+            self.assertEqual(saved["harvests"][0]["issue"], 5)
 
     def test_sync_issue_form_switches_location_to_dropdown(self):
         with tempfile.TemporaryDirectory() as d:

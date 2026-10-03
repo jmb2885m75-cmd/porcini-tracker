@@ -6,16 +6,6 @@
       "date": "2026-10-02",
       "observation_type": "no_mushrooms",
       "issue": 13
-    },
-    {
-      "location": "East Berlin Pine & Oak Ridge",
-      "date": "2026-09-15",
-      "observation_type": "harvest",
-      "yield_tier": "large",
-      "cap_stage": "prime",
-      "weight_g": 450,
-      "issue": 5,
-      "reporter": "me"
     }
   ]
 }

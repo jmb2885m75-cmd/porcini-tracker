@@ -23,6 +23,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Add harvest label to observation issues
+        if: startsWith(github.event.issue.title, 'Observation:') && !contains(github.event.issue.labels.*.name, 'harvest')
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: gh issue edit "$ISSUE" --add-label harvest --repo "$GITHUB_REPOSITORY"
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
@@ -46,7 +54,6 @@ jobs:
           ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
           ISSUE_AUTHOR_ASSOCIATION: ${{ github.event.issue.author_association }}
           REPO_OWNER: ${{ github.repository_owner }}
-          ISSUE_HAS_HARVEST_LABEL: ${{ contains(github.event.issue.labels.*.name, 'harvest') }}
           HARVEST_ERROR_FILE: ${{ runner.temp }}/harvest_error.md
         run: python harvest.py
 

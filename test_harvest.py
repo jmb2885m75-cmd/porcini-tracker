@@ -126,23 +126,23 @@ class IntakeUsabilityTests(unittest.TestCase):
             err = Path(d) / "err.md"
             cfg = Path(d) / "config.json"
             cfg.write_text('{"LOCATIONS": [{"name": "A"}]}')
-            env = {"ISSUE_AUTHOR_ASSOCIATION": "OWNER", "ISSUE_HAS_HARVEST_LABEL": "true", "ISSUE_BODY": "### Location / spot\n\nB\n", "ISSUE_NUMBER": "5", "HARVEST_ERROR_FILE": str(err)}
+            env = {"ISSUE_AUTHOR_ASSOCIATION": "OWNER", "ISSUE_BODY": "### Location / spot\n\nB\n", "ISSUE_NUMBER": "5", "HARVEST_ERROR_FILE": str(err)}
             with patch.dict(os.environ, env):
                 self.assertEqual(h.main(["--config", str(cfg)]), 1)
             self.assertIn("Unknown location 'B'", err.read_text())
 
-    def test_main_reports_missing_label(self):
+    def test_main_accepts_trusted_issue_without_label(self):
         import os
         from unittest.mock import patch
         with tempfile.TemporaryDirectory() as d:
             cfg = Path(d) / "config.json"
-            cfg.write_text('{"LOCATIONS": [{"name": "A"}]}')
-            err = Path(d) / "err.md"
-            env = {"ISSUE_AUTHOR_ASSOCIATION": "OWNER", "ISSUE_HAS_HARVEST_LABEL": "false", "ISSUE_BODY": BODY,
-                   "ISSUE_NUMBER": "5", "HARVEST_ERROR_FILE": str(err)}
-            with patch.dict(os.environ, env):
-                self.assertEqual(h.main(["--config", str(cfg)]), 1)
-            self.assertIn("missing the 'harvest' label", err.read_text())
+            cfg.write_text('{"LOCATIONS": [{"name": "East Berlin Pine & Oak Ridge"}]}')
+            env = {"ISSUE_AUTHOR_ASSOCIATION": "OWNER", "ISSUE_BODY": BODY, "ISSUE_NUMBER": "5", "ISSUE_AUTHOR": "me"}
+            saved = {}
+            with patch.dict(os.environ, env), patch.object(h, "load_harvest_log", return_value={"harvests": []}), \
+                    patch.object(h, "save_harvest_log", side_effect=lambda log: saved.update(log)):
+                self.assertEqual(h.main(["--config", str(cfg)]), 0)
+            self.assertEqual(saved["harvests"][0]["issue"], 5)
 
     def test_sync_issue_form_switches_location_to_dropdown(self):
         with tempfile.TemporaryDirectory() as d:
@@ -251,8 +251,9 @@ class StoreMergeTests(unittest.TestCase):
         self.assertIn("unsynced draft", html_out)
         self.assertIn("Visited, found no mushrooms", html_out)
         self.assertIn("function localToday()", html_out)
-        self.assertIn("Open prefilled GitHub issue", html_out)
-        self.assertIn("click GitHub's Submit new issue button", html_out)
+        self.assertIn("submit-observation.yml/dispatches", html_out)
+        self.assertIn("Clear synced observations", html_out)
+        self.assertIn("Save as draft", html_out)
 
 
 if __name__ == "__main__":

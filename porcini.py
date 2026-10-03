@@ -13,7 +13,7 @@ import os
 import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
@@ -33,13 +33,7 @@ FORECAST_API_URL = "https://api.open-meteo.com/v1/forecast"
 
 INITIAL_ARCHIVE_DAYS = 730
 
-HOST_TREE_SCORES = {
-    "Norway Spruce": 15,
-    "Spruce": 15,
-    "Beech": 15,
-    "Oak": 12,
-    "Pine": 10,
-}
+HOST_TREES = {"birch", "beech", "chestnut", "fir", "oak", "pine", "spruce"}
 
 
 def load_json(path: Path, default: Any = None) -> Any:
@@ -112,19 +106,11 @@ def month_day_window(dt: date) -> bool:
     return aug_15 <= dt <= dec_01
 
 
-def lunar_phase_fraction(day: date) -> float:
-    known_new_moon = datetime(2000, 1, 6)
-    days_since = (datetime.combine(day, datetime.min.time()) - known_new_moon).days
-    cycle = 29.53
-    return (days_since % cycle) / cycle
-
-
-
 SCHEMA_VERSION = 3
 # Bump when the scoring rules change; forces every stored daily score to be recomputed.
 # Score penalty applied 1..N days after a visit that found nothing (flush not started yet)
 NO_FIND_PENALTY = (25, 20, 15, 10, 5)
-MODEL_VERSION = 6  # 6: same-day no-find cap is applied last (affinity bonus can no longer lift it); 5: no-find also lowers following days
+MODEL_VERSION = 9  # 9: preceding-day windows and a historical 90-day drought signal
 ARCHIVE_LAG_DAYS = 5
 SOURCE_ARCHIVE = "archive"
 SOURCE_FORECAST = "forecast"
@@ -150,18 +136,23 @@ FRIDAY_POLICIES = (FRIDAY_POLICY_THURSDAY_ONLY, FRIDAY_POLICY_ALL_ABOVE)
 
 MIN_ALERT_GAP_DAYS = 5
 AFFINITY_LOOKBACK_DAYS = 730  # "proven spot affinity" only counts harvests from the last 2 years
-RAIN_TRIGGER_MM = 10.0
-THERMAL_SHOCK_DROP_C = 5.0
-TRIGGER_LOOKBACK_DAYS = 14
 RUNOFF_MIN_DAY_MM = 15.0
+FLUSH_RAIN_WINDOW_DAYS = 26
+FLUSH_TEMPERATURE_WINDOW_DAYS = 20
+LONG_TERM_RAIN_WINDOW_DAYS = 90
+LONG_TERM_RAIN_SEASON_RADIUS_DAYS = 15
+LONG_TERM_RAIN_MIN_SAMPLES = 20
+FLUSH_RAIN_SCORE_MAX = 30
+FLUSH_TEMPERATURE_SCORE_MAX = 20
+DROUGHT_SCORE_PENALTY_MAX = 10
 VERDICT_LOW_TIERS = (
     (25, "🚫 Not worth it"),
     (45, "😐 Unlikely"),
     (60, "🤔 Long shot"),
 )
 VERDICT_WORTH_LOOK = "👀 Worth a look"
-VERDICT_GO = "👍 Good chance – go"
-VERDICT_DEFINITE_GO = "🔥 Definitely go for it"
+VERDICT_GO = "👍 Favourable conditions"
+VERDICT_DEFINITE_GO = "🔥 Very favourable conditions"
 VERDICT_SPECIAL_TAGS = {
     "terminated": "❄️ Season over",
     "off_season": "🍂 Off season",
@@ -553,101 +544,81 @@ def _precip(rec: Optional[Dict[str, Any]]) -> float:
     return float((rec or {}).get("precipitation_sum") or 0)
 
 
-def _sum_precip(recs: Iterable[Dict[str, Any]]) -> float:
-    return sum(_precip(r) for r in recs)
+def observed_rainfall_total(hist: History, day: date, days: int) -> Optional[float]:
+    """Return the total from the `days` complete days before `day` with at least 80% coverage."""
+    records = hist.window(day - timedelta(days=1), days)
+    values = [r.get("precipitation_sum") for r in records if r.get("precipitation_sum") is not None]
+    if len(values) < math.ceil(days * 0.8):
+        return None
+    return sum(float(value) for value in values)
 
 
-def moisture_retention_days(location: Dict[str, Any]) -> int:
-    """Length (days) of the rain window that still counts as 'wet' for this spot.
+def mean_air_temperature(hist: History, day: date, days: int) -> Optional[float]:
+    """Mean air temperature for the `days` complete days before `day`, with at least 80% coverage."""
+    records = hist.window(day - timedelta(days=1), days)
+    values = [
+        (float(r["temperature_2m_max"]) + float(r["temperature_2m_min"])) / 2
+        for r in records
+        if r.get("temperature_2m_max") is not None and r.get("temperature_2m_min") is not None
+    ]
+    if len(values) < math.ceil(days * 0.8):
+        return None
+    return sum(values) / len(values)
 
-    Base is 7 days. North aspect holds moisture 3 days longer; south dries 1.5x faster (7 / 1.5 ~ 5 days).
-    Dense canopy keeps +1 day, open/sparse canopy loses 1 day. Only the rain window is adjusted: the
-    grid soil-moisture value from the weather API cannot see aspect or canopy.
+
+def historical_rainfall_percentile(hist: History, day: date) -> Optional[float]:
+    """Compare preceding 90-day rain with prior-year, seasonally comparable windows.
+
+    Requires at least 20 valid daily comparison windows from earlier calendar years.
+    This data-derived signal is omitted when the local archive is too short or incomplete.
     """
-    aspect = str(location.get("aspect", "")).lower()
-    days = 7.0
-    if aspect == "north":
-        days += 3
-    elif aspect == "south":
-        days /= 1.5
-    density = str(location.get("tree_density", "")).lower()
-    if "dense" in density:
-        days += 1
-    elif "open" in density or "sparse" in density:
-        days -= 1
-    return max(3, int(round(days)))
-
-
-def is_thermal_shock(hist: History, day: date) -> bool:
-    """Max temperature drops >= THERMAL_SHOCK_DROP_C below the mean of the previous 3 days."""
-    rec = hist.get(day)
-    if not rec or rec.get("temperature_2m_max") is None:
-        return False
-    prev = [r["temperature_2m_max"] for r in hist.between(day - timedelta(days=3), day - timedelta(days=1)) if r.get("temperature_2m_max") is not None]
-    if len(prev) < 2:
-        return False
-    return (sum(prev) / len(prev)) - float(rec["temperature_2m_max"]) >= THERMAL_SHOCK_DROP_C
-
-
-def find_flush_trigger(hist: History, day: date) -> Optional[Tuple[date, str]]:
-    """Scan the 14-day lookback for a rain / thermal-shock trigger whose 7-12 day fruiting lag lands on `day`.
-
-    Kinds: 'rain+shock' (coupled, strongest), 'rain', 'shock'. Returns the most recent active trigger.
-    """
-    for lag in range(7, 13):
-        t = day - timedelta(days=lag)
-        rec = hist.get(t)
-        if rec is None:
+    target_day_of_year = day.timetuple().tm_yday
+    comparable_totals = []
+    for record in hist.records:
+        try:
+            candidate_day = parse_date(record["date"])
+        except (KeyError, TypeError, ValueError):
             continue
-        rain = _precip(rec) >= RAIN_TRIGGER_MM or _precip(hist.get(t + timedelta(days=1))) >= RAIN_TRIGGER_MM
-        shock = is_thermal_shock(hist, t)
-        if rain and shock:
-            return t, "rain+shock"
-        if rain:
-            return t, "rain"
-        if shock:
-            return t, "shock"
-    return None
-
-
-def find_drought_rebound(hist: History, day: date) -> Optional[date]:
-    """Event rule: >=45 mm over 7 days (ending e) after a dry spell (<100 mm in the 120 days before that burst).
-
-    Returns the event day e if it happened within the last 14 days.
-    """
-    for back in range(0, 15):
-        e = day - timedelta(days=back)
-        if _sum_precip(hist.window(e, 7)) < 45:
+        if candidate_day.year >= day.year:
             continue
-        if _sum_precip(hist.window(e - timedelta(days=7), 120)) < 100:
-            return e
-    return None
+        day_distance = abs(candidate_day.timetuple().tm_yday - target_day_of_year)
+        day_distance = min(day_distance, 366 - day_distance)
+        if day_distance > LONG_TERM_RAIN_SEASON_RADIUS_DAYS:
+            continue
+        total = observed_rainfall_total(hist, candidate_day, LONG_TERM_RAIN_WINDOW_DAYS)
+        if total is not None:
+            comparable_totals.append(total)
+    if len(comparable_totals) < LONG_TERM_RAIN_MIN_SAMPLES:
+        return None
+
+    current_total = observed_rainfall_total(hist, day, LONG_TERM_RAIN_WINDOW_DAYS)
+    if current_total is None:
+        return None
+    below = sum(total < current_total for total in comparable_totals)
+    tied = sum(total == current_total for total in comparable_totals)
+    return (below + tied / 2) / len(comparable_totals)
 
 
 def has_runoff(hist: History, day: date) -> bool:
-    """Heavy-rain runoff: a day (last 3) with >= 15 mm where >50% fell in its busiest 2 hours.
+    """Heavy-rain runoff: a day (last 3 complete days) with >= 15 mm where >50% fell in its busiest 2 hours.
 
     Needs hourly data (precip_peak_2h_mm); records without it (not yet backfilled, see backfill_runoff_data) get no penalty.
     """
-    for rec in hist.window(day, 3):
+    for rec in hist.window(day - timedelta(days=1), 3):
         total, peak = _precip(rec), rec.get("precip_peak_2h_mm")
         if peak is not None and total >= RUNOFF_MIN_DAY_MM and float(peak) > 0.5 * total:
             return True
     return False
 
 
-def post_rain_wind_days(hist: History, day: date) -> int:
-    """Days with max wind > 30 km/h in the 5 days after the most recent rain event (>=10 mm) in the last 14 days."""
-    events = [r for r in hist.window(day - timedelta(days=1), TRIGGER_LOOKBACK_DAYS) if _precip(r) >= RAIN_TRIGGER_MM]
-    if not events:
-        return 0
-    event_day = parse_date(events[-1]["date"])
-    after = hist.between(event_day + timedelta(days=1), min(event_day + timedelta(days=5), day))
-    return sum(1 for r in after if r.get("wind_speed_10m_max") is not None and r["wind_speed_10m_max"] > 30)
+def rainfall_score(rainfall: float) -> int:
+    """Give up to 30 points for recent rain, saturating at 100 mm without an uncalibrated wet penalty."""
+    scaled = max(0.0, min(FLUSH_RAIN_SCORE_MAX, rainfall * FLUSH_RAIN_SCORE_MAX / 100))
+    return round(scaled)
 
 
 def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], historical: Any, past_harvests: List[Dict[str, Any]]) -> Tuple[int, str, str]:
-    """Score one day using only data on/before that day (no look-ahead, no dependence on 'today')."""
+    """Return a 0–100 favourability index, not a calibrated probability."""
     hist = historical if isinstance(historical, History) else History(historical)
     score = 0
     status = "🟡 Monitoring"
@@ -661,81 +632,40 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
     if not month_day_window(d):
         return 0, "❌ Outside mushroom season", ""
 
-    if daily.get("temperature_2m_min") is not None and daily["temperature_2m_min"] < -2:
-        frost_count = sum(
-            1 for rec in hist.window(d, 7)
-            if (rec.get("temperature_2m_min") is not None and rec["temperature_2m_min"] < -2)
-            or (rec.get("soil_temperature_0_to_7cm_mean") is not None and rec["soil_temperature_0_to_7cm_mean"] < 3)
+    rainfall = observed_rainfall_total(hist, d, FLUSH_RAIN_WINDOW_DAYS)
+    if rainfall is not None:
+        score += rainfall_score(rainfall)
+
+    long_term_rainfall_percentile = historical_rainfall_percentile(hist, d)
+    if long_term_rainfall_percentile is not None and long_term_rainfall_percentile < 0.5:
+        score -= round(
+            DROUGHT_SCORE_PENALTY_MAX * (0.5 - long_term_rainfall_percentile) / 0.5
         )
-        if frost_count >= 2:
-            return 0, "❄️ SEASON TERMINATED BY FROST", ""
 
-    soil_temp = daily.get("soil_temperature_0_to_7cm_mean")
-    if soil_temp is not None and soil_temp > 20:
-        return 0, "🔥 SEASON DELAYED BY HIGH SOIL TEMP", ""
-    if soil_temp is not None and 10 <= soil_temp <= 18:
-        score += 15
-
-    rainfall_120 = _sum_precip(hist.window(d, 120))
-    rainfall_recent = _sum_precip(hist.window(d, moisture_retention_days(location)))
-    rebound = find_drought_rebound(hist, d)
-    if rebound is not None:
-        # Drought rebound / super-flush is an event: bonus applies for 14 days after the breaking rain,
-        # with an extra boost when the usual 7-14 day mycelial response window is reached.
-        score += 15
-        if (d - rebound).days >= 7:
-            score += 10
-        status = "🔥 DROUGHT BROKEN - High potential for massive super-flush!"
-    elif rainfall_120 < 100:
-        status = "🔎 No mushrooms found (field observation)" if no_find_today else "TOO DRY - DROUGHT UNBROKEN"
-        return 20, status, ""
-    elif rainfall_recent >= 20:
-        score += 30
-
-    trigger = find_flush_trigger(hist, d)
-    if trigger is not None:
-        score += {"rain+shock": 25, "rain": 10, "shock": 10}[trigger[1]]
-        # Weekend timing: trigger lag lands the flush on Fri/Sat/Sun (+15) or Mon/Tue/Wed (-20).
-        if d.weekday() in (4, 5, 6):
-            score += 15
-        elif d.weekday() in (0, 1, 2):
-            score -= 20
+    average_temperature = mean_air_temperature(hist, d, FLUSH_TEMPERATURE_WINDOW_DAYS)
+    if average_temperature is not None:
+        score += max(
+            0,
+            round(FLUSH_TEMPERATURE_SCORE_MAX - abs(average_temperature - 13) * 2),
+        )
 
     if has_runoff(hist, d):
-        score -= 10
+        score -= 5
 
     soil_moisture = daily.get("soil_moisture_0_to_7cm_mean")
     if soil_moisture is not None:
         if soil_moisture > 0.35:
-            score += 10
-        elif soil_moisture < 0.18 and (daily.get("precipitation_sum") or 0) > 5:
-            score -= 15
+            score += 5
+        elif soil_moisture <= 0.20:
+            score -= 10
+            status = "TOO DRY - LOW SOIL MOISTURE"
 
-    for tree_name, pts in HOST_TREE_SCORES.items():
-        if tree_name in location.get("tree_species", []):
-            score += pts
-    if location.get("soil_pH") == "alkaline":
-        score = min(score, 60)
-
-    if soil_temp is not None and 12 <= soil_temp <= 17:
-        score += 15
-
-    # Growth phase = the 12 days leading up to the scored day.
-    rh_values = [r["relative_humidity_2m_mean"] for r in hist.window(d, 12) if r.get("relative_humidity_2m_mean") is not None]
-    if rh_values and sum(rh_values) / len(rh_values) < 60:
-        score -= 15
-
-    if post_rain_wind_days(hist, d) > 2:
-        score -= 10
-
-    last_seen = location.get("last_seen_fly_agaric")
-    if last_seen and valid_date_string(last_seen):
-        if 0 <= (d - parse_date(last_seen)).days <= 10:
-            score += 15
-
-    phase = lunar_phase_fraction(d)
-    if 0.35 <= phase <= 0.65:
-        score += 5
+    tree_species = location.get("tree_species", [])
+    normalized_species = {str(tree).strip().lower() for tree in tree_species} if isinstance(tree_species, list) else set()
+    if any(any(host in tree for host in HOST_TREES) for tree in normalized_species):
+        score += 10
+    if str(location.get("soil_pH", "")).strip().lower() == "alkaline":
+        score -= 5
 
     for harvest in past_harvests:
         harvest_date = harvest.get("date")
@@ -752,22 +682,22 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
                     status = "🔎 Recent empty visit lowers odds"
             continue
         if harvest.get("cap_stage") == "buttons_young" and 1 <= delta_days <= 4:
-            score += 20
+            score += 10
         elif harvest.get("cap_stage") == "old_overripe" and 1 <= delta_days <= 7:
-            score -= 25
+            score -= 10
             status = "🍂 EXHAUSTION / POST-FLUSH COOLING OFF"
 
-    # Proven spot affinity: >=2 medium/large harvests in the 2 years BEFORE the scored day -> +10.
+    # Prior medium/large finds at this site add a modest affinity signal.
     positive = sum(
         1 for h in past_harvests
         if h.get("yield_tier") in {"medium", "large"} and valid_date_string(h.get("date"))
         and 0 < (d - parse_date(h["date"])).days <= AFFINITY_LOOKBACK_DAYS
     )
     if positive >= 2:
-        score += 10
+        score += 5
 
-    # Quality / risk uses the 7-day average of daily max temperature.
-    temps = [float(r["temperature_2m_max"]) for r in hist.window(d, 7) if r.get("temperature_2m_max") is not None]
+    # Harvest quality / risk is separate from the 20-day flush-favourability temperature signal.
+    temps = [float(r["temperature_2m_max"]) for r in hist.window(d - timedelta(days=1), 7) if r.get("temperature_2m_max") is not None]
     if temps:
         avg_max = sum(temps) / len(temps)
         if avg_max > 18:
@@ -785,7 +715,7 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
 
 def location_signature(location: Dict[str, Any]) -> str:
     """Fingerprint of the config fields that influence scores; a change recomputes the stored series."""
-    keys = ("tree_species", "tree_density", "aspect", "soil_pH", "past_harvests", "last_seen_fly_agaric")
+    keys = ("tree_species", "soil_pH", "past_harvests")
     blob = json.dumps({k: location.get(k) for k in keys}, sort_keys=True, default=str)
     return f"{MODEL_VERSION}:{hashlib.sha1(blob.encode('utf-8')).hexdigest()[:12]}"
 
@@ -821,25 +751,52 @@ def update_daily_scores(location: Dict[str, Any], records: List[Dict[str, Any]],
     return updated
 
 
-def backtest_accuracy(daily_scores: Dict[str, Any], harvests: List[Dict[str, Any]], threshold: int) -> Dict[str, Any]:
-    """Compare stored scores with logged medium/large harvests (hit = score >= threshold on the harvest date).
+def backtest_accuracy(location: Dict[str, Any], records: List[Dict[str, Any]],
+                      harvests: List[Dict[str, Any]], threshold: int) -> Dict[str, Any]:
+    """Compare scores only with dated visits; unvisited days are unknown, not failures.
 
-    Only as good as the harvest log. TODO: calibrate weights from this output and, if a remote
-    observation store is ever added, pull its harvests here (no live remote DB integration exists today).
+    The score for a visit date is recomputed without that date's observation to avoid
+    evaluating a no-find against a score that the same no-find already capped.
     """
-    in_season = [v["score"] for v in daily_scores.values() if not str(v.get("status", "")).startswith("❌")]
-    on_harvest = [
-        daily_scores[h["date"]]["score"] for h in harvests
-        if h.get("yield_tier") in {"medium", "large"} and h.get("date") in daily_scores
-    ]
-    hits = sum(1 for s in on_harvest if s >= threshold)
+    hist = History(records)
+    outcomes: Dict[str, bool] = {}
+    for observation in harvests:
+        day = observation.get("date")
+        if not valid_date_string(day):
+            continue
+        observation_type = observation.get("observation_type")
+        if observation_type == "no_mushrooms":
+            outcomes.setdefault(day, False)
+        elif observation_type in (None, "harvest") and observation.get("yield_tier") in {"small", "medium", "large"}:
+            outcomes[day] = True
+
+    evaluated = []
+    for day, found in outcomes.items():
+        daily = hist.get(parse_date(day))
+        if daily is None:
+            continue
+        prior_observations = [
+            observation for observation in harvests
+            if valid_date_string(observation.get("date")) and observation["date"] != day
+        ]
+        score, _, _ = calculate_score_for_day(location, daily, hist, prior_observations)
+        evaluated.append((score, found))
+
+    finds = [score for score, found in evaluated if found]
+    no_finds = [score for score, found in evaluated if not found]
+    finds_above = sum(score >= threshold for score in finds)
+    no_finds_above = sum(score >= threshold for score in no_finds)
     return {
         "threshold": threshold,
-        "evaluated_harvests": len(on_harvest),
-        "hits": hits,
-        "hit_rate": round(hits / len(on_harvest), 3) if on_harvest else None,
-        "mean_score_on_harvest_days": round(sum(on_harvest) / len(on_harvest), 1) if on_harvest else None,
-        "mean_score_in_season": round(sum(in_season) / len(in_season), 1) if in_season else None,
+        "observed_days": len(evaluated),
+        "find_days": len(finds),
+        "no_find_days": len(no_finds),
+        "finds_above_threshold": finds_above,
+        "no_finds_above_threshold": no_finds_above,
+        "find_hit_rate": round(finds_above / len(finds), 3) if finds else None,
+        "no_find_above_threshold_rate": round(no_finds_above / len(no_finds), 3) if no_finds else None,
+        "mean_score_on_find_days": round(sum(finds) / len(finds), 1) if finds else None,
+        "mean_score_on_no_find_days": round(sum(no_finds) / len(no_finds), 1) if no_finds else None,
     }
 
 
@@ -879,54 +836,37 @@ def explain_score(location: Dict[str, Any], records: List[Dict[str, Any]], best_
         signals.append("a no-find field observation limits the score")
     elif "outside mushroom season" in status.lower():
         signals.append("this date is outside the model's mushroom season")
-    elif "terminated by frost" in status.lower():
-        signals.append("repeated frost conditions have ended the season")
-    elif "delayed by high soil temp" in status.lower():
-        signals.append("the soil is too warm for the season to score")
-    elif "too dry" in status.lower():
-        rain_120 = _sum_precip(hist.window(day, 120))
-        signals.append(f"only {rain_120:.0f} mm of rain fell in the past 120 days, so drought remains unbroken")
     else:
-        rebound = find_drought_rebound(hist, day)
-        if rebound is not None:
-            rain = _sum_precip(hist.window(rebound, 7))
-            signals.append(f"a drought-breaking {rain:.0f} mm of rain over 7 days around {format_display_date(rebound)}")
+        rainfall = observed_rainfall_total(hist, day, FLUSH_RAIN_WINDOW_DAYS)
+        if rainfall is not None:
+            signals.append(f"{rainfall:.0f} mm of rain during the {FLUSH_RAIN_WINDOW_DAYS} complete days before this date")
 
-        trigger = find_flush_trigger(hist, day)
-        if trigger is not None:
-            trigger_day, kind = trigger
-            if kind == "rain+shock":
-                description = "rain and a sharp temperature drop"
-            elif kind == "rain":
-                description = "heavy rain"
-            else:
-                description = "a sharp temperature drop"
-            lag = (day - trigger_day).days
-            signals.append(f"{description} on {format_display_date(trigger_day)} ({lag} days before)")
+        average_temperature = mean_air_temperature(hist, day, FLUSH_TEMPERATURE_WINDOW_DAYS)
+        if average_temperature is not None:
+            signals.append(
+                f"mean air temperature of {average_temperature:.1f}°C during the {FLUSH_TEMPERATURE_WINDOW_DAYS} complete days before this date"
+            )
 
-        rain_days = moisture_retention_days(location)
-        recent_rain = _sum_precip(hist.window(day, rain_days))
-        if recent_rain >= 20:
-            signals.append(f"{recent_rain:.0f} mm of recent rain in the past {rain_days} days")
+        rainfall_percentile = historical_rainfall_percentile(hist, day)
+        if rainfall_percentile is not None:
+            signals.append(
+                f"90-day rainfall is at the {rainfall_percentile * 100:.0f}th percentile of comparable prior-year periods"
+            )
 
-        soil_temp = daily.get("soil_temperature_0_to_7cm_mean")
-        if soil_temp is not None and 10 <= soil_temp <= 18:
-            signals.append(f"soil temperature is favourable at {float(soil_temp):.1f}°C")
         soil_moisture = daily.get("soil_moisture_0_to_7cm_mean")
-        if soil_moisture is not None and soil_moisture > 0.35:
-            signals.append("soil moisture is high")
-        humidity = [
-            r["relative_humidity_2m_mean"] for r in hist.window(day, 12)
-            if r.get("relative_humidity_2m_mean") is not None
-        ]
-        if humidity and sum(humidity) / len(humidity) < 60:
-            signals.append("low humidity is slightly reducing the score")
+        if soil_moisture is not None and soil_moisture <= 0.20:
+            signals.append(f"measured soil moisture is low at {float(soil_moisture):.3f} m³/m³")
+        elif soil_moisture is not None and soil_moisture > 0.35:
+            signals.append("measured soil moisture is high")
         if has_runoff(hist, day):
-            signals.append("concentrated heavy rain caused a runoff penalty")
+            signals.append("concentrated heavy rain may have caused runoff")
 
     if not signals:
         signals.append("no standout recent weather signal was found")
-    return "Key signals: " + "; ".join(signals) + ". The score also reflects local habitat and logged field observations."
+    return (
+        "Key signals: " + "; ".join(signals)
+        + ". This heuristic favourability index is not a measured chance; it also reflects local habitat and logged observations."
+    )
 
 
 def detect_run_mode(now: Optional[datetime] = None) -> str:
@@ -961,8 +901,6 @@ def status_category(status: Optional[str]) -> str:
         return "exhausted"
     if "too dry" in s:
         return "dry"
-    if "drought broken" in s or "super-flush" in s:
-        return "superflush"
     if "outside" in s:
         return "off_season"
     if "viable" in s:
@@ -1109,7 +1047,7 @@ def build_alert_message(results: List[Tuple[str, int, str, str]], dashboard_url:
         name, score, best_day, status = result[:4]
         verdict = f"{'GO' if score >= threshold else 'NO-GO'} - " if mode == MODE_FINAL else ""
         tag = score_verdict_tag(score, status, threshold)
-        lines.append(f"{index}. {name} - {verdict}{score}% – {tag} ({best_day}) | {status}")
+        lines.append(f"{index}. {name} - {verdict}{score}/100 index – {tag} ({best_day}) | {status}")
         if len(result) > 4 and result[4]:
             lines.append(f"   Why: {result[4]}")
     lines.append("")
@@ -1225,10 +1163,10 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     <h2>📈 Daily Score History &amp; Field Observations <button class="info-button" type="button" data-info="score" aria-label="How the forecast score is calculated" aria-haspopup="dialog" aria-controls="info-dialog">ⓘ</button></h2>
     <div class="card">
       <div class="toolbar"><label for="range">Date range<select id="range"></select></label><button type="button" id="seasonOnly" class="season-toggle" aria-pressed="false" title="Show only Aug 15 – Dec 1">Season Only</button></div>
-      <div id="chartbox"><svg id="chart" viewBox="0 0 900 320" role="img" aria-label="Daily favourability score with optional rain and temperature trends"></svg><div id="tip"></div></div>
-      <div class="meta">Hover or tap for daily details. Dashed line marks the alert threshold.</div>
+      <div id="chartbox"><svg id="chart" viewBox="0 0 900 320" role="img" aria-label="Daily favourability index with optional rain and temperature trends"></svg><div id="tip"></div></div>
+      <div class="meta">Favourability index (0–100; not a probability). Hover or tap for daily details. Dashed line marks the alert threshold.</div>
       <div class="legend" aria-label="Chart and timeline legend">
-        <span class="legend-chip"><span class="line-key line-score"></span>Score %</span>
+        <span class="legend-chip"><span class="line-key line-score"></span>Favourability index</span>
         <label class="legend-chip"><input id="rain-toggle" type="checkbox" checked> <span class="line-key line-rain"></span>Rain</label>
         <label class="legend-chip"><input id="temp-toggle" type="checkbox" checked> <span class="line-key line-temp"></span>Temperature</label>
         <span class="legend-chip">🍄 Found</span><span class="legend-chip">❌ No find</span>
@@ -1252,7 +1190,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     <div class="card">
       <div class="toolbar"><label for="q">Date filter<input id="q" placeholder="ISO prefix, e.g. 2025-09" /></label>
       <label for="src">Weather source<select id="src"><option value="">All sources</option><option>archive</option><option>forecast</option></select></label></div>
-      <div class="table-wrap"><table class="observation-table"><thead><tr><th>Date</th><th>Score</th><th>Tmax</th><th>Rain mm</th><th>Wind</th><th>Soil °C</th><th>RH %</th><th>Source</th></tr></thead><tbody id="rows"></tbody></table></div>
+      <div class="table-wrap"><table class="observation-table"><thead><tr><th>Date</th><th>Index</th><th>Tmax</th><th>Rain mm</th><th>Wind</th><th>Soil °C</th><th>RH %</th><th>Source</th></tr></thead><tbody id="rows"></tbody></table></div>
       <div class="toolbar"><button id="prev">&laquo; Previous</button><button id="next">Next &raquo;</button><span id="pageinfo" class="meta"></span></div>
     </div>
 __OBSERVATION_LOG__
@@ -1267,12 +1205,13 @@ __OBSERVATION_LOG__
           <label class="field" for="lweight">Weight (g)<input type="number" id="lweight" min="0" /></label>
         </span>
         <label class="field" for="lnotes">Notes<input id="lnotes" placeholder="Optional notes" /></label>
-        <button type="submit">Submit via GitHub issue</button>
-        <p id="draft-status" class="note" aria-live="polite">Drafts are saved only in this browser until you submit the GitHub issue and intake succeeds.</p>
-        <a id="draft-issue-link" hidden target="_blank" rel="noopener">Open prefilled GitHub issue</a>
+        <label class="field" for="lkey">GitHub token (fine-grained PAT, Actions: Read and write)<input type="password" id="lkey" autocomplete="off" /></label>
+        <button type="submit" id="lsubmit">Submit observation</button>
+        <button type="button" id="lsavedraft">Save as draft</button>
+        <p id="draft-status" class="note" aria-live="polite">Observations are submitted directly to the shared log. If you are offline, save a draft in this browser instead.</p>
       </form>
-      <details><summary>How observations are submitted and saved</summary><p class="note">Save a draft, open the prefilled GitHub issue, then click GitHub's Submit new issue button. Opening the issue page does not save the observation. Only issues from the repository owner or collaborators are accepted. The shared log updates after intake succeeds; browser drafts stay local until cleared here. A no-find report caps that day's score at 20.</p></details>
-      <div class="toolbar"><button id="export">Export drafts (JSON)</button><button id="clearlogs">Clear drafts</button></div>
+      <details><summary>How observations are submitted and saved</summary><p class="note">Submit queues a GitHub Actions workflow that validates the observation and commits it to harvest_log.json; it appears here after the workflow finishes and the report is regenerated. Your token is stored in this browser's localStorage. If GitHub rejects the request, nothing is lost: fix the form or use Save as draft, which stays only in this browser. A no-find report caps that day's score at 20.</p></details>
+      <div class="toolbar"><button id="export">Export drafts (JSON)</button><button id="clearlogs">Clear drafts</button><button id="clearsynced">Clear synced observations</button></div>
       <pre id="exported" class="alert" style="display:none"></pre>
     </div>
   </div>
@@ -1285,11 +1224,13 @@ __OBSERVATION_LOG__
   <script>
   (function () {
     var D = JSON.parse(document.getElementById('porcini-data').textContent);
-    var LOG_KEY = 'porcini_logs_v1', PAGE = 15;
+    var LOG_KEY = 'porcini_logs_v1', SYNCED_KEY = 'porcini_synced_v1', KEY_KEY = 'porcini_api_key', PAGE = 15;
     var LABELS = { small: 'Small', medium: 'Medium', large: 'Large', buttons_young: 'Buttons / young', prime: 'Prime', old_overripe: 'Old / overripe' };
     function $(id) { return document.getElementById(id); }
     function loadLogs() { try { return JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); } catch (e) { return []; } }
     function saveLogs(l) { try { localStorage.setItem(LOG_KEY, JSON.stringify(l)); } catch (e) { alert('Could not save: storage unavailable'); } }
+    function loadSynced() { try { return JSON.parse(localStorage.getItem(SYNCED_KEY) || '[]'); } catch (e) { return []; } }
+    function saveSynced(l) { try { localStorage.setItem(SYNCED_KEY, JSON.stringify(l)); } catch (e) { /* display cache only */ } }
     var MONTHS = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'Jun.', 'Jul.', 'Aug.', 'Sep.', 'Oct.', 'Nov.', 'Dec.'];
     var WEEKDAYS = ['Sun.', 'Mon.', 'Tue.', 'Wed.', 'Thu.', 'Fri.', 'Sat.'];
     function fmtDate(s) {
@@ -1304,27 +1245,28 @@ __OBSERVATION_LOG__
     }
     var INFO = {
       weather: ['Weather indicators', [
-        'High and low show the forecast or recorded air temperature for that day. Soil temperature is the temperature near the surface where mushrooms grow. Moderate soil temperatures (10–18°C) help the score; above 20°C stops that day’s score, and repeated frost can end the season.',
-        'Rain shows the daily total. Recent rain helps keep a spot wet; the usual window is 7 days and is adjusted for the configured slope direction and canopy (roughly 4–11 days). The model also checks the longer 120-day rainfall history for drought.',
-        'Humidity is checked as a 12-day average; below 60% can lower the score. Soil moisture above 0.35 can help, while below 0.18 after more than 5 mm of rain can lower it.',
-        'Wind above 30 km/h on several days after rain can reduce the score. A day with at least 15 mm of concentrated rain can also cause runoff and a small penalty.',
-        'A rain trigger is at least 10 mm in a day. A sharp cooling signal means the high temperature fell at least 5°C below the average of the previous 3 days. The strongest signal is rain together with that cooling.',
+        'Daily high and low are averaged to form a 20-day mean air temperature signal. A value near 13°C contributes most to the heuristic score; this is based on one regional porcini study, not a universal optimum.',
+        'The main rain signal is the total over the 26 complete days before the scored date. It adds points up to a 100 mm plateau; there is no extra uncalibrated penalty for sustained high totals.',
+        'A 90-day rainfall comparison can apply a modest drought penalty when rain is unusually low against seasonally comparable prior-year periods. It is omitted until enough local archive data is available.',
+        'Measured 0–7 cm soil moisture is a smaller supporting signal. Soil texture and local calibration affect what a given volumetric moisture value means; soil temperature and air humidity do not directly add score points.',
+        'Concentrated heavy rain can apply a small runoff penalty. No new high-rain cutoff is assumed without local observations. Aspect/canopy rain-retention adjustments are not used.',
         'Weather source “archive” means recorded past weather; “forecast” means weather-model data. Weather inputs guide the score; they do not confirm mushrooms are present.'
       ]],
       score: ['How the forecast score works', [
         'The weather feed supplies 7 forecast days in total (including today) and the previous 7 days of recent weather. That means it can score up to 6 calendar days after today; beyond that, this dashboard has no forward weather forecast. Older observed weather is kept in the archive.',
-        'For each scored day, the model looks for a rain or sharp-cooling signal 7–12 days earlier. It checks the recent 14-day period; a rain-and-cooling signal is stronger than either one alone. Recent rain, soil temperature and moisture, humidity, wind, drought, season, local tree/site settings and field observations also matter.',
-        'The displayed percentage is a 0–100 favourability score, not a measured chance that mushrooms will be found. For example, 60% means the model rates conditions as fairly favourable; it does not mean a 60-in-100 guarantee. The usual alert threshold is 65.',
-        'Verdict guide at the default 65 threshold: below 25 Not worth it; 25–44 Unlikely; 45–59 Long shot; 60–64 Worth a look; 65–74 Good chance – go; 75+ Definitely go for it. The go boundary follows the configured ALERT_THRESHOLD. Tags provide meaning in addition to the red-to-green score colour.',
+        'For each scored day, the model uses rain from the 26 complete days before that date and mean air temperature from the 20 complete days before it, when at least 80% of daily values are present. Forecast rain/temperature on the scored date itself do not count. A seasonally matched 90-day rainfall comparison adds a modest drought penalty when enough prior-year records exist. The score also includes measured soil moisture, a modest host-tree/site signal, and field observations.',
+        'The score does not vary by weekday or lunar phase. The cited preprint found associations in one central European beech-forest setting; applying it elsewhere needs local validation. No-find observations cap that date at 20 and reduce scores for five following days.',
+        'The displayed 0–100 value is a favourability index, not a measured chance of finding mushrooms or a probability. The usual alert threshold is 65 index points; the index and its thresholds are not locally calibrated.',
+        'Verdict guide at the default 65 index-point threshold: below 25 Not worth it; 25–44 Unlikely; 45–59 Long shot; 60–64 Worth a look; 65–74 Favourable conditions; 75+ Very favourable conditions. The alert boundary follows ALERT_THRESHOLD.',
         'The chart’s light rain and temperature lines add weather context on their own visible-range scales; missing readings leave gaps, and the score line remains the main signal.',
-        'Quality notes are separate from the score: they use recent average high temperatures to flag possible maggot risk or prime-quality conditions.',
+        'Harvest-quality notes are separate from flush favorability: recent average highs flag possible maggot risk or prime-quality conditions and do not change the score.',
         'Scores are estimates and become less dependable further into the 7-day weather forecast. Conditions and local growing spots can differ from the weather grid.'
       ]],
       observations: ['How observations affect the forecast', [
         'A visit with no mushrooms is valid evidence, not missing data. On that date it caps the score at 20, even if weather or other bonuses would have made it higher.',
         'A no-find observation also lowers scores on the next five days (the effect fades from day to day). It does not change unrelated dates.',
-        'Finding young/button mushrooms can raise scores over the following few days; an old/overripe find can lower scores while a flush cools off. Repeated medium or large finds can also add a small site-familiarity bonus.',
-        '🍄 marks a recorded find and ❌ marks a visit where none were found. Draft observations stay in this browser until submitted and accepted.'
+        'A recent button-stage find modestly raises scores for a few days; an old/overripe find modestly lowers them. Repeated medium or large finds can add a small site-familiarity bonus. These weights are heuristic, not calibrated.',
+        '🍄 marks a recorded find and ❌ marks a visit where none were found. Draft observations stay in this browser until submitted; synced ones are already in the shared log.'
       ]]
     };
     var infoDialog = $('info-dialog');
@@ -1356,6 +1298,7 @@ __OBSERVATION_LOG__
     function inRange(d) { if ($('seasonOnly').getAttribute('aria-pressed') === 'true' && !inSeason(d)) return false; var r = $('range').value || 'all'; if (r === 'all') return true; if (r === '365') return Date.parse(d) >= Date.now() - 365 * 864e5; return d.slice(0, 4) === r; }
     function harvestsFor() {
       var h = (loc.harvests || []).map(function (x) { return Object.assign({}, x, { origin: x.origin === 'log' ? 'harvest_log.json' : 'config' }); });
+      loadSynced().filter(function (x) { return x.location === loc.name; }).forEach(function (x) { h.push(Object.assign({ origin: 'synced' }, x)); });
       loadLogs().filter(function (x) { return x.location === loc.name; }).forEach(function (x) { h.push(Object.assign({ origin: 'draft (unsynced)' }, x)); });
       return h;
     }
@@ -1410,9 +1353,9 @@ __OBSERVATION_LOG__
       $('selected-label').textContent = selectedDate ? 'Selected: ' + fmtDate(selectedDate) : 'No score dates available';
       $('selected-date').value = selectedDate;
       var lines = selectedDate ? [fmtDate(selectedDate)] : [];
-      if (sm) lines.push('Model score: ' + sm[1] + '% — ' + sm[4] + ' — ' + sm[2], 'Weather: ' + (rm && rm[8] === 'forecast' ? 'forecast' : 'recorded'));
+      if (sm) lines.push('Favourability index: ' + sm[1] + '/100 — ' + sm[4] + ' — ' + sm[2], 'Weather: ' + (rm && rm[8] === 'forecast' ? 'forecast' : 'recorded'));
       else if (selectedDate) lines.push('No score is available for this day.');
-      hs.forEach(function (h) { lines.push((h.observation_type === 'no_mushrooms' ? '❌ Visited, no mushrooms found' : '🍄 Mushrooms found') + (h.origin === 'draft (unsynced)' ? ' (unsynced draft)' : '')); });
+      hs.forEach(function (h) { lines.push((h.observation_type === 'no_mushrooms' ? '❌ Visited, no mushrooms found' : '🍄 Mushrooms found') + (h.origin === 'draft (unsynced)' ? ' (unsynced draft)' : h.origin === 'synced' ? ' (synced)' : '')); });
       setLines($('selected-day'), lines);
     }
     function renderTimeline() {
@@ -1446,7 +1389,7 @@ __OBSERVATION_LOG__
         var bar = document.createElement('span'), score = row ? row[1] : 0;
         bar.style.width = Math.max(0, Math.min(100, score)) + '%'; bar.style.background = row ? row[5] : '';
         heat.appendChild(bar); day.appendChild(heat);
-        day.title = fmtDate(d) + (row ? ', score ' + score + '%' : '') + (observations.length ? ', ' + observations.map(function (h) { return h.observation_type === 'no_mushrooms' ? 'no mushrooms found' : 'mushrooms found'; }).join(', ') : '');
+        day.title = fmtDate(d) + (row ? ', favourability index ' + score + ' of 100' : '') + (observations.length ? ', ' + observations.map(function (h) { return h.observation_type === 'no_mushrooms' ? 'no mushrooms found' : 'mushrooms found'; }).join(', ') : '');
         day.setAttribute('aria-label', day.title);
         day.addEventListener('click', function () { selectedDate = d; renderTimeline(); var button = Array.prototype.find.call($('timeline').children, function (item) { return item.getAttribute('aria-label').indexOf(fmtDate(d)) === 0; }); if (button) button.focus(); });
         timeline.appendChild(day);
@@ -1547,7 +1490,7 @@ __OBSERVATION_LOG__
     }
     function backtest() {
       var b = loc.backtest || {};
-      $('backtest').textContent = b.evaluated_harvests ? 'Backtest: ' + b.hits + '/' + b.evaluated_harvests + ' medium/large harvests fell on days scoring >= ' + b.threshold + ' (mean score on harvest days ' + b.mean_score_on_harvest_days + ' vs in-season mean ' + b.mean_score_in_season + '). Small sample; indicative only.' : 'Backtest: no medium/large harvests with a stored score yet.';
+      $('backtest').textContent = b.observed_days ? 'Observed visits only (unvisited days are unknown): ' + b.finds_above_threshold + '/' + b.find_days + ' find-days and ' + b.no_finds_above_threshold + '/' + b.no_find_days + ' no-find days scored at least ' + b.threshold + '/100. Scores exclude the same-day observation. Small, potentially biased sample; not calibrated.' : 'Backtest: no recorded visit days with a stored weather record yet.';
     }
     function refresh() { fillRange(); draw(); rows(); backtest(); weatherOverview(); renderTimeline(); }
     function showLocation(index) {
@@ -1577,24 +1520,50 @@ __OBSERVATION_LOG__
     toggleHarvestFields();
     function setObservationDate() { if (!$('ldate').value) $('ldate').value = localToday(); }
     setObservationDate();
-    $('logform').onsubmit = function (e) {
-      e.preventDefault(); var logs = loadLogs();
+    function readEntry() {
       var entry = { location: loc.name, date: $('ldate').value, observation_type: $('lobservation').value, notes: $('lnotes').value };
       if (entry.observation_type === 'harvest') {
         entry.yield_tier = $('ltier').value; entry.cap_stage = $('lstage').value;
         entry.weight_g = $('lweight').value === '' ? undefined : +$('lweight').value;
       }
-      logs.push(entry); saveLogs(logs); this.reset(); draw();
-      toggleHarvestFields();
-      var q = new URLSearchParams({ template: 'harvest.yml', title: 'Observation: ' + entry.location + ' ' + fmtDate(entry.date), labels: 'harvest', location: entry.location, date: entry.date, observation_type: entry.observation_type === 'harvest' ? 'Found mushrooms' : 'No mushrooms found', yield_tier: LABELS[entry.yield_tier] || '', cap_stage: LABELS[entry.cap_stage] || '', weight_g: entry.weight_g || '', notes: entry.notes });
-      var issueLink = $('draft-issue-link');
-      issueLink.href = 'https://github.com/' + D.repo + '/issues/new?' + q.toString();
-      issueLink.hidden = false;
-      $('draft-status').textContent = 'Draft saved in this browser only. Open the issue link and submit it on GitHub; it will not enter the shared log until intake succeeds.';
-      setObservationDate();
+      return entry;
+    }
+    function resetForm() { $('logform').reset(); toggleHarvestFields(); setObservationDate(); }
+    function setStatus(t) { $('draft-status').textContent = t; }
+    $('lsavedraft').onclick = function () {
+      var logs = loadLogs(); logs.push(readEntry()); saveLogs(logs); resetForm(); draw();
+      setStatus('Draft saved in this browser only. It is not in the shared log.');
+    };
+    $('lkey').value = (function () { try { return localStorage.getItem(KEY_KEY) || ''; } catch (e) { return ''; } })();
+    $('logform').onsubmit = function (e) {
+      e.preventDefault();
+      var entry = readEntry(), key = $('lkey').value.trim();
+      if (!key) { setStatus('❌ Enter a GitHub token (fine-grained PAT with Actions: Read and write) to submit, or use Save as draft.'); return; }
+      try { localStorage.setItem(KEY_KEY, key); } catch (err) { /* optional */ }
+      var inputs = {
+        location: entry.location, date: entry.date || '', observation_type: entry.observation_type,
+        yield_tier: entry.yield_tier || '', cap_stage: entry.cap_stage || '',
+        weight_g: entry.weight_g === undefined ? '' : String(entry.weight_g), notes: entry.notes || ''
+      };
+      $('lsubmit').disabled = true; setStatus('Submitting…');
+      fetch('https://api.github.com/repos/' + D.repo + '/actions/workflows/submit-observation.yml/dispatches', {
+        method: 'POST',
+        headers: { 'Accept': 'application/vnd.github+json', 'Authorization': 'Bearer ' + key, 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ref: D.branch || 'main', inputs: inputs })
+      })
+        .then(function (r) {
+          if (r.status === 204) { resetForm(); setStatus('✅ Submitted. GitHub workflow queued; refresh later to see synced log.'); return; }
+          return r.json().catch(function () { return {}; }).then(function (b) {
+            var hint = { 401: 'Check your token.', 403: 'The token needs Actions: Read and write on this repository.', 404: 'Repository or workflow not found, or the token cannot access it.', 422: 'GitHub rejected the request (check the branch and workflow inputs).' }[r.status] || '';
+            setStatus('❌ GitHub error ' + r.status + (b.message ? ': ' + b.message : '') + '. ' + hint + ' Correct and retry, or use Save as draft.');
+          });
+        })
+        .catch(function () { setStatus('❌ Could not reach GitHub. Use Save as draft to keep this observation in this browser.'); })
+        .then(function () { $('lsubmit').disabled = false; });
     };
     $('export').onclick = function () { var pre = $('exported'); pre.style.display = 'block'; pre.textContent = JSON.stringify(loadLogs(), null, 2); };
     $('clearlogs').onclick = function () { if (confirm('Delete all drafts stored in this browser?')) { saveLogs([]); draw(); } };
+    $('clearsynced').onclick = function () { if (confirm('Clear synced observations shown from this browser? They stay in the shared log and reappear when the report is regenerated.')) { saveSynced([]); draw(); } };
     (function () {
       var lf = $('log-loc'), tf = $('log-type');
       if (!lf || !tf) return;
@@ -1636,7 +1605,7 @@ def dashboard_payload(cfg: Dict[str, Any], analysis: List[Dict[str, Any]], mode:
             "backtest": item.get("backtest", {}),
         })
     repo = os.environ.get("GITHUB_REPOSITORY") or cfg.get("GITHUB_REPOSITORY") or "jmb2885m75-cmd/porcini-tracker"
-    return {"mode": mode, "threshold": threshold, "repo": repo, "locations": locations}
+    return {"mode": mode, "threshold": threshold, "repo": repo, "branch": str(cfg.get("GITHUB_BRANCH", "main")), "locations": locations}
 
 
 _TIER_LABELS = {"small": "Small", "medium": "Medium", "large": "Large"}
@@ -1684,7 +1653,7 @@ def render_observation_log(entries: List[Dict[str, Any]], repo: str) -> str:
     locations = sorted({str(e.get("location")) for e in entries})
     options = "".join(f"<option value=\"{esc(l)}\">{esc(l)}</option>" for l in locations)
     if not entries:
-        return ("    <h2 id='observation-log'>📒 Observation Log</h2>\n    <div class='card'><div class='meta'>No observations recorded yet. This overview includes configured past harvests and accepted issue submissions; browser-local drafts are not shared or listed here.</div></div>")
+        return ("    <h2 id='observation-log'>📒 Observation Log</h2>\n    <div class='card'><div class='meta'>No observations recorded yet. This overview includes configured past harvests and submitted observations; browser-local drafts are not shared or listed here.</div></div>")
     return f"""    <h2 id="observation-log">📒 Observation Log</h2>
     <div class="card">
       <div class="log-summary">{''.join(chips)}</div>
@@ -1699,7 +1668,7 @@ def render_observation_log(entries: List[Dict[str, Any]], repo: str) -> str:
 
 
 def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]], alert_message: str = "", alert_will_send: bool = False, mode: str = MODE_DEFAULT, harvest_log: Optional[Dict[str, Any]] = None) -> str:
-    """Self-contained dashboard (inline CSS/JS/data, no CDN). Static hosting only; harvests come from harvest_log.json via the issue workflow."""
+    """Self-contained dashboard (inline CSS/JS/data, no CDN). Static hosting; observations are POSTed to api.py and stored in harvest_log.json."""
     threshold = int(cfg.get("ALERT_THRESHOLD", 65))
     cards = []
     for item in analysis:
@@ -1709,7 +1678,7 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]],
         score_display = "N/A"
         if available:
             score_display = (
-                f"<span class='score' style='color:{score_color(score)}'>{score}%</span>"
+                f"<span class='score' style='color:{score_color(score)}'>{score}/100</span>"
                 f"<span class='verdict-tag'>{html.escape(score_verdict_tag(score, item['status'], threshold))}</span>"
             )
         if mode == MODE_FINAL and available:
@@ -1730,7 +1699,7 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]],
     <div class="card">
       <div class="meta">{html.escape(alert_status)}</div>
       <pre class="alert">{html.escape(alert_message)}</pre>
-      <div class="meta">Fields sent per ranked spot (top 3): rank, location name, best weekend score (%), best day, status. The final line is the dashboard link.</div>
+      <div class="meta">Fields sent per ranked spot (top 3): rank, location name, best weekend favourability index (0–100), best day, status. The final line is the dashboard link.</div>
     </div>"""
     payload = dashboard_payload(cfg, analysis, mode)
     observation_log = render_observation_log(build_observation_log(cfg.get("LOCATIONS", []), harvest_log), payload["repo"])
@@ -1831,7 +1800,7 @@ def main() -> int:
         records = ensure_location_history(name, db, latitude, longitude, elevation, today)
         loc_store = db["locations"][name]
         update_daily_scores(dict(location, past_harvests=harvests), records, loc_store)
-        loc_store["backtest"] = backtest_accuracy(loc_store["daily_scores"], harvests, threshold)
+        loc_store["backtest"] = backtest_accuracy(location, records, harvests, threshold)
 
         best_score, best_day, status, quality = find_weekend_best(location, records, harvests, loc_store["daily_scores"], today)
         moisture = 0.0
@@ -1886,7 +1855,7 @@ def main() -> int:
 
     print("\n### Porcini Summary")
     for item in analyses:
-        print(f"- {item['name']}: {item['best_score']}% on {item['best_day']} | {item['status']} | moisture {item['soil_moisture']:.2f} m³/m³")
+        print(f"- {item['name']}: index {item['best_score']}/100 on {item['best_day']} | {item['status']} | moisture {item['soil_moisture']:.2f} m³/m³")
 
     if alert_queue:
         print("\n[INFO] Dispatching alert message")

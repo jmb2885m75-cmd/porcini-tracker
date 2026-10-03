@@ -9,11 +9,14 @@ body:
         **Quick log:** pick the spot, leave the date empty for today, choose what you found and submit.
         For "No mushrooms found" you only need the spot and (optionally) a date or note. The dashboard's *Log Field Observation* form can pre-fill this page for you.
   # BEGIN LOCATION FIELD
-  - type: input
+  - type: dropdown
     id: location
     attributes:
       label: Location / spot
-      description: Must match a configured location name (the dashboard form pre-fills it).
+      description: Pick the spot you visited.
+      options:
+        - "Fangschleuse"
+        - "Zosse"
     validations:
       required: true
   # END LOCATION FIELD

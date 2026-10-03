@@ -13,14 +13,14 @@
     "Fangschleuse": {
       "last_alert_date": "2026-10-03",
       "last_alert_mode": "default",
-      "last_score": 82,
-      "last_status": "✅ Viable conditions"
+      "last_score": 27,
+      "last_status": "⚠️ Watch closely"
     },
     "Zosse": {
       "last_alert_date": "2026-10-03",
       "last_alert_mode": "default",
-      "last_score": 82,
-      "last_status": "✅ Viable conditions"
+      "last_score": 20,
+      "last_status": "🔎 No mushrooms found (field observation)"
     }
   }
 }

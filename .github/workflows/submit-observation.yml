@@ -1,0 +1,82 @@
+name: Submit Observation
+
+on:
+  workflow_dispatch:
+    inputs:
+      location:
+        description: Location name
+        required: true
+      date:
+        description: Observation date (blank = today)
+        required: false
+        default: ''
+      observation_type:
+        description: harvest or no_mushrooms
+        required: true
+        default: harvest
+      yield_tier:
+        description: small, medium or large (harvest only)
+        required: false
+        default: ''
+      cap_stage:
+        description: buttons_young, prime or old_overripe (harvest only)
+        required: false
+        default: ''
+      weight_g:
+        description: Weight in grams (optional)
+        required: false
+        default: ''
+      notes:
+        description: Notes
+        required: false
+        default: ''
+      reporter:
+        description: Submitter hint (defaults to the triggering user)
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: porcini-state
+  cancel-in-progress: false
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Create config.json from GitHub Secrets
+        env:
+          CONFIG_JSON: ${{ secrets.CONFIG_JSON }}
+        run: |
+          if [ -n "$CONFIG_JSON" ]; then printf '%s' "$CONFIG_JSON" > config.json; fi
+
+      - name: Validate and append observation
+        env:
+          INPUT_LOCATION: ${{ inputs.location }}
+          INPUT_DATE: ${{ inputs.date }}
+          INPUT_OBSERVATION_TYPE: ${{ inputs.observation_type }}
+          INPUT_YIELD_TIER: ${{ inputs.yield_tier }}
+          INPUT_CAP_STAGE: ${{ inputs.cap_stage }}
+          INPUT_WEIGHT_G: ${{ inputs.weight_g }}
+          INPUT_NOTES: ${{ inputs.notes }}
+          INPUT_REPORTER: ${{ inputs.reporter }}
+        run: python scripts/submit_observation_from_dispatch.py
+
+      - name: Commit updated log
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add harvest_log.json
+          if ! git diff --cached --quiet; then
+            git commit -m "🍄 Record observation via dispatch [skip ci]"
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
+            git push
+          fi

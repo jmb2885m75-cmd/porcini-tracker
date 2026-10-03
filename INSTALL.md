@@ -9,12 +9,12 @@ and writes `porcini_report.html`. A separate GitHub issue workflow validates har
 - Keeps a multi-year weather archive per location in `porcini_db.json` (schema version 3) and a per-day score series.
 - Sends Telegram / Pushover / Twilio alerts (see below).
 - Generates `porcini_report.html`: a self-contained dashboard (no CDN) with a score chart, harvest pins, tooltips and an observation browser.
-- The dashboard includes keyboard-accessible “ⓘ” explanations, found/no-find markers, and a scrollable day-by-day timeline with date picking and previous/next controls. Its score is a favourability index, not a calibrated chance; the weather feed provides 7 forecast days including today, while rain/cooling triggers are checked 7–12 days before each scored day.
+- The dashboard includes keyboard-accessible “ⓘ” explanations, found/no-find markers, and a scrollable day-by-day timeline with date picking and previous/next controls. Its 0–100 value is a heuristic favourability index, not a calibrated chance or probability. Weather inputs include rain over the 26 complete days before each scored date, mean air temperature over the 20 complete days before it, and a local-history 90-day drought comparison when enough prior-year data is available. Rain input saturates at 100 mm; no additional high-rain penalty is assumed without local observations. The windows are informed by a [regional porcini preprint](https://doi.org/10.64898/2025.12.12.693895); score weights and cutoffs are not locally calibrated. Weekday and lunar phase do not affect scores. The weather feed provides 7 forecast days including today.
 - Harvest and no-mushrooms-found observations can be submitted as GitHub issues. A no-find observation caps that
   date's score at 20; it does not affect other dates. The intake workflow validates submissions from the
   repository owner or collaborators and stores them in `harvest_log.json`; browser drafts stay local until submitted.
   Existing harvests can also be configured in `past_harvests` in the private `CONFIG_JSON` secret.
-- **Observation form:** the issue form uses friendly dropdowns (Found mushrooms / No mushrooms found, Small–Large, Buttons / young – Prime – Old / overripe). Date may be left empty (today) or `today`/`yesterday`; weight accepts `450`, `450 g` or `1.2 kg`. The intake workflow refreshes the location list and checks issues when opened, edited or labeled. A missing `harvest` label, untrusted author, unavailable config, or invalid field gets an explanatory issue comment; fixing the issue or adding its label retries intake. The dashboard saves a local draft and provides a link to the prefilled issue; the observation is not shared until you submit that issue on GitHub and intake succeeds.
+- **Observation form:** the issue form uses friendly dropdowns (Found mushrooms / No mushrooms found, Small–Large, Buttons / young – Prime – Old / overripe). Date may be left empty (today) or `today`/`yesterday`; weight accepts `450`, `450 g` or `1.2 kg`. The intake workflow refreshes the location list and checks issues when opened, edited or labeled. Issues titled `Observation: ...` are processed even if the `harvest` label is missing; intake attempts to add that label automatically. Untrusted authors, unavailable config, or invalid fields get an explanatory issue comment; correcting and editing the issue retries intake. The dashboard saves a local draft and provides a link to the prefilled issue; the observation is not shared until you submit that issue on GitHub and intake succeeds.
 - **Observation Log:** the dashboard has an Observation Log section listing every config `past_harvests` and accepted `harvest_log.json` entry (newest first) with source, reporter and issue link, per-location counts and filters. Browser-local drafts are intentionally not presented as shared observations. Run the Harvest Intake workflow manually after changing `CONFIG_JSON` to refresh the issue form's location dropdown.
 - **Dates:** stored and exchanged as ISO `yyyy-MM-dd` (database, `harvest_log.json`, issue payloads); every
   user-facing date is displayed as `Ddd. dd Mon. yyyy` (e.g. `Sat. 03 Oct. 2026`; May has no period). Accepted input formats (issue form,
@@ -22,7 +22,7 @@ and writes `porcini_report.html`. A separate GitHub issue workflow validates har
   its matching weekday; they are normalised to ISO
   and impossible dates are rejected. Dates are date-only (no time zone), so they never shift by a day. See `dates.py`.
 - The daily score chart includes optional rain and temperature context lines, each scaled to its visible range and
-  shown behind the more prominent favourability score line. Toggle them from the chart legend; gaps mean weather data
+  shown behind the more prominent favourability index. Toggle them from the chart legend; gaps mean weather data
   is unavailable for those dates.
 - `index.html` links to the generated report; GitHub Actions updates its alert preview.
 
@@ -90,7 +90,26 @@ The first run downloads ~2 years of history per location. A corrupt `porcini_db.
 - **Alerts** fire only if the best weekend score crosses the threshold upward since the previous run, the status category changes, and ≥ 5 days passed since the last alert. A failed send is retried next run.
 - **Friday final confirmation** follows `FRIDAY_POLICY`: by default only spots that received the Thursday outlook alert are confirmed; `all_above_threshold` confirms every spot meeting the threshold.
 - **Archive/forecast merge:** archive observations replace forecast values for the same date; forecast-only dates are kept; a forecast never overwrites archive data.
-- **Daily scores** are stored in `porcini_db.json` under `daily_scores` (archive days scored once; forecast days rescored each run; everything rescored when the model version or a spot's config changes). Harvest backtests combine `past_harvests` from the secret and validated observations in `harvest_log.json`.
-- **Runoff penalty** uses hourly rain intensity and applies only to days fetched after this feature was added.
-- Aspect/canopy adjust the length of the "wet" rain window only; the API's soil-moisture value does not know about aspect.
+- **Daily scores** are stored in `porcini_db.json` under `daily_scores` (archive days scored once; forecast days rescored each run; everything rescored when the model version or a spot's config changes). Harvest backtests compare only recorded visit days, exclude that day's observation from its score, and treat unvisited days as unknown. These small, potentially biased samples do not calibrate the index.
+- **Runoff penalty** uses hourly rain intensity over the three complete days before the scored date and applies only to days fetched after this feature was added.
+- The 26-day rain and 20-day temperature windows end the day before the scored date. Seasonally matched 90-day rainfall comparisons use prior-year archive data only and are omitted when fewer than 20 valid comparison windows are available. Aspect/canopy adjustments are not currently applied.
 - Size: roughly 365 records per location per year; there is no automatic pruning.
+
+## Submitting observations from the report (GitHub only)
+
+The report's *Submit observation* button calls the GitHub API to dispatch `.github/workflows/submit-observation.yml`.
+The workflow validates the input with the same rules as the issue intake (`harvest.py`), appends it to
+`harvest_log.json` and pushes the commit; invalid input fails the run with the reason in the log and nothing is committed.
+No server is needed. Refresh the report after the run finishes (the next dashboard rebuild shows the entry).
+
+Setup:
+1. Settings → Actions → General → Workflow permissions → *Read and write* (the workflow also declares `contents: write`).
+2. Create a fine-grained personal access token (github.com/settings/personal-access-tokens) limited to this repository with
+   **Actions: Read and write** (needed to dispatch the workflow). **Contents** permission is not needed in the browser;
+   the workflow commits with `GITHUB_TOKEN`. Only people with write access can dispatch the workflow.
+3. Paste the token into the form's token field. It is saved in the browser's `localStorage`.
+
+Security caveat: anything in `localStorage` is readable by scripts on the same origin, so use a short-lived token scoped to
+this one repository with only Actions: Read and write, and clear it on shared devices. *Save as draft* works offline and never uses the token.
+
+`api.py` (`POST /api/submit-observation`) is still available for people who prefer to self-host a server.

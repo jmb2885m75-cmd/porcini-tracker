@@ -97,14 +97,14 @@ class VerdictTests(unittest.TestCase):
             (45, "🤔 Long shot"),
             (60, "👀 Worth a look"),
             (64, "👀 Worth a look"),
-            (65, "👍 Good chance – go"),
-            (74, "👍 Good chance – go"),
-            (75, "🔥 Definitely go for it"),
+            (65, "👍 Favourable conditions"),
+            (74, "👍 Favourable conditions"),
+            (75, "🔥 Very favourable conditions"),
         ]
         for score, expected in cases:
             with self.subTest(score=score):
                 self.assertEqual(p.score_verdict_tag(score, "⚠️ Watch closely"), expected)
-        self.assertEqual(p.score_verdict_tag(70, "⚠️ Watch closely", 70), "👍 Good chance – go")
+        self.assertEqual(p.score_verdict_tag(70, "⚠️ Watch closely", 70), "👍 Favourable conditions")
         self.assertEqual(p.score_verdict_tag(69, "⚠️ Watch closely", 70), "👀 Worth a look")
 
     def test_special_statuses_override_score_tier(self):
@@ -137,8 +137,8 @@ class ModeTests(unittest.TestCase):
     def test_messages_differ(self):
         r = [("A", 70, "Fri 2025-10-03", "ok")]
         self.assertIn("Outlook", p.build_alert_message(r, "u", p.MODE_OUTLOOK))
-        self.assertIn("GO - 70%", p.build_alert_message(r, "u", p.MODE_FINAL, 65))
-        self.assertIn("70% – 👍 Good chance – go (Fri 2025-10-03)", p.build_alert_message(r, "u"))
+        self.assertIn("GO - 70/100 index", p.build_alert_message(r, "u", p.MODE_FINAL, 65))
+        self.assertIn("70/100 index – 👍 Favourable conditions (Fri 2025-10-03)", p.build_alert_message(r, "u"))
         self.assertIn("Forecast", p.build_alert_message(r, "u"))
 
 
@@ -202,26 +202,57 @@ class ScoringTests(unittest.TestCase):
         next_day = p.calculate_score_for_day(LOC, hist.get(observed + timedelta(days=1)), hist, no_find)
         self.assertGreater(next_day[0], score[0])
 
-    def test_timing_bonus_and_penalty(self):
-        # rain trigger 7-12 days before: Sat (+15) vs Mon (-20)
-        start = date(2025, 9, 1)
-        recs = series(start, 40, precipitation_sum=3.0)
-        recs[5]["precipitation_sum"] = 30.0  # 2025-09-06
+    def test_weekday_does_not_change_favourability(self):
+        recs = series(date(2025, 9, 1), 40, precipitation_sum=3.0)
         h = p.History(recs)
-        sat, mon = date(2025, 9, 13), date(2025, 9, 15)  # lags 7 and 9 after the trigger
-        s_sat = p.calculate_score_for_day(LOC, h.get(sat), h, [])[0]
-        s_mon = p.calculate_score_for_day(LOC, h.get(mon), h, [])[0]
-        self.assertGreater(s_sat, s_mon + 30)
+        saturday, monday = date(2025, 9, 13), date(2025, 9, 15)
+        sat_score = p.calculate_score_for_day(LOC, h.get(saturday), h, [])[0]
+        mon_score = p.calculate_score_for_day(LOC, h.get(monday), h, [])[0]
+        self.assertEqual(sat_score, mon_score)
 
-    def test_score_explanation_mentions_recent_rain_and_cooling_in_dashboard_and_alert(self):
+    def test_rain_score_uses_26_day_total(self):
+        recs = series(date(2025, 9, 1), 50, precipitation_sum=0.0)
+        h = p.History(recs)
+        day = date(2025, 10, 18)
+        for record in h.window(day - timedelta(days=1), 26):
+            record["precipitation_sum"] = 1.0
+        wet_score = p.calculate_score_for_day(LOC, h.get(day), h, [])[0]
+        for record in h.window(day - timedelta(days=1), 26):
+            record["precipitation_sum"] = 0.0
+        dry_score = p.calculate_score_for_day(LOC, h.get(day), h, [])[0]
+        self.assertEqual(wet_score - dry_score, 8)
+
+    def test_temperature_score_uses_20_day_mean_air_temperature(self):
+        recs = series(date(2025, 9, 1), 50, temperature_2m_max=20.0, temperature_2m_min=6.0)
+        h = p.History(recs)
+        day = date(2025, 10, 18)
+        optimal = p.calculate_score_for_day(LOC, h.get(day), h, [])[0]
+        for record in h.window(day - timedelta(days=1), 20):
+            record["temperature_2m_max"] = 16.0
+            record["temperature_2m_min"] = 2.0
+        cooler = p.calculate_score_for_day(LOC, h.get(day), h, [])[0]
+        self.assertEqual(optimal - cooler, 8)
+
+    def test_missing_weather_coverage_omits_rolling_signal(self):
+        recs = series(date(2025, 9, 1), 50)
+        h = p.History(recs)
+        day = date(2025, 10, 18)
+        for record in h.window(day - timedelta(days=1), 26)[:6]:
+            record["precipitation_sum"] = None
+        for record in h.window(day - timedelta(days=1), 20)[:5]:
+            record["temperature_2m_min"] = None
+        self.assertIsNone(p.observed_rainfall_total(h, day, 26))
+        self.assertIsNone(p.mean_air_temperature(h, day, 20))
+
+    def test_score_explanation_uses_supported_weather_windows_in_dashboard_and_alert(self):
         target = date(2025, 10, 4)
         recs = series(date(2025, 9, 1), 40, temperature_2m_max=20.0)
         trigger = target - timedelta(days=8)
         trigger_record = next(r for r in recs if r["date"] == trigger.isoformat())
         trigger_record.update(precipitation_sum=12.0, temperature_2m_max=14.0)
         explanation = p.explain_score(LOC, recs, p.format_display_date(target), "✅ Viable conditions")
-        self.assertIn("rain and a sharp temperature drop", explanation)
-        self.assertIn("8 days before", explanation)
+        self.assertIn("mean air temperature", explanation)
+        self.assertIn("26 complete days before this date", explanation)
 
         message = p.build_alert_message(
             [("Oak & Beech Spot", 82, p.format_display_date(target), "✅ Viable conditions", explanation)],
@@ -237,15 +268,81 @@ class ScoringTests(unittest.TestCase):
               "harvests": [], "backtest": {}}],
         )
         self.assertIn("score-explanation", report)
-        self.assertIn("rain and a sharp temperature drop", report)
+        self.assertIn("26 complete days before this date", report)
+        self.assertIn("mean air temperature", report)
 
-    def test_wet_baseline_vs_humidity_penalty(self):
+    def test_air_humidity_is_not_a_scoring_input(self):
         recs = series(date(2025, 8, 20), 60, precipitation_sum=3.0)
         h = p.History(recs)
         day = recs[-1]
         base = p.calculate_score_for_day(LOC, day, h, [])[0]
         dry = series(date(2025, 8, 20), 60, precipitation_sum=3.0, relative_humidity_2m_mean=40.0)
-        self.assertEqual(base - 15, p.calculate_score_for_day(LOC, dry[-1], p.History(dry), [])[0])
+        self.assertEqual(base, p.calculate_score_for_day(LOC, dry[-1], p.History(dry), [])[0])
+
+    def test_low_soil_moisture_penalizes_without_same_day_rain(self):
+        recs = series(date(2025, 8, 20), 60, precipitation_sum=3.0)
+        hist = p.History(recs)
+        baseline = p.calculate_score_for_day(LOC, recs[-1], hist, [])
+        dry_day = dict(recs[-1], soil_moisture_0_to_7cm_mean=0.195, precipitation_sum=0.0)
+        dry = p.calculate_score_for_day(LOC, dry_day, hist, [])
+        self.assertEqual(dry[0], baseline[0] - 10)
+        self.assertEqual(dry[1], "TOO DRY - LOW SOIL MOISTURE")
+        explanation = p.explain_score(LOC, recs[:-1] + [dry_day], p.format_display_date(date(2025, 10, 18)), dry[1])
+        self.assertIn("soil moisture is low at 0.195 m³/m³", explanation)
+
+    def test_high_soil_moisture_adds_five_points(self):
+        recs = series(date(2025, 8, 20), 60, precipitation_sum=3.0)
+        hist = p.History(recs)
+        baseline = p.calculate_score_for_day(LOC, recs[-1], hist, [])[0]
+        wet_day = dict(recs[-1], soil_moisture_0_to_7cm_mean=0.36)
+        self.assertEqual(p.calculate_score_for_day(LOC, wet_day, hist, [])[0], baseline + 5)
+
+    def test_rain_score_saturates_without_inventing_a_wet_penalty(self):
+        self.assertEqual(p.rainfall_score(0), 0)
+        self.assertEqual(p.rainfall_score(50), 15)
+        self.assertEqual(p.rainfall_score(100), p.FLUSH_RAIN_SCORE_MAX)
+        self.assertEqual(p.rainfall_score(250), p.FLUSH_RAIN_SCORE_MAX)
+        self.assertEqual(p.rainfall_score(-5), 0)
+
+    def test_scored_day_weather_is_excluded_from_prior_day_windows(self):
+        recs = series(date(2025, 9, 1), 50, precipitation_sum=1.0,
+                      temperature_2m_max=13.0, temperature_2m_min=13.0)
+        hist = p.History(recs)
+        day = recs[-1]
+        baseline = p.calculate_score_for_day(LOC, day, hist, [])[0]
+        day["precipitation_sum"] = 1000.0
+        day["temperature_2m_max"] = 40.0
+        day["temperature_2m_min"] = -20.0
+        self.assertEqual(p.calculate_score_for_day(LOC, day, hist, [])[0], baseline)
+
+    def test_long_term_drought_penalty_uses_local_seasonal_history(self):
+        start, end = date(2024, 1, 1), date(2025, 10, 18)
+        recs = series(start, (end - start).days + 1, precipitation_sum=2.0)
+        for record in recs:
+            if date(2025, 7, 20) <= p.parse_date(record["date"]) < end:
+                record["precipitation_sum"] = 0.0
+        hist = p.History(recs)
+        self.assertEqual(p.historical_rainfall_percentile(hist, end), 0.0)
+        drought_score = p.calculate_score_for_day(LOC, hist.get(end), hist, [])[0]
+
+        for record in recs:
+            if p.parse_date(record["date"]).year == 2024:
+                record["precipitation_sum"] = 0.0
+        self.assertEqual(p.historical_rainfall_percentile(hist, end), 0.5)
+        normal_score = p.calculate_score_for_day(LOC, hist.get(end), hist, [])[0]
+        self.assertEqual(normal_score - drought_score, p.DROUGHT_SCORE_PENALTY_MAX)
+
+    def test_backtest_uses_visits_only_and_excludes_same_day_observation(self):
+        recs = series(date(2025, 8, 1), 60, precipitation_sum=5.0)
+        found = {"date": "2025-09-25", "observation_type": "harvest", "yield_tier": "small"}
+        no_find = {"date": "2025-09-26", "observation_type": "no_mushrooms"}
+        results = p.backtest_accuracy(LOC, recs, [found, no_find], 40)
+        self.assertEqual(results["observed_days"], 2)
+        self.assertEqual(results["find_days"], 1)
+        self.assertEqual(results["no_find_days"], 1)
+        self.assertEqual(results["finds_above_threshold"], 1)
+        self.assertEqual(results["no_finds_above_threshold"], 1)
+        self.assertGreater(results["mean_score_on_no_find_days"], 20)
 
     def test_affinity_limited_to_two_years(self):
         recs = series(date(2025, 8, 20), 60, precipitation_sum=3.0)
@@ -254,7 +351,7 @@ class ScoringTests(unittest.TestCase):
         recent = [{"date": "2025-05-01", "yield_tier": "large"}, {"date": "2025-06-01", "yield_tier": "medium"}]
         old = [{"date": "2022-05-01", "yield_tier": "large"}, {"date": "2022-06-01", "yield_tier": "medium"}]
         base = p.calculate_score_for_day(LOC, day, h, [])[0]
-        self.assertEqual(p.calculate_score_for_day(LOC, day, h, recent)[0], base + 10)
+        self.assertEqual(p.calculate_score_for_day(LOC, day, h, recent)[0], base + 5)
         self.assertEqual(p.calculate_score_for_day(LOC, day, h, old)[0], base)
 
     def test_quality_flags(self):
@@ -263,9 +360,32 @@ class ScoringTests(unittest.TestCase):
         self.assertIn("MAGGOT", p.calculate_score_for_day(LOC, hot[-1], p.History(hot), [])[2])
         self.assertIn("PRIME", p.calculate_score_for_day(LOC, cool[-1], p.History(cool), [])[2])
 
-    def test_microclimate_window(self):
-        self.assertEqual(p.moisture_retention_days({"aspect": "north"}), 10)
-        self.assertEqual(p.moisture_retention_days({"aspect": "south"}), 5)
+    def test_quality_warning_does_not_change_flush_score(self):
+        target = date(2025, 10, 18)
+        start = target - timedelta(days=20)
+        hot = series(start, 21, temperature_2m_max=13.0, temperature_2m_min=13.0)
+        cool = series(start, 21, temperature_2m_max=13.0, temperature_2m_min=13.0)
+        for records in (hot, cool):
+            for record in records:
+                record["date"] = p.parse_date(record["date"]).isoformat()
+        for record in hot[13:20]:
+            record["temperature_2m_max"] = 20.0
+            record["temperature_2m_min"] = 6.0
+        hot_score = p.calculate_score_for_day(LOC, hot[-1], p.History(hot), [])
+        cool_score = p.calculate_score_for_day(LOC, cool[-1], p.History(cool), [])
+        self.assertEqual(hot_score[0], cool_score[0])
+        self.assertIn("MAGGOT", hot_score[2])
+        self.assertNotIn("MAGGOT", cool_score[2])
+
+    def test_duplicate_host_labels_do_not_stack_and_additional_hosts_are_supported(self):
+        recs = series(date(2025, 8, 20), 60, precipitation_sum=3.0)
+        h = p.History(recs)
+        day = recs[-1]
+        base = p.calculate_score_for_day(LOC, day, h, [])[0]
+        duplicate_spruce = dict(LOC, tree_species=["Spruce", "Norway Spruce"])
+        birch_chestnut = dict(LOC, tree_species=["Birch", "Chestnut"])
+        self.assertEqual(p.calculate_score_for_day(duplicate_spruce, day, h, [])[0], base)
+        self.assertEqual(p.calculate_score_for_day(birch_chestnut, day, h, [])[0], base)
 
     def test_daily_scores_incremental(self):
         recs = series(date(2025, 9, 1), 20)
@@ -292,7 +412,7 @@ class RunoffBackfillTests(unittest.TestCase):
         self.assertEqual(records[0]["precip_peak_2h_mm"], 14.0)
         self.assertEqual(records[0]["precip_peak_basis"], p.PEAK_BASIS_BACKFILL)
         self.assertNotIn("precip_peak_basis", records[1])
-        self.assertTrue(p.has_runoff(p.History(records), date(2025, 9, 1)))
+        self.assertTrue(p.has_runoff(p.History(records), date(2025, 9, 2)))
 
     def test_failure_is_soft_and_retried(self):
         records = [rec("2025-09-01")]
@@ -339,10 +459,10 @@ class WeatherFailureTests(unittest.TestCase):
               "scores": {"2026-10-04": {"score": 37, "status": status, "quality": ""}},
               "harvests": [], "backtest": {}}],
         )
-        self.assertIn("style='color:hsl(0 80% 58%)'>37%</span>", report)
+        self.assertIn("style='color:hsl(0 80% 58%)'>37/100</span>", report)
         self.assertIn("<span class='verdict-tag'>😐 Unlikely</span>", report)
         self.assertIn('["2026-10-04", 37, "⚠️ Watch closely", "", "😐 Unlikely", "hsl(0 80% 58%)"]', report)
-        self.assertIn("Score: ' + sm[1] + '% – ' + sm[4]", report)
+        self.assertIn("Favourability index: ' + sm[1] + '/100 — ' + sm[4]", report)
         self.assertIn("bar.style.background = row ? row[5]", report)
         self.assertIn("seasonOnly", report)
 

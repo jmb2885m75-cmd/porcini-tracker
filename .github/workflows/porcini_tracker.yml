@@ -6,6 +6,11 @@ on:
     - cron: '0 18 * * 4'  # Thursday 18:00 UTC -> weekend outlook mode (porcini.py detects it from the UTC time)
     - cron: '0 6 * * 5'   # Friday 06:00 UTC -> final go/no-go confirmation mode
   workflow_dispatch:     # Allows manual triggering from the GitHub Actions tab
+    inputs:
+      test_alert:
+        description: 'Send a Telegram test alert only'
+        type: boolean
+        default: false
 
 # One run at a time: the job rewrites and commits the shared JSON state files.
 concurrency:
@@ -35,8 +40,13 @@ jobs:
       - name: Execute Porcini Evaluation Engine
         env:
           CONFIG_JSON: ${{ secrets.CONFIG_JSON }}
+          TEST_ALERT: ${{ inputs.test_alert }}
         run: |
-          python porcini.py
+          if [ "$TEST_ALERT" = "true" ]; then
+            python porcini.py --test-alert
+          else
+            python porcini.py
+          fi
 
       - name: Commit and Push Updated Weather Database & Report
         run: |

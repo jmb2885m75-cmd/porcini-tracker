@@ -33,13 +33,7 @@ FORECAST_API_URL = "https://api.open-meteo.com/v1/forecast"
 
 INITIAL_ARCHIVE_DAYS = 730
 
-HOST_TREE_SCORES = {
-    "Norway Spruce": 15,
-    "Spruce": 15,
-    "Beech": 15,
-    "Oak": 12,
-    "Pine": 10,
-}
+HOST_TREES = {"birch", "beech", "chestnut", "fir", "oak", "pine", "spruce"}
 
 
 def load_json(path: Path, default: Any = None) -> Any:
@@ -112,19 +106,11 @@ def month_day_window(dt: date) -> bool:
     return aug_15 <= dt <= dec_01
 
 
-def lunar_phase_fraction(day: date) -> float:
-    known_new_moon = datetime(2000, 1, 6)
-    days_since = (datetime.combine(day, datetime.min.time()) - known_new_moon).days
-    cycle = 29.53
-    return (days_since % cycle) / cycle
-
-
-
 SCHEMA_VERSION = 3
 # Bump when the scoring rules change; forces every stored daily score to be recomputed.
 # Score penalty applied 1..N days after a visit that found nothing (flush not started yet)
 NO_FIND_PENALTY = (25, 20, 15, 10, 5)
-MODEL_VERSION = 7  # 7: low measured soil moisture penalizes the score even without same-day rain
+MODEL_VERSION = 8  # 8: score uses 20-day temperature and 26-day rainfall; removes calendar/lunar bonuses
 ARCHIVE_LAG_DAYS = 5
 SOURCE_ARCHIVE = "archive"
 SOURCE_FORECAST = "forecast"
@@ -150,10 +136,11 @@ FRIDAY_POLICIES = (FRIDAY_POLICY_THURSDAY_ONLY, FRIDAY_POLICY_ALL_ABOVE)
 
 MIN_ALERT_GAP_DAYS = 5
 AFFINITY_LOOKBACK_DAYS = 730  # "proven spot affinity" only counts harvests from the last 2 years
-RAIN_TRIGGER_MM = 10.0
-THERMAL_SHOCK_DROP_C = 5.0
-TRIGGER_LOOKBACK_DAYS = 14
 RUNOFF_MIN_DAY_MM = 15.0
+FLUSH_RAIN_WINDOW_DAYS = 26
+FLUSH_TEMPERATURE_WINDOW_DAYS = 20
+FLUSH_RAIN_SCORE_MAX = 30
+FLUSH_TEMPERATURE_SCORE_MAX = 20
 VERDICT_LOW_TIERS = (
     (25, "🚫 Not worth it"),
     (45, "😐 Unlikely"),
@@ -553,75 +540,26 @@ def _precip(rec: Optional[Dict[str, Any]]) -> float:
     return float((rec or {}).get("precipitation_sum") or 0)
 
 
-def _sum_precip(recs: Iterable[Dict[str, Any]]) -> float:
-    return sum(_precip(r) for r in recs)
+def observed_rainfall_total(hist: History, day: date, days: int) -> Optional[float]:
+    """Return a rolling rain total only when at least 80% of its daily values are present."""
+    records = hist.window(day, days)
+    values = [r.get("precipitation_sum") for r in records if r.get("precipitation_sum") is not None]
+    if len(values) < math.ceil(days * 0.8):
+        return None
+    return sum(float(value) for value in values)
 
 
-def moisture_retention_days(location: Dict[str, Any]) -> int:
-    """Length (days) of the rain window that still counts as 'wet' for this spot.
-
-    Base is 7 days. North aspect holds moisture 3 days longer; south dries 1.5x faster (7 / 1.5 ~ 5 days).
-    Dense canopy keeps +1 day, open/sparse canopy loses 1 day. Only the rain window is adjusted: the
-    grid soil-moisture value from the weather API cannot see aspect or canopy.
-    """
-    aspect = str(location.get("aspect", "")).lower()
-    days = 7.0
-    if aspect == "north":
-        days += 3
-    elif aspect == "south":
-        days /= 1.5
-    density = str(location.get("tree_density", "")).lower()
-    if "dense" in density:
-        days += 1
-    elif "open" in density or "sparse" in density:
-        days -= 1
-    return max(3, int(round(days)))
-
-
-def is_thermal_shock(hist: History, day: date) -> bool:
-    """Max temperature drops >= THERMAL_SHOCK_DROP_C below the mean of the previous 3 days."""
-    rec = hist.get(day)
-    if not rec or rec.get("temperature_2m_max") is None:
-        return False
-    prev = [r["temperature_2m_max"] for r in hist.between(day - timedelta(days=3), day - timedelta(days=1)) if r.get("temperature_2m_max") is not None]
-    if len(prev) < 2:
-        return False
-    return (sum(prev) / len(prev)) - float(rec["temperature_2m_max"]) >= THERMAL_SHOCK_DROP_C
-
-
-def find_flush_trigger(hist: History, day: date) -> Optional[Tuple[date, str]]:
-    """Scan the 14-day lookback for a rain / thermal-shock trigger whose 7-12 day fruiting lag lands on `day`.
-
-    Kinds: 'rain+shock' (coupled, strongest), 'rain', 'shock'. Returns the most recent active trigger.
-    """
-    for lag in range(7, 13):
-        t = day - timedelta(days=lag)
-        rec = hist.get(t)
-        if rec is None:
-            continue
-        rain = _precip(rec) >= RAIN_TRIGGER_MM or _precip(hist.get(t + timedelta(days=1))) >= RAIN_TRIGGER_MM
-        shock = is_thermal_shock(hist, t)
-        if rain and shock:
-            return t, "rain+shock"
-        if rain:
-            return t, "rain"
-        if shock:
-            return t, "shock"
-    return None
-
-
-def find_drought_rebound(hist: History, day: date) -> Optional[date]:
-    """Event rule: >=45 mm over 7 days (ending e) after a dry spell (<100 mm in the 120 days before that burst).
-
-    Returns the event day e if it happened within the last 14 days.
-    """
-    for back in range(0, 15):
-        e = day - timedelta(days=back)
-        if _sum_precip(hist.window(e, 7)) < 45:
-            continue
-        if _sum_precip(hist.window(e - timedelta(days=7), 120)) < 100:
-            return e
-    return None
+def mean_air_temperature(hist: History, day: date, days: int) -> Optional[float]:
+    """Mean daily air temperature, using (max + min) / 2 when at least 80% of days are complete."""
+    records = hist.window(day, days)
+    values = [
+        (float(r["temperature_2m_max"]) + float(r["temperature_2m_min"])) / 2
+        for r in records
+        if r.get("temperature_2m_max") is not None and r.get("temperature_2m_min") is not None
+    ]
+    if len(values) < math.ceil(days * 0.8):
+        return None
+    return sum(values) / len(values)
 
 
 def has_runoff(hist: History, day: date) -> bool:
@@ -636,18 +574,8 @@ def has_runoff(hist: History, day: date) -> bool:
     return False
 
 
-def post_rain_wind_days(hist: History, day: date) -> int:
-    """Days with max wind > 30 km/h in the 5 days after the most recent rain event (>=10 mm) in the last 14 days."""
-    events = [r for r in hist.window(day - timedelta(days=1), TRIGGER_LOOKBACK_DAYS) if _precip(r) >= RAIN_TRIGGER_MM]
-    if not events:
-        return 0
-    event_day = parse_date(events[-1]["date"])
-    after = hist.between(event_day + timedelta(days=1), min(event_day + timedelta(days=5), day))
-    return sum(1 for r in after if r.get("wind_speed_10m_max") is not None and r["wind_speed_10m_max"] > 30)
-
-
 def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], historical: Any, past_harvests: List[Dict[str, Any]]) -> Tuple[int, str, str]:
-    """Score one day using only data on/before that day (no look-ahead, no dependence on 'today')."""
+    """Return a 0–100 favourability index, not a calibrated probability."""
     hist = historical if isinstance(historical, History) else History(historical)
     score = 0
     status = "🟡 Monitoring"
@@ -661,82 +589,37 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
     if not month_day_window(d):
         return 0, "❌ Outside mushroom season", ""
 
-    if daily.get("temperature_2m_min") is not None and daily["temperature_2m_min"] < -2:
-        frost_count = sum(
-            1 for rec in hist.window(d, 7)
-            if (rec.get("temperature_2m_min") is not None and rec["temperature_2m_min"] < -2)
-            or (rec.get("soil_temperature_0_to_7cm_mean") is not None and rec["soil_temperature_0_to_7cm_mean"] < 3)
+    rainfall = observed_rainfall_total(hist, d, FLUSH_RAIN_WINDOW_DAYS)
+    if rainfall is not None:
+        score += round(min(FLUSH_RAIN_SCORE_MAX, rainfall * FLUSH_RAIN_SCORE_MAX / 100))
+
+    average_temperature = mean_air_temperature(hist, d, FLUSH_TEMPERATURE_WINDOW_DAYS)
+    if average_temperature is not None:
+        score += max(
+            0,
+            round(FLUSH_TEMPERATURE_SCORE_MAX - abs(average_temperature - 13) * 2),
         )
-        if frost_count >= 2:
-            return 0, "❄️ SEASON TERMINATED BY FROST", ""
-
-    soil_temp = daily.get("soil_temperature_0_to_7cm_mean")
-    if soil_temp is not None and soil_temp > 20:
-        return 0, "🔥 SEASON DELAYED BY HIGH SOIL TEMP", ""
-    if soil_temp is not None and 10 <= soil_temp <= 18:
-        score += 15
-
-    rainfall_120 = _sum_precip(hist.window(d, 120))
-    rainfall_recent = _sum_precip(hist.window(d, moisture_retention_days(location)))
-    rebound = find_drought_rebound(hist, d)
-    if rebound is not None:
-        # Drought rebound / super-flush is an event: bonus applies for 14 days after the breaking rain,
-        # with an extra boost when the usual 7-14 day mycelial response window is reached.
-        score += 15
-        if (d - rebound).days >= 7:
-            score += 10
-        status = "🔥 DROUGHT BROKEN - High potential for massive super-flush!"
-    elif rainfall_120 < 100:
-        status = "🔎 No mushrooms found (field observation)" if no_find_today else "TOO DRY - DROUGHT UNBROKEN"
-        return 20, status, ""
-    elif rainfall_recent >= 20:
-        score += 30
-
-    trigger = find_flush_trigger(hist, d)
-    if trigger is not None:
-        score += {"rain+shock": 25, "rain": 10, "shock": 10}[trigger[1]]
-        # Weekend timing: trigger lag lands the flush on Fri/Sat/Sun (+15) or Mon/Tue/Wed (-20).
-        if d.weekday() in (4, 5, 6):
-            score += 15
-        elif d.weekday() in (0, 1, 2):
-            score -= 20
 
     if has_runoff(hist, d):
-        score -= 10
+        score -= 5
 
     soil_moisture = daily.get("soil_moisture_0_to_7cm_mean")
     if soil_moisture is not None:
         if soil_moisture > 0.35:
-            score += 10
+            score += 5
         elif soil_moisture <= 0.20:
-            score -= 20
+            score -= 10
             status = "TOO DRY - LOW SOIL MOISTURE"
 
-    for tree_name, pts in HOST_TREE_SCORES.items():
-        if tree_name in location.get("tree_species", []):
-            score += pts
-    if location.get("soil_pH") == "alkaline":
-        score = min(score, 60)
+    tree_species = location.get("tree_species", [])
+    normalized_species = {str(tree).strip().lower() for tree in tree_species} if isinstance(tree_species, list) else set()
+    if any(any(host in tree for host in HOST_TREES) for tree in normalized_species):
+        score += 10
+    if str(location.get("soil_pH", "")).strip().lower() == "alkaline":
+        score -= 5
 
-    if soil_temp is not None and 12 <= soil_temp <= 17:
-        score += 15
-
-    # Growth phase = the 12 days leading up to the scored day.
-    rh_values = [r["relative_humidity_2m_mean"] for r in hist.window(d, 12) if r.get("relative_humidity_2m_mean") is not None]
-    if rh_values and sum(rh_values) / len(rh_values) < 60:
-        score -= 15
-
-    if post_rain_wind_days(hist, d) > 2:
-        score -= 10
-
-    last_seen = location.get("last_seen_fly_agaric")
-    if last_seen and valid_date_string(last_seen):
-        if 0 <= (d - parse_date(last_seen)).days <= 10:
-            score += 15
-
-    phase = lunar_phase_fraction(d)
-    if 0.35 <= phase <= 0.65:
-        score += 5
+    if rainfall is not None and rainfall < 20 and status == "🟡 Monitoring":
+        status = "TOO DRY - LOW RECENT RAIN"
 
     for harvest in past_harvests:
         harvest_date = harvest.get("date")
@@ -753,9 +636,9 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
                     status = "🔎 Recent empty visit lowers odds"
             continue
         if harvest.get("cap_stage") == "buttons_young" and 1 <= delta_days <= 4:
-            score += 20
+            score += 10
         elif harvest.get("cap_stage") == "old_overripe" and 1 <= delta_days <= 7:
-            score -= 25
+            score -= 10
             status = "🍂 EXHAUSTION / POST-FLUSH COOLING OFF"
 
     # Proven spot affinity: >=2 medium/large harvests in the 2 years BEFORE the scored day -> +10.
@@ -765,7 +648,7 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
         and 0 < (d - parse_date(h["date"])).days <= AFFINITY_LOOKBACK_DAYS
     )
     if positive >= 2:
-        score += 10
+        score += 5
 
     # Quality / risk uses the 7-day average of daily max temperature.
     temps = [float(r["temperature_2m_max"]) for r in hist.window(d, 7) if r.get("temperature_2m_max") is not None]
@@ -880,58 +763,31 @@ def explain_score(location: Dict[str, Any], records: List[Dict[str, Any]], best_
         signals.append("a no-find field observation limits the score")
     elif "outside mushroom season" in status.lower():
         signals.append("this date is outside the model's mushroom season")
-    elif "terminated by frost" in status.lower():
-        signals.append("repeated frost conditions have ended the season")
-    elif "delayed by high soil temp" in status.lower():
-        signals.append("the soil is too warm for the season to score")
-    elif "too dry" in status.lower():
-        soil_moisture = daily.get("soil_moisture_0_to_7cm_mean")
-        if "soil moisture" in status.lower() and soil_moisture is not None:
-            signals.append(f"soil moisture is low at {float(soil_moisture):.3f} m³/m³")
-        else:
-            rain_120 = _sum_precip(hist.window(day, 120))
-            signals.append(f"only {rain_120:.0f} mm of rain fell in the past 120 days, so drought remains unbroken")
     else:
-        rebound = find_drought_rebound(hist, day)
-        if rebound is not None:
-            rain = _sum_precip(hist.window(rebound, 7))
-            signals.append(f"a drought-breaking {rain:.0f} mm of rain over 7 days around {format_display_date(rebound)}")
+        rainfall = observed_rainfall_total(hist, day, FLUSH_RAIN_WINDOW_DAYS)
+        if rainfall is not None:
+            signals.append(f"{rainfall:.0f} mm of rain over the preceding {FLUSH_RAIN_WINDOW_DAYS} days")
 
-        trigger = find_flush_trigger(hist, day)
-        if trigger is not None:
-            trigger_day, kind = trigger
-            if kind == "rain+shock":
-                description = "rain and a sharp temperature drop"
-            elif kind == "rain":
-                description = "heavy rain"
-            else:
-                description = "a sharp temperature drop"
-            lag = (day - trigger_day).days
-            signals.append(f"{description} on {format_display_date(trigger_day)} ({lag} days before)")
+        average_temperature = mean_air_temperature(hist, day, FLUSH_TEMPERATURE_WINDOW_DAYS)
+        if average_temperature is not None:
+            signals.append(
+                f"mean air temperature of {average_temperature:.1f}°C over the preceding {FLUSH_TEMPERATURE_WINDOW_DAYS} days"
+            )
 
-        rain_days = moisture_retention_days(location)
-        recent_rain = _sum_precip(hist.window(day, rain_days))
-        if recent_rain >= 20:
-            signals.append(f"{recent_rain:.0f} mm of recent rain in the past {rain_days} days")
-
-        soil_temp = daily.get("soil_temperature_0_to_7cm_mean")
-        if soil_temp is not None and 10 <= soil_temp <= 18:
-            signals.append(f"soil temperature is favourable at {float(soil_temp):.1f}°C")
         soil_moisture = daily.get("soil_moisture_0_to_7cm_mean")
-        if soil_moisture is not None and soil_moisture > 0.35:
-            signals.append("soil moisture is high")
-        humidity = [
-            r["relative_humidity_2m_mean"] for r in hist.window(day, 12)
-            if r.get("relative_humidity_2m_mean") is not None
-        ]
-        if humidity and sum(humidity) / len(humidity) < 60:
-            signals.append("low humidity is slightly reducing the score")
+        if soil_moisture is not None and soil_moisture <= 0.20:
+            signals.append(f"measured soil moisture is low at {float(soil_moisture):.3f} m³/m³")
+        elif soil_moisture is not None and soil_moisture > 0.35:
+            signals.append("measured soil moisture is high")
         if has_runoff(hist, day):
-            signals.append("concentrated heavy rain caused a runoff penalty")
+            signals.append("concentrated heavy rain may have caused runoff")
 
     if not signals:
         signals.append("no standout recent weather signal was found")
-    return "Key signals: " + "; ".join(signals) + ". The score also reflects local habitat and logged field observations."
+    return (
+        "Key signals: " + "; ".join(signals)
+        + ". This heuristic favourability index is not a measured chance; it also reflects local habitat and logged observations."
+    )
 
 
 def detect_run_mode(now: Optional[datetime] = None) -> str:
@@ -966,8 +822,6 @@ def status_category(status: Optional[str]) -> str:
         return "exhausted"
     if "too dry" in s:
         return "dry"
-    if "drought broken" in s or "super-flush" in s:
-        return "superflush"
     if "outside" in s:
         return "off_season"
     if "viable" in s:
@@ -1309,16 +1163,16 @@ __OBSERVATION_LOG__
     }
     var INFO = {
       weather: ['Weather indicators', [
-        'High and low show the forecast or recorded air temperature for that day. Soil temperature is the temperature near the surface where mushrooms grow. Moderate soil temperatures (10–18°C) help the score; above 20°C stops that day’s score, and repeated frost can end the season.',
-        'Rain shows the daily total. Recent rain helps keep a spot wet; the usual window is 7 days and is adjusted for the configured slope direction and canopy (roughly 4–11 days). The model also checks the longer 120-day rainfall history for drought.',
-        'Humidity is checked as a 12-day average; below 60% can lower the score. Soil moisture above 0.35 can help, while below 0.18 after more than 5 mm of rain can lower it.',
-        'Wind above 30 km/h on several days after rain can reduce the score. A day with at least 15 mm of concentrated rain can also cause runoff and a small penalty.',
-        'A rain trigger is at least 10 mm in a day. A sharp cooling signal means the high temperature fell at least 5°C below the average of the previous 3 days. The strongest signal is rain together with that cooling.',
+        'Daily high and low are averaged to form a 20-day mean air temperature signal. A value near 13°C contributes most to the heuristic score; this is based on one regional porcini study, not a universal optimum.',
+        'The main rain signal is the total over the preceding 26 days. That window reflects a published porcini field study; its point conversion is an uncalibrated index, not a yield prediction.',
+        'Measured 0–7 cm soil moisture is a smaller supporting signal. Soil texture and local calibration affect what a given volumetric moisture value means; soil temperature and air humidity do not directly add score points.',
+        'Concentrated heavy rain can apply a small runoff penalty. Temperature shocks, assumed slope/canopy rain-retention adjustments, and 120-day rainfall cutoffs are not used.',
         'Weather source “archive” means recorded past weather; “forecast” means weather-model data. Weather inputs guide the score; they do not confirm mushrooms are present.'
       ]],
       score: ['How the forecast score works', [
         'The weather feed supplies 7 forecast days in total (including today) and the previous 7 days of recent weather. That means it can score up to 6 calendar days after today; beyond that, this dashboard has no forward weather forecast. Older observed weather is kept in the archive.',
-        'For each scored day, the model looks for a rain or sharp-cooling signal 7–12 days earlier. It checks the recent 14-day period; a rain-and-cooling signal is stronger than either one alone. Recent rain, soil temperature and moisture, humidity, wind, drought, season, local tree/site settings and field observations also matter.',
+        'For each scored day, the model uses the preceding 26-day rainfall total and preceding 20-day mean air temperature when enough daily weather values are available. The score also includes measured soil moisture, a modest host-tree/site signal, and field observations.',
+        'The score does not vary by weekday or lunar phase. The reported study found associations in one central European beech-forest setting; applying it elsewhere needs local validation. No-find observations cap that date at 20 and reduce scores for five following days.',
         'The displayed percentage is a 0–100 favourability score, not a measured chance that mushrooms will be found. For example, 60% means the model rates conditions as fairly favourable; it does not mean a 60-in-100 guarantee. The usual alert threshold is 65.',
         'Verdict guide at the default 65 threshold: below 25 Not worth it; 25–44 Unlikely; 45–59 Long shot; 60–64 Worth a look; 65–74 Good chance – go; 75+ Definitely go for it. The go boundary follows the configured ALERT_THRESHOLD. Tags provide meaning in addition to the red-to-green score colour.',
         'The chart’s light rain and temperature lines add weather context on their own visible-range scales; missing readings leave gaps, and the score line remains the main signal.',
@@ -1328,7 +1182,7 @@ __OBSERVATION_LOG__
       observations: ['How observations affect the forecast', [
         'A visit with no mushrooms is valid evidence, not missing data. On that date it caps the score at 20, even if weather or other bonuses would have made it higher.',
         'A no-find observation also lowers scores on the next five days (the effect fades from day to day). It does not change unrelated dates.',
-        'Finding young/button mushrooms can raise scores over the following few days; an old/overripe find can lower scores while a flush cools off. Repeated medium or large finds can also add a small site-familiarity bonus.',
+        'A recent button-stage find modestly raises scores for a few days; an old/overripe find modestly lowers them. Repeated medium or large finds can add a small site-familiarity bonus. These weights are heuristic, not calibrated.',
         '🍄 marks a recorded find and ❌ marks a visit where none were found. Draft observations stay in this browser until submitted and accepted.'
       ]]
     };

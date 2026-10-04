@@ -23510,13 +23510,13 @@
         },
         {
           "date": "2026-09-29",
-          "source": "forecast",
+          "source": "archive",
           "precipitation_sum": 0.0,
-          "temperature_2m_max": 24.8,
-          "temperature_2m_min": 10.9,
-          "wind_speed_10m_max": 14.5,
+          "temperature_2m_max": 24.6,
+          "temperature_2m_min": 13.0,
+          "wind_speed_10m_max": 16.5,
           "soil_temperature_0_to_7cm_mean": 17.1,
-          "relative_humidity_2m_mean": 61,
+          "relative_humidity_2m_mean": 59,
           "soil_moisture_0_to_7cm_mean": 0.246,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
@@ -23568,7 +23568,7 @@
           "temperature_2m_min": 10.5,
           "wind_speed_10m_max": 6.6,
           "soil_temperature_0_to_7cm_mean": 15.1,
-          "relative_humidity_2m_mean": 89,
+          "relative_humidity_2m_mean": 90,
           "soil_moisture_0_to_7cm_mean": 0.234,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
@@ -23577,12 +23577,12 @@
           "date": "2026-10-04",
           "source": "forecast",
           "precipitation_sum": 0.0,
-          "temperature_2m_max": 19.4,
-          "temperature_2m_min": 11.1,
+          "temperature_2m_max": 20.0,
+          "temperature_2m_min": 7.4,
           "wind_speed_10m_max": 7.7,
-          "soil_temperature_0_to_7cm_mean": 14.1,
-          "relative_humidity_2m_mean": 82,
-          "soil_moisture_0_to_7cm_mean": 0.235,
+          "soil_temperature_0_to_7cm_mean": 14.0,
+          "relative_humidity_2m_mean": 83,
+          "soil_moisture_0_to_7cm_mean": 0.238,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
         },
@@ -23590,12 +23590,12 @@
           "date": "2026-10-05",
           "source": "forecast",
           "precipitation_sum": 0.0,
-          "temperature_2m_max": 20.6,
-          "temperature_2m_min": 8.3,
-          "wind_speed_10m_max": 10.2,
-          "soil_temperature_0_to_7cm_mean": 13.4,
-          "relative_humidity_2m_mean": 75,
-          "soil_moisture_0_to_7cm_mean": 0.23,
+          "temperature_2m_max": 20.7,
+          "temperature_2m_min": 4.0,
+          "wind_speed_10m_max": 10.0,
+          "soil_temperature_0_to_7cm_mean": 13.1,
+          "relative_humidity_2m_mean": 80,
+          "soil_moisture_0_to_7cm_mean": 0.232,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
         },
@@ -23603,38 +23603,38 @@
           "date": "2026-10-06",
           "source": "forecast",
           "precipitation_sum": 0.0,
-          "temperature_2m_max": 21.8,
-          "temperature_2m_min": 7.5,
-          "wind_speed_10m_max": 7.9,
-          "soil_temperature_0_to_7cm_mean": 13.7,
-          "relative_humidity_2m_mean": 76,
-          "soil_moisture_0_to_7cm_mean": 0.225,
+          "temperature_2m_max": 21.3,
+          "temperature_2m_min": 7.3,
+          "wind_speed_10m_max": 8.0,
+          "soil_temperature_0_to_7cm_mean": 13.5,
+          "relative_humidity_2m_mean": 79,
+          "soil_moisture_0_to_7cm_mean": 0.227,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
         },
         {
           "date": "2026-10-07",
           "source": "forecast",
-          "precipitation_sum": 0.2,
-          "temperature_2m_max": 22.8,
-          "temperature_2m_min": 6.4,
-          "wind_speed_10m_max": 9.0,
-          "soil_temperature_0_to_7cm_mean": 14.1,
+          "precipitation_sum": 0.0,
+          "temperature_2m_max": 22.5,
+          "temperature_2m_min": 7.3,
+          "wind_speed_10m_max": 9.5,
+          "soil_temperature_0_to_7cm_mean": 14.0,
           "relative_humidity_2m_mean": 77,
-          "soil_moisture_0_to_7cm_mean": 0.221,
-          "precip_peak_2h_mm": 0.2,
+          "soil_moisture_0_to_7cm_mean": 0.223,
+          "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
         },
         {
           "date": "2026-10-08",
           "source": "forecast",
-          "precipitation_sum": 3.1,
-          "temperature_2m_max": 14.6,
-          "temperature_2m_min": 6.3,
-          "wind_speed_10m_max": 10.8,
-          "soil_temperature_0_to_7cm_mean": 14.7,
-          "relative_humidity_2m_mean": 85,
-          "soil_moisture_0_to_7cm_mean": 0.22,
+          "precipitation_sum": 1.5,
+          "temperature_2m_max": 17.9,
+          "temperature_2m_min": 5.9,
+          "wind_speed_10m_max": 15.0,
+          "soil_temperature_0_to_7cm_mean": 13.0,
+          "relative_humidity_2m_mean": 83,
+          "soil_moisture_0_to_7cm_mean": 0.291,
           "precip_peak_2h_mm": 1.0,
           "precip_peak_basis": "hourly"
         },
@@ -23642,18 +23642,31 @@
           "date": "2026-10-09",
           "source": "forecast",
           "precipitation_sum": 0.0,
-          "temperature_2m_max": 13.8,
-          "temperature_2m_min": 5.9,
-          "wind_speed_10m_max": 10.2,
-          "soil_temperature_0_to_7cm_mean": 12.9,
-          "relative_humidity_2m_mean": 77,
-          "soil_moisture_0_to_7cm_mean": 0.225,
+          "temperature_2m_max": 14.2,
+          "temperature_2m_min": 5.6,
+          "wind_speed_10m_max": 18.2,
+          "soil_temperature_0_to_7cm_mean": 11.6,
+          "relative_humidity_2m_mean": 72,
+          "soil_moisture_0_to_7cm_mean": 0.313,
           "precip_peak_2h_mm": 0.0,
+          "precip_peak_basis": "hourly"
+        },
+        {
+          "date": "2026-10-10",
+          "source": "forecast",
+          "precipitation_sum": 0.6,
+          "temperature_2m_max": 12.4,
+          "temperature_2m_min": 8.1,
+          "wind_speed_10m_max": 11.4,
+          "soil_temperature_0_to_7cm_mean": 11.2,
+          "relative_humidity_2m_mean": 78,
+          "soil_moisture_0_to_7cm_mean": 0.321,
+          "precip_peak_2h_mm": 0.2,
           "precip_peak_basis": "hourly"
         }
       ],
-      "last_sync_date": "2026-10-03",
-      "record_count": 737,
+      "last_sync_date": "2026-10-04",
+      "record_count": 738,
       "merge_policy": "archive replaces forecast for the same date; forecast-only dates are kept; newer forecast replaces older forecast",
       "daily_scores": {
         "2024-10-03": {
@@ -25554,13 +25567,13 @@
         },
         "2025-08-15": {
           "score": 33,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
         "2025-08-16": {
           "score": 32,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
@@ -27744,7 +27757,7 @@
         },
         "2026-08-15": {
           "score": 8,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
@@ -27822,19 +27835,19 @@
         },
         "2026-08-28": {
           "score": 12,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
         "2026-08-29": {
           "score": 10,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
         "2026-08-30": {
           "score": 11,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
@@ -28016,7 +28029,7 @@
           "score": 25,
           "status": "⚠️ Watch closely",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
-          "source": "forecast"
+          "source": "archive"
         },
         "2026-09-30": {
           "score": 25,
@@ -28061,25 +28074,31 @@
           "source": "forecast"
         },
         "2026-10-07": {
-          "score": 18,
+          "score": 19,
           "status": "🔎 Recent empty visit lowers odds",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         },
         "2026-10-08": {
-          "score": 23,
+          "score": 24,
           "status": "⚠️ Watch closely",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         },
         "2026-10-09": {
-          "score": 27,
+          "score": 25,
+          "status": "⚠️ Watch closely",
+          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
+          "source": "forecast"
+        },
+        "2026-10-10": {
+          "score": 26,
           "status": "⚠️ Watch closely",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         }
       },
-      "scores_signature": "9:d7c5f055e116",
+      "scores_signature": "10:d7c5f055e116",
       "backtest": {
         "threshold": 65,
         "observed_days": 1,
@@ -37539,11 +37558,11 @@
         },
         {
           "date": "2026-09-29",
-          "source": "forecast",
+          "source": "archive",
           "precipitation_sum": 0.0,
-          "temperature_2m_max": 24.6,
-          "temperature_2m_min": 11.5,
-          "wind_speed_10m_max": 14.8,
+          "temperature_2m_max": 24.4,
+          "temperature_2m_min": 13.0,
+          "wind_speed_10m_max": 16.4,
           "soil_temperature_0_to_7cm_mean": 16.7,
           "relative_humidity_2m_mean": 61,
           "soil_moisture_0_to_7cm_mean": 0.217,
@@ -37597,7 +37616,7 @@
           "temperature_2m_min": 11.0,
           "wind_speed_10m_max": 6.2,
           "soil_temperature_0_to_7cm_mean": 15.3,
-          "relative_humidity_2m_mean": 90,
+          "relative_humidity_2m_mean": 91,
           "soil_moisture_0_to_7cm_mean": 0.202,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
@@ -37606,12 +37625,12 @@
           "date": "2026-10-04",
           "source": "forecast",
           "precipitation_sum": 0.0,
-          "temperature_2m_max": 19.5,
-          "temperature_2m_min": 9.3,
-          "wind_speed_10m_max": 7.1,
-          "soil_temperature_0_to_7cm_mean": 14.3,
-          "relative_humidity_2m_mean": 81,
-          "soil_moisture_0_to_7cm_mean": 0.206,
+          "temperature_2m_max": 20.1,
+          "temperature_2m_min": 7.4,
+          "wind_speed_10m_max": 8.0,
+          "soil_temperature_0_to_7cm_mean": 14.1,
+          "relative_humidity_2m_mean": 83,
+          "soil_moisture_0_to_7cm_mean": 0.209,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
         },
@@ -37619,12 +37638,12 @@
           "date": "2026-10-05",
           "source": "forecast",
           "precipitation_sum": 0.0,
-          "temperature_2m_max": 20.9,
-          "temperature_2m_min": 7.1,
-          "wind_speed_10m_max": 10.0,
-          "soil_temperature_0_to_7cm_mean": 13.8,
-          "relative_humidity_2m_mean": 76,
-          "soil_moisture_0_to_7cm_mean": 0.199,
+          "temperature_2m_max": 21.1,
+          "temperature_2m_min": 6.1,
+          "wind_speed_10m_max": 9.8,
+          "soil_temperature_0_to_7cm_mean": 13.6,
+          "relative_humidity_2m_mean": 75,
+          "soil_moisture_0_to_7cm_mean": 0.202,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
         },
@@ -37632,39 +37651,39 @@
           "date": "2026-10-06",
           "source": "forecast",
           "precipitation_sum": 0.0,
-          "temperature_2m_max": 22.1,
-          "temperature_2m_min": 8.8,
+          "temperature_2m_max": 21.5,
+          "temperature_2m_min": 7.0,
           "wind_speed_10m_max": 6.4,
-          "soil_temperature_0_to_7cm_mean": 14.2,
-          "relative_humidity_2m_mean": 73,
-          "soil_moisture_0_to_7cm_mean": 0.192,
+          "soil_temperature_0_to_7cm_mean": 14.0,
+          "relative_humidity_2m_mean": 75,
+          "soil_moisture_0_to_7cm_mean": 0.195,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
         },
         {
           "date": "2026-10-07",
           "source": "forecast",
-          "precipitation_sum": 0.2,
-          "temperature_2m_max": 23.3,
-          "temperature_2m_min": 8.0,
-          "wind_speed_10m_max": 8.8,
-          "soil_temperature_0_to_7cm_mean": 14.4,
-          "relative_humidity_2m_mean": 74,
-          "soil_moisture_0_to_7cm_mean": 0.185,
-          "precip_peak_2h_mm": 0.2,
+          "precipitation_sum": 0.0,
+          "temperature_2m_max": 22.5,
+          "temperature_2m_min": 7.2,
+          "wind_speed_10m_max": 9.4,
+          "soil_temperature_0_to_7cm_mean": 14.2,
+          "relative_humidity_2m_mean": 75,
+          "soil_moisture_0_to_7cm_mean": 0.189,
+          "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
         },
         {
           "date": "2026-10-08",
           "source": "forecast",
-          "precipitation_sum": 3.1,
-          "temperature_2m_max": 15.6,
-          "temperature_2m_min": 6.9,
-          "wind_speed_10m_max": 14.0,
-          "soil_temperature_0_to_7cm_mean": 15.1,
-          "relative_humidity_2m_mean": 81,
-          "soil_moisture_0_to_7cm_mean": 0.185,
-          "precip_peak_2h_mm": 1.0,
+          "precipitation_sum": 1.5,
+          "temperature_2m_max": 17.6,
+          "temperature_2m_min": 8.3,
+          "wind_speed_10m_max": 16.2,
+          "soil_temperature_0_to_7cm_mean": 13.2,
+          "relative_humidity_2m_mean": 83,
+          "soil_moisture_0_to_7cm_mean": 0.265,
+          "precip_peak_2h_mm": 0.6,
           "precip_peak_basis": "hourly"
         },
         {
@@ -37672,17 +37691,30 @@
           "source": "forecast",
           "precipitation_sum": 0.0,
           "temperature_2m_max": 14.1,
-          "temperature_2m_min": 5.7,
-          "wind_speed_10m_max": 11.0,
-          "soil_temperature_0_to_7cm_mean": 12.7,
-          "relative_humidity_2m_mean": 74,
-          "soil_moisture_0_to_7cm_mean": 0.196,
+          "temperature_2m_min": 6.6,
+          "wind_speed_10m_max": 20.2,
+          "soil_temperature_0_to_7cm_mean": 11.6,
+          "relative_humidity_2m_mean": 69,
+          "soil_moisture_0_to_7cm_mean": 0.288,
           "precip_peak_2h_mm": 0.0,
+          "precip_peak_basis": "hourly"
+        },
+        {
+          "date": "2026-10-10",
+          "source": "forecast",
+          "precipitation_sum": 2.9,
+          "temperature_2m_max": 11.2,
+          "temperature_2m_min": 8.9,
+          "wind_speed_10m_max": 13.2,
+          "soil_temperature_0_to_7cm_mean": 11.4,
+          "relative_humidity_2m_mean": 80,
+          "soil_moisture_0_to_7cm_mean": 0.3,
+          "precip_peak_2h_mm": 1.0,
           "precip_peak_basis": "hourly"
         }
       ],
-      "last_sync_date": "2026-10-03",
-      "record_count": 737,
+      "last_sync_date": "2026-10-04",
+      "record_count": 738,
       "merge_policy": "archive replaces forecast for the same date; forecast-only dates are kept; newer forecast replaces older forecast",
       "daily_scores": {
         "2024-10-03": {
@@ -39583,19 +39615,19 @@
         },
         "2025-08-15": {
           "score": 31,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
         "2025-08-16": {
           "score": 30,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
         "2025-08-17": {
           "score": 21,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
@@ -39613,19 +39645,19 @@
         },
         "2025-08-20": {
           "score": 19,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
         "2025-08-21": {
           "score": 17,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
         "2025-08-22": {
           "score": 15,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
@@ -41773,13 +41805,13 @@
         },
         "2026-08-15": {
           "score": 4,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
         "2026-08-16": {
           "score": 2,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
@@ -41827,43 +41859,43 @@
         },
         "2026-08-24": {
           "score": 9,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
         "2026-08-25": {
           "score": 10,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
         "2026-08-26": {
           "score": 11,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
         "2026-08-27": {
           "score": 11,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
         "2026-08-28": {
           "score": 8,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
         "2026-08-29": {
           "score": 7,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
         "2026-08-30": {
           "score": 9,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
@@ -42045,23 +42077,23 @@
           "score": 28,
           "status": "⚠️ Watch closely",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
-          "source": "forecast"
+          "source": "archive"
         },
         "2026-09-30": {
           "score": 18,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         },
         "2026-10-01": {
-          "score": 15,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "score": 14,
+          "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         },
         "2026-10-02": {
           "score": 13,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         },
@@ -42078,37 +42110,43 @@
           "source": "forecast"
         },
         "2026-10-05": {
-          "score": 0,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "score": 4,
+          "status": "🔎 Recent empty visit lowers odds",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         },
         "2026-10-06": {
           "score": 0,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         },
         "2026-10-07": {
-          "score": 4,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "score": 5,
+          "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         },
         "2026-10-08": {
-          "score": 9,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "score": 20,
+          "status": "🔎 Recent empty visit lowers odds",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         },
         "2026-10-09": {
-          "score": 16,
-          "status": "TOO DRY - LOW SOIL MOISTURE",
+          "score": 25,
+          "status": "⚠️ Watch closely",
+          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
+          "source": "forecast"
+        },
+        "2026-10-10": {
+          "score": 24,
+          "status": "⚠️ Watch closely",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         }
       },
-      "scores_signature": "9:7c53e21d4e1c",
+      "scores_signature": "10:7c53e21d4e1c",
       "backtest": {
         "threshold": 65,
         "observed_days": 1,
@@ -49032,8 +49070,8 @@
   },
   "schema_version": 3,
   "meta": {
-    "last_run_utc": "2026-10-03T19:25:44Z",
+    "last_run_utc": "2026-10-04T09:12:36Z",
     "last_run_mode": "default",
-    "model_version": 9
+    "model_version": 10
   }
 }

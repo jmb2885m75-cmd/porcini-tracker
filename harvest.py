@@ -233,6 +233,16 @@ def append_harvest(log: Dict[str, Any], record: Dict[str, Any], issue_number: Op
     return True
 
 
+def entry_id(entry: Any) -> str:
+    """Stable id of a deletable harvest_log.json entry ('' when it has neither submitted_at nor an issue number)."""
+    if not isinstance(entry, dict):
+        return ""
+    if entry.get("submitted_at"):
+        return f"{entry.get('location', '')}|{entry['submitted_at']}"
+    issue = entry.get("issue")
+    return f"issue-{issue}" if isinstance(issue, int) and not isinstance(issue, bool) else ""
+
+
 def _key(h: Dict[str, Any]) -> Tuple[Any, ...]:
     return (h.get("date"), h.get("observation_type", "harvest"), h.get("yield_tier"), h.get("cap_stage"), h.get("weight_g"))
 

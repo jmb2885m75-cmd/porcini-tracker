@@ -12,10 +12,12 @@ from typing import Any, Dict, Optional, Tuple
 
 import requests
 
-from harvest import (HARVEST_LOG_PATH, HarvestError, _read_locations, append_harvest, load_harvest_log,
+from harvest import (HARVEST_LOG_PATH, HarvestError, _read_locations, append_harvest, entry_id, load_harvest_log,
                      save_harvest_log, validate_harvest)
 
 ENDPOINT = "/api/submit-observation"
+DELETE_ENDPOINT = "/api/delete-observation"
+AUDIT_LOG_NAME = "harvest_deletions.log"
 FIELDS = ("location", "date", "observation_type", "yield_tier", "cap_stage", "weight_g", "notes")
 MAX_BODY = 16 * 1024
 _LOCK = threading.Lock()
@@ -45,6 +47,72 @@ def identify_submitter(token: str, repo: str = "", api_key: str = "") -> Optiona
     if perms.get("push") or perms.get("admin"):
         return str(user.json().get("login", "")) or None
     return None
+
+
+def identify_caller(token: str, repo: str = "", api_key: str = "") -> Optional[Tuple[str, bool]]:
+    """Return (name, is_admin) for a valid API key (admin) or GitHub token with push access; None if rejected."""
+    if not token:
+        return None
+    if api_key and hmac.compare_digest(token, api_key):
+        return "api-key", True
+    if not repo:
+        return None
+    headers = {"Authorization": "Bearer " + token, "Accept": "application/vnd.github+json"}
+    try:
+        user = requests.get("https://api.github.com/user", headers=headers, timeout=10)
+        info = requests.get(f"https://api.github.com/repos/{repo}", headers=headers, timeout=10)
+    except requests.RequestException:
+        return None
+    if user.status_code != 200 or info.status_code != 200:
+        return None
+    perms = info.json().get("permissions") or {}
+    name = str(user.json().get("login", ""))
+    if name and (perms.get("push") or perms.get("admin")):
+        return name, bool(perms.get("admin"))
+    return None
+
+
+def delete_observation(entry_key: Any, caller: str, is_admin: bool, log_path: Path = HARVEST_LOG_PATH) -> Tuple[int, Dict[str, Any]]:
+    """Remove one harvest_log.json entry (own entries, or any entry for an admin) and audit-log it. Returns (http_status, body)."""
+    if not isinstance(entry_key, str) or not entry_key:
+        return _fail(400, "An entry id is required.")
+    try:
+        with _LOCK:
+            log = load_harvest_log(log_path)
+            index = next((i for i, e in enumerate(log["harvests"]) if entry_id(e) == entry_key), None)
+            if index is None:
+                return _fail(404, "Entry not found; it may already have been deleted.")
+            entry = log["harvests"][index]
+            if not is_admin and entry.get("reporter") != caller:
+                return _fail(403, "You can only delete entries you submitted.")
+            del log["harvests"][index]
+            save_harvest_log(log, log_path)
+            audit = {"deleted_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "deleted_by": caller, "entry": entry}
+            with open(log_path.with_name(AUDIT_LOG_NAME), "a", encoding="utf-8") as fh:
+                fh.write(json.dumps(audit, ensure_ascii=False) + "\n")
+    except (HarvestError, OSError) as exc:
+        return _fail(500, f"Could not delete the observation: {exc}")
+    return 200, {"success": True, "message": "Observation deleted.", "entry": entry}
+
+
+def handle_delete_request(body: bytes, headers, log_path: Path = HARVEST_LOG_PATH) -> Tuple[int, Dict[str, Any]]:
+    """Authenticate (always required) and process one deletion."""
+    api_key = os.environ.get("OBSERVATION_API_KEY", "")
+    repo = os.environ.get("OBSERVATION_REPO", "")
+    if not (api_key or repo):
+        return _fail(403, "Deleting is disabled: set OBSERVATION_API_KEY or OBSERVATION_REPO on the server.")
+    auth = headers.get("Authorization", "")
+    token = auth[7:].strip() if auth.lower().startswith("bearer ") else headers.get("X-API-Key", "").strip()
+    caller = identify_caller(token, repo, api_key)
+    if caller is None:
+        return _fail(401, "A valid API key or GitHub token for the repository owner or a collaborator is required.")
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return _fail(400, "Request body is not valid JSON.")
+    if not isinstance(payload, dict):
+        return _fail(400, "Request body must be a JSON object.")
+    return delete_observation(payload.get("id"), caller[0], caller[1], log_path)
 
 
 def submit_observation(payload: Any, known_locations, log_path: Path = HARVEST_LOG_PATH, reporter: str = "") -> Tuple[int, Dict[str, Any]]:
@@ -112,9 +180,23 @@ def make_handler(config_path: Path, log_path: Path):
         def do_OPTIONS(self) -> None:
             self.send_response(204)
             self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Methods", "POST, DELETE, OPTIONS")
             self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key")
             self.end_headers()
+
+        def do_DELETE(self) -> None:
+            if self.path.split("?")[0] != DELETE_ENDPOINT:
+                return self._send(*_fail(404, "Not found."))
+            length = self._length()
+            if not 0 < length <= MAX_BODY:
+                return self._send(*_fail(400, "Request body missing or too large."))
+            self._send(*handle_delete_request(self.rfile.read(length), self.headers, log_path))
+
+        def _length(self) -> int:
+            try:
+                return int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                return -1
 
         def do_POST(self) -> None:
             if self.path.split("?")[0] != ENDPOINT:

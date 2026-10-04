@@ -215,7 +215,7 @@ class ScoringTests(unittest.TestCase):
         self.assertGreater(next_day[0], score[0])
 
     def test_weekday_does_not_change_favourability(self):
-        recs = series(date(2025, 9, 1), 40, precipitation_sum=3.0)
+        recs = series(date(2025, 8, 1), 60, precipitation_sum=3.0)
         h = p.History(recs)
         saturday, monday = date(2025, 9, 13), date(2025, 9, 15)
         sat_score = p.calculate_score_for_day(LOC, h.get(saturday), h, [])[0]
@@ -240,10 +240,10 @@ class ScoringTests(unittest.TestCase):
         day = date(2025, 10, 18)
         optimal = p.calculate_score_for_day(LOC, h.get(day), h, [])[0]
         for record in h.window(day - timedelta(days=1), 20):
-            record["temperature_2m_max"] = 16.0
-            record["temperature_2m_min"] = 2.0
+            record["temperature_2m_max"] = 12.0
+            record["temperature_2m_min"] = 0.0
         cooler = p.calculate_score_for_day(LOC, h.get(day), h, [])[0]
-        self.assertEqual(optimal - cooler, 8)
+        self.assertEqual(optimal - cooler, 4)
 
     def test_missing_weather_coverage_omits_rolling_signal(self):
         recs = series(date(2025, 9, 1), 50)
@@ -285,13 +285,46 @@ class ScoringTests(unittest.TestCase):
         self.assertIn("12 mm rain / 26 days", report)
         self.assertIn("12.8°C mean / 20 days", report)
 
-    def test_air_humidity_is_not_a_scoring_input(self):
+    def test_air_humidity_adjusts_score(self):
         recs = series(date(2025, 8, 20), 60, precipitation_sum=3.0)
         h = p.History(recs)
         day = recs[-1]
         base = p.calculate_score_for_day(LOC, day, h, [])[0]
         dry = series(date(2025, 8, 20), 60, precipitation_sum=3.0, relative_humidity_2m_mean=40.0)
-        self.assertEqual(base, p.calculate_score_for_day(LOC, dry[-1], p.History(dry), [])[0])
+        humid = series(date(2025, 8, 20), 60, precipitation_sum=3.0, relative_humidity_2m_mean=90.0)
+        self.assertEqual(base - 3, p.calculate_score_for_day(LOC, dry[-1], p.History(dry), [])[0])
+        self.assertEqual(base + 5, p.calculate_score_for_day(LOC, humid[-1], p.History(humid), [])[0])
+
+    def test_seasonal_params_and_location_overrides(self):
+        self.assertEqual(p.get_seasonal_params(date(2025, 9, 1))["rain_window"], 14)
+        self.assertEqual(p.get_seasonal_params(date(2025, 10, 1))["optimal_temp_range"], (8.0, 14.0))
+        self.assertEqual(p.get_seasonal_params(date(2025, 12, 1))["rain_window"], 30)
+        loc = {"optimal_temp_range": [10, 15], "seasonal_params": {"mid": {"rain_window": 20, "optimal_temp": [9, 11]}}}
+        mid = p.get_seasonal_params(date(2025, 10, 1), loc)
+        self.assertEqual((mid["rain_window"], mid["optimal_temp_range"]), (20, (9.0, 11.0)))
+        self.assertEqual(p.get_seasonal_params(date(2025, 9, 1), loc)["optimal_temp_range"], (10.0, 15.0))
+
+    def test_recency_weight_and_distribution_score(self):
+        ref = date(2025, 10, 1)
+        self.assertEqual(p.weight_by_recency(date(2025, 1, 1), ref), 1.0)
+        self.assertEqual(p.weight_by_recency(date(2020, 1, 1), ref), 0.5)
+        steady = p.History(series(date(2025, 9, 1), 40, precipitation_sum=3.0))
+        recs = series(date(2025, 9, 1), 40, precipitation_sum=0.0)
+        recs[10]["precipitation_sum"] = 78.0
+        burst = p.History(recs)
+        day = date(2025, 10, 5)
+        self.assertGreater(p.rainfall_distribution_score(steady, day), p.rainfall_distribution_score(burst, day))
+
+    def test_post_flush_bonus_and_calibration_messages(self):
+        recs = series(date(2025, 8, 20), 60, precipitation_sum=3.0)
+        h = p.History(recs)
+        day = recs[-1]
+        find = [{"date": (date.fromisoformat(day["date"]) - timedelta(days=10)).isoformat(), "yield_tier": "small"}]
+        base = p.calculate_score_for_day(LOC, day, h, [])
+        boosted = p.calculate_score_for_day(LOC, day, h, find)
+        self.assertEqual(boosted[0], base[0] + p.POST_FLUSH_BONUS)
+        msgs = p.calibration_messages("A", {"find_hit_rate": 0.4, "find_days": 6, "threshold": 55, "suggested_threshold": 45})
+        self.assertIn("ALERT_THRESHOLD=45", msgs[0])
 
     def test_low_soil_moisture_penalizes_without_same_day_rain(self):
         recs = series(date(2025, 8, 20), 60, precipitation_sum=3.0)

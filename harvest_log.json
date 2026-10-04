@@ -32,15 +32,6 @@
       "cap_stage": "prime",
       "submitted_at": "2026-10-04T17:34:58Z",
       "reporter": "jmb2885m75-cmd"
-    },
-    {
-      "location": "Fangschleuse",
-      "date": "2026-10-04",
-      "observation_type": "harvest",
-      "yield_tier": "medium",
-      "cap_stage": "prime",
-      "submitted_at": "2026-10-04T17:37:16Z",
-      "reporter": "jmb2885m75-cmd"
     }
   ]
 }

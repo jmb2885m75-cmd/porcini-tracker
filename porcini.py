@@ -110,7 +110,7 @@ SCHEMA_VERSION = 3
 # Bump when the scoring rules change; forces every stored daily score to be recomputed.
 # Score penalty applied 1..N days after a visit that found nothing (flush not started yet)
 NO_FIND_PENALTY = (25, 20, 15, 10, 5)
-MODEL_VERSION = 9  # 9: preceding-day windows and a historical 90-day drought signal
+MODEL_VERSION = 10  # 10: consistently formatted status labels
 ARCHIVE_LAG_DAYS = 5
 SOURCE_ARCHIVE = "archive"
 SOURCE_FORECAST = "forecast"
@@ -658,7 +658,7 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
             score += 5
         elif soil_moisture <= 0.20:
             score -= 10
-            status = "TOO DRY - LOW SOIL MOISTURE"
+            status = "💧 Too dry – low soil moisture"
 
     tree_species = location.get("tree_species", [])
     normalized_species = {str(tree).strip().lower() for tree in tree_species} if isinstance(tree_species, list) else set()
@@ -685,7 +685,7 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
             score += 10
         elif harvest.get("cap_stage") == "old_overripe" and 1 <= delta_days <= 7:
             score -= 10
-            status = "🍂 EXHAUSTION / POST-FLUSH COOLING OFF"
+            status = "🍂 Exhaustion / post-flush cooling off"
 
     # Prior medium/large finds at this site add a modest affinity signal.
     positive = sum(
@@ -821,52 +821,45 @@ def find_weekend_best(location: Dict[str, Any], records: List[Dict[str, Any]], h
 
 
 def explain_score(location: Dict[str, Any], records: List[Dict[str, Any]], best_day: str, status: str) -> str:
-    """Summarize the strongest weather signals behind a scored day without implying certainty."""
+    """Return concise weather context for a scored day."""
     try:
         day = parse_date(best_day)
     except (TypeError, ValueError):
-        return "Weather context is unavailable; local habitat and field observations also affect the score."
+        return "weather unavailable"
     hist = History(records)
     daily = hist.get(day)
     if not daily:
-        return "Weather context for this day is unavailable; local habitat and field observations also affect the score."
+        return "weather unavailable"
 
     signals = []
     if "no mushrooms found" in status.lower():
-        signals.append("a no-find field observation limits the score")
+        signals.append("no-find observation caps score")
     elif "outside mushroom season" in status.lower():
-        signals.append("this date is outside the model's mushroom season")
+        signals.append("outside season")
     else:
         rainfall = observed_rainfall_total(hist, day, FLUSH_RAIN_WINDOW_DAYS)
         if rainfall is not None:
-            signals.append(f"{rainfall:.0f} mm of rain during the {FLUSH_RAIN_WINDOW_DAYS} complete days before this date")
+            signals.append(f"{rainfall:.0f} mm rain / {FLUSH_RAIN_WINDOW_DAYS} days")
 
         average_temperature = mean_air_temperature(hist, day, FLUSH_TEMPERATURE_WINDOW_DAYS)
         if average_temperature is not None:
-            signals.append(
-                f"mean air temperature of {average_temperature:.1f}°C during the {FLUSH_TEMPERATURE_WINDOW_DAYS} complete days before this date"
-            )
+            signals.append(f"{average_temperature:.1f}°C mean / {FLUSH_TEMPERATURE_WINDOW_DAYS} days")
 
         rainfall_percentile = historical_rainfall_percentile(hist, day)
         if rainfall_percentile is not None:
-            signals.append(
-                f"90-day rainfall is at the {rainfall_percentile * 100:.0f}th percentile of comparable prior-year periods"
-            )
+            signals.append(f"90-day rain at {rainfall_percentile * 100:.0f}th percentile")
 
         soil_moisture = daily.get("soil_moisture_0_to_7cm_mean")
         if soil_moisture is not None and soil_moisture <= 0.20:
-            signals.append(f"measured soil moisture is low at {float(soil_moisture):.3f} m³/m³")
+            signals.append(f"soil moisture {float(soil_moisture):.3f} m³/m³")
         elif soil_moisture is not None and soil_moisture > 0.35:
-            signals.append("measured soil moisture is high")
+            signals.append("soil moisture high")
         if has_runoff(hist, day):
-            signals.append("concentrated heavy rain may have caused runoff")
+            signals.append("possible runoff")
 
     if not signals:
-        signals.append("no standout recent weather signal was found")
-    return (
-        "Key signals: " + "; ".join(signals)
-        + ". This heuristic favourability index is not a measured chance; it also reflects local habitat and logged observations."
-    )
+        signals.append("no standout weather signal")
+    return "; ".join(signals)
 
 
 def detect_run_mode(now: Optional[datetime] = None) -> str:
@@ -1044,6 +1037,8 @@ def build_alert_message(results: List[Tuple[str, int, str, str]], dashboard_url:
     else:
         lines = ["🍄 Weekend Porcini Forecast (Ranked):"]
     for index, result in enumerate(ranking, 1):
+        if index > 1:
+            lines.append("")
         name, score, best_day, status = result[:4]
         verdict = f"{'GO' if score >= threshold else 'NO-GO'} - " if mode == MODE_FINAL else ""
         tag = score_verdict_tag(score, status, threshold)
@@ -1811,7 +1806,7 @@ def main() -> int:
             "name": name,
             "best_score": best_score,
             "best_day": best_day,
-            "status": (status or "Monitoring") if best_day != "N/A" else "Weather data unavailable",
+            "status": (status or "🟡 Monitoring") if best_day != "N/A" else "📡 Weather data unavailable",
             "explanation": explain_score(location, records, best_day, status) if best_day != "N/A" else "",
             "soil_moisture": moisture,
             "quality": quality,
@@ -1822,7 +1817,7 @@ def main() -> int:
         })
 
         available = best_day != "N/A"
-        current_status = (status or "Monitoring") if available else "Weather data unavailable"
+        current_status = (status or "🟡 Monitoring") if available else "📡 Weather data unavailable"
         send = False
         loc_state = alert_state["locations"].get(name, {})
         if mode == MODE_FINAL and available:

@@ -112,7 +112,7 @@ class VerdictTests(unittest.TestCase):
             ("❌ Outside mushroom season", "🍂 Off season"),
             ("❄️ SEASON TERMINATED BY FROST", "❄️ Season over"),
             ("🔥 SEASON DELAYED BY HIGH SOIL TEMP", "🔥 Too warm – wait"),
-            ("TOO DRY - DROUGHT UNBROKEN", "💧 Too dry – wait"),
+            ("💧 Too dry – drought unbroken", "💧 Too dry – wait"),
             ("🔎 No mushrooms found (field observation)", "🔎 No mushrooms found (field observation)"),
         ]
         for status, expected in cases:
@@ -140,6 +140,18 @@ class ModeTests(unittest.TestCase):
         self.assertIn("GO - 70/100 index", p.build_alert_message(r, "u", p.MODE_FINAL, 65))
         self.assertIn("70/100 index – 👍 Favourable conditions (Fri 2025-10-03)", p.build_alert_message(r, "u"))
         self.assertIn("Forecast", p.build_alert_message(r, "u"))
+
+    def test_ranked_entries_and_dashboard_have_one_blank_line_between_them(self):
+        message = p.build_alert_message(
+            [
+                ("A", 70, "Fri 2025-10-03", "⚠️ Watch closely", "first explanation"),
+                ("B", 60, "Sat 2025-10-04", "⚠️ Watch closely", "second explanation"),
+            ],
+            "https://example.test",
+        )
+        self.assertIn("Why: first explanation\n\n2.", message)
+        self.assertIn("Why: second explanation\n\n🌐 Dashboard: https://example.test", message)
+        self.assertNotIn("Why: second explanation\n\n\n🌐 Dashboard", message)
 
 
 LOC = {"tree_species": ["Spruce"], "aspect": "", "tree_density": "", "soil_pH": "acidic"}
@@ -251,8 +263,10 @@ class ScoringTests(unittest.TestCase):
         trigger_record = next(r for r in recs if r["date"] == trigger.isoformat())
         trigger_record.update(precipitation_sum=12.0, temperature_2m_max=14.0)
         explanation = p.explain_score(LOC, recs, p.format_display_date(target), "✅ Viable conditions")
-        self.assertIn("mean air temperature", explanation)
-        self.assertIn("26 complete days before this date", explanation)
+        self.assertIn("12.8°C mean / 20 days", explanation)
+        self.assertIn("12 mm rain / 26 days", explanation)
+        self.assertNotIn("Key signals", explanation)
+        self.assertNotIn("not a measured chance", explanation)
 
         message = p.build_alert_message(
             [("Oak & Beech Spot", 82, p.format_display_date(target), "✅ Viable conditions", explanation)],
@@ -268,8 +282,8 @@ class ScoringTests(unittest.TestCase):
               "harvests": [], "backtest": {}}],
         )
         self.assertIn("score-explanation", report)
-        self.assertIn("26 complete days before this date", report)
-        self.assertIn("mean air temperature", report)
+        self.assertIn("12 mm rain / 26 days", report)
+        self.assertIn("12.8°C mean / 20 days", report)
 
     def test_air_humidity_is_not_a_scoring_input(self):
         recs = series(date(2025, 8, 20), 60, precipitation_sum=3.0)
@@ -286,9 +300,38 @@ class ScoringTests(unittest.TestCase):
         dry_day = dict(recs[-1], soil_moisture_0_to_7cm_mean=0.195, precipitation_sum=0.0)
         dry = p.calculate_score_for_day(LOC, dry_day, hist, [])
         self.assertEqual(dry[0], baseline[0] - 10)
-        self.assertEqual(dry[1], "TOO DRY - LOW SOIL MOISTURE")
+        self.assertEqual(dry[1], "💧 Too dry – low soil moisture")
+        self.assertTrue(dry[1].startswith("💧"))
+        self.assertFalse(dry[1].isupper())
         explanation = p.explain_score(LOC, recs[:-1] + [dry_day], p.format_display_date(date(2025, 10, 18)), dry[1])
-        self.assertIn("soil moisture is low at 0.195 m³/m³", explanation)
+        self.assertIn("soil moisture 0.195 m³/m³", explanation)
+
+    def test_exhaustion_status_is_icon_prefixed_sentence_case(self):
+        recs = series(date(2025, 8, 20), 60, precipitation_sum=3.0)
+        hist = p.History(recs)
+        day = date(2025, 10, 18)
+        harvests = [{"date": (day - timedelta(days=1)).isoformat(), "cap_stage": "old_overripe"}]
+        status = p.calculate_score_for_day(LOC, hist.get(day), hist, harvests)[1]
+        self.assertEqual(status, "🍂 Exhaustion / post-flush cooling off")
+        self.assertTrue(status.startswith("🍂"))
+        self.assertFalse(status.isupper())
+
+    def test_compact_explanation_special_cases_and_fallbacks(self):
+        day = date(2025, 10, 18)
+        recs = series(date(2025, 10, 18), 1, precipitation_sum=None, temperature_2m_max=None,
+                      temperature_2m_min=None, soil_moisture_0_to_7cm_mean=None)
+        display_day = p.format_display_date(day)
+        self.assertEqual(p.explain_score(LOC, recs, display_day, "🔎 No mushrooms found (field observation)"),
+                         "no-find observation caps score")
+        self.assertEqual(p.explain_score(LOC, recs, display_day, "❌ Outside mushroom season"),
+                         "outside season")
+        self.assertEqual(p.explain_score(LOC, recs, display_day, "⚠️ Watch closely"),
+                         "no standout weather signal")
+        self.assertEqual(p.explain_score(LOC, recs, "N/A", "⚠️ Watch closely"), "weather unavailable")
+
+    def test_new_status_labels_keep_their_categories(self):
+        self.assertEqual(p.status_category("💧 Too dry – low soil moisture"), "dry")
+        self.assertEqual(p.status_category("🍂 Exhaustion / post-flush cooling off"), "exhausted")
 
     def test_high_soil_moisture_adds_five_points(self):
         recs = series(date(2025, 8, 20), 60, precipitation_sum=3.0)
@@ -442,7 +485,7 @@ class WeatherFailureTests(unittest.TestCase):
     def test_dashboard_restores_weather_overview_and_marks_missing_scores(self):
         report = p.generate_dashboard_html(
             {"ALERT_THRESHOLD": 65},
-            [{"name": "A", "best_score": 0, "best_day": "N/A", "status": "Weather data unavailable",
+            [{"name": "A", "best_score": 0, "best_day": "N/A", "status": "📡 Weather data unavailable",
               "quality": "", "soil_moisture": 0, "records": [], "scores": {}, "harvests": [], "backtest": {}}],
         )
         self.assertIn("Rain &amp; Temperature Overview", report)

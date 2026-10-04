@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 
 from dates import format_display_date, parse_user_date
-from harvest import HarvestError, build_observation_log, load_harvest_log, merge_harvests, summarize_observations
+from harvest import HarvestError, build_observation_log, entry_id, load_harvest_log, merge_harvests, summarize_observations
 
 CONFIG_PATH = Path("config.json")
 DB_PATH = Path("porcini_db.json")
@@ -1215,6 +1215,12 @@ __OBSERVATION_LOG__
     <div id="info-copy"></div>
     <button id="info-close" type="button">Close</button>
   </dialog>
+  <dialog id="delete-dialog" aria-labelledby="delete-title" aria-modal="true">
+    <h2 id="delete-title">Delete observation?</h2>
+    <p id="delete-copy"></p>
+    <button id="delete-confirm" type="button">Delete</button>
+    <button id="delete-cancel" type="button">Cancel</button>
+  </dialog>
   <script id="porcini-data" type="application/json">__DATA__</script>
   <script>
   (function () {
@@ -1572,6 +1578,73 @@ __OBSERVATION_LOG__
       }
       lf.onchange = filterLog; tf.onchange = filterLog; filterLog();
     })();
+    (function () {
+      var dlg = $('delete-dialog'), body = $('log-rows');
+      if (!dlg || !body) return;
+      var pending = null;
+      function status(t) { $('delete-status').textContent = t; }
+      function entryId(e) {
+        if (e.submitted_at) return (e.location || '') + '|' + e.submitted_at;
+        return typeof e.issue === 'number' ? 'issue-' + e.issue : '';
+      }
+      function gh(path, opts, key) {
+        opts = opts || {};
+        opts.headers = Object.assign({ 'Accept': 'application/vnd.github+json', 'Authorization': 'Bearer ' + key, 'X-GitHub-Api-Version': '2022-11-28' }, opts.headers || {});
+        return fetch('https://api.github.com' + path, opts).then(function (r) {
+          return r.json().catch(function () { return {}; }).then(function (b) {
+            if (!r.ok) { var err = new Error(b.message || ('GitHub error ' + r.status)); err.status = r.status; throw err; }
+            return b;
+          });
+        });
+      }
+      function deleteEntry(id, key) {
+        var file = '/repos/' + D.repo + '/contents/harvest_log.json', ref = encodeURIComponent(D.branch || 'main');
+        return Promise.all([gh('/user', {}, key), gh('/repos/' + D.repo, {}, key), gh(file + '?ref=' + ref, {}, key)]).then(function (res) {
+          var login = res[0].login, perms = res[1].permissions || {}, meta = res[2];
+          if (!perms.push && !perms.admin) throw new Error('Your token needs write access to this repository.');
+          var log = JSON.parse(decodeURIComponent(escape(atob(meta.content.replace(/\s/g, '')))));
+          var idx = -1;
+          log.harvests.forEach(function (e, i) { if (idx < 0 && entryId(e) === id) idx = i; });
+          if (idx < 0) { var gone = new Error('Entry not found; it may already have been deleted.'); gone.gone = true; throw gone; }
+          var removed = log.harvests[idx];
+          if (!perms.admin && removed.reporter !== login) throw new Error('You can only delete entries you submitted.');
+          log.harvests.splice(idx, 1);
+          var text = JSON.stringify(log, null, 2) + '\n';
+          return gh(file, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              message: 'Delete observation ' + id + ' (deleted by ' + login + ')\n\nRemoved entry: ' + JSON.stringify(removed),
+              content: btoa(unescape(encodeURIComponent(text))), sha: meta.sha, branch: D.branch || 'main'
+            })
+          }, key);
+        });
+      }
+      body.addEventListener('click', function (ev) {
+        var btn = ev.target.closest && ev.target.closest('.del-btn');
+        if (!btn) return;
+        pending = btn.closest('tr');
+        var c = pending.children;
+        $('delete-copy').textContent = 'Delete the ' + c[2].textContent.trim() + ' entry for ' + c[1].textContent + ' on ' + c[0].textContent + '? This cannot be undone from the dashboard.';
+        dlg.showModal();
+      });
+      $('delete-cancel').onclick = function () { pending = null; dlg.close(); };
+      $('delete-confirm').onclick = function () {
+        var row = pending, key = '';
+        try { key = ($('lkey').value || localStorage.getItem(KEY_KEY) || '').trim(); } catch (e) { key = ($('lkey').value || '').trim(); }
+        dlg.close();
+        if (!row) return;
+        if (!key) { status('❌ Enter your GitHub token in the observation form first.'); return; }
+        status('Deleting…');
+        deleteEntry(row.dataset.id, key).then(function () {
+          row.remove(); status('✅ Entry deleted. Scores and charts update the next time the report is regenerated.');
+          $('log-type').onchange();
+        }).catch(function (err) {
+          if (err.gone) { row.remove(); $('log-type').onchange(); }
+          var hint = err.status === 403 || err.status === 404 ? ' The token needs Contents: Read and write on this repository.' : '';
+          status('❌ ' + err.message + hint);
+        });
+      };
+    })();
     refresh();
   })();
   </script>
@@ -1633,15 +1706,17 @@ def render_observation_log(entries: List[Dict[str, Any]], repo: str) -> str:
         issue = e.get("issue")
         link = f"<a href='https://github.com/{esc(repo)}/issues/{esc(issue)}' rel='noopener'>#{esc(issue)}</a>" if isinstance(issue, int) and not isinstance(issue, bool) else "—"
         weight = e.get("weight_g")
+        eid = entry_id(e) if str(e.get("origin", "")).startswith("log") else ""
+        action = f"<button type='button' class='del-btn' data-id=\"{esc(eid)}\">Delete</button>" if eid else "—"
         rows.append(
-            f"<tr data-location=\"{esc(e.get('location'))}\" data-type=\"{'no_mushrooms' if none else 'harvest'}\">"
+            f"<tr data-id=\"{esc(eid)}\" data-location=\"{esc(e.get('location'))}\" data-type=\"{'no_mushrooms' if none else 'harvest'}\">"
             f"<td>{esc(show_date(e['date']))}</td><td>{esc(e.get('location'))}</td>"
             f"<td class='{'type-none' if none else 'type-found'}'>{'❌ No mushrooms' if none else '🍄 Harvest'}</td>"
             f"<td>{esc(_TIER_LABELS.get(e.get('yield_tier'), e.get('yield_tier') or '—'))}</td>"
             f"<td>{esc(_STAGE_LABELS.get(e.get('cap_stage'), e.get('cap_stage') or '—'))}</td>"
             f"<td class='num'>{esc(weight) if weight not in (None, '') else '—'}</td>"
             f"<td class='notes'>{esc(e.get('notes') or '—')}</td><td>{esc(e.get('origin', ''))}</td>"
-            f"<td>{esc(e.get('reporter') or '—')}</td><td>{link}</td></tr>")
+            f"<td>{esc(e.get('reporter') or '—')}</td><td>{link}</td><td>{action}</td></tr>")
     orphans = sorted({str(e.get("location")) for e in entries if e.get("origin") == "log (location not configured)"})
     orphan_note = (f"<p class=\"meta orphan-note\">⚠️ Observations for locations that are no longer configured are still listed here "
                    f"but have no chart or score: {esc(', '.join(orphans))}. Add the location back to the config to see them in the Daily Score History.</p>") if orphans else ""
@@ -1658,7 +1733,8 @@ def render_observation_log(entries: List[Dict[str, Any]], repo: str) -> str:
       <div class="toolbar"><label for="log-loc">Location<select id="log-loc"><option value="">All locations</option>{options}</select></label>
       <label for="log-type">Type<select id="log-type"><option value="">All types</option><option value="harvest">Harvest</option><option value="no_mushrooms">No mushrooms</option></select></label>
       <span id="log-count" class="meta"></span></div>
-      <div class="table-wrap"><table class="log-table"><thead><tr><th>Date</th><th>Location</th><th>Type</th><th>Yield</th><th>Cap stage</th><th class="num">Weight g</th><th>Notes</th><th>Source</th><th>Reported by</th><th>Issue</th></tr></thead><tbody id="log-rows">{''.join(rows)}</tbody></table></div>
+      <p id="delete-status" class="note" aria-live="polite">Entries from the shared log can be deleted with your GitHub token (Contents: Read and write). You can delete your own entries; repository admins can delete any. Configured past harvests cannot be deleted here.</p>
+      <div class="table-wrap"><table class="log-table"><thead><tr><th>Date</th><th>Location</th><th>Type</th><th>Yield</th><th>Cap stage</th><th class="num">Weight g</th><th>Notes</th><th>Source</th><th>Reported by</th><th>Issue</th><th>Action</th></tr></thead><tbody id="log-rows">{''.join(rows)}</tbody></table></div>
     </div>"""
 
 

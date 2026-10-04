@@ -53,5 +53,43 @@ class SubmitObservationTests(unittest.TestCase):
             del os.environ["OBSERVATION_API_KEY"]
 
 
+class DeleteObservationTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.log = Path(self.tmp.name) / "harvest_log.json"
+        entries = [{"location": "Forest A", "date": "2024-09-01", "observation_type": "no_mushrooms",
+                    "submitted_at": "2024-09-02T10:00:00Z", "reporter": "me"},
+                   {"location": "Forest A", "date": "2024-09-03", "observation_type": "no_mushrooms", "issue": 7}]
+        self.log.write_text(json.dumps({"schema_version": 1, "harvests": entries}))
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_owner_deletes_and_audit_logged(self):
+        status, body = api.delete_observation("Forest A|2024-09-02T10:00:00Z", "me", False, self.log)
+        self.assertEqual((status, body["success"]), (200, True))
+        self.assertEqual(len(json.loads(self.log.read_text())["harvests"]), 1)
+        audit = (Path(self.tmp.name) / api.AUDIT_LOG_NAME).read_text()
+        self.assertIn('"deleted_by": "me"', audit)
+        self.assertEqual(api.delete_observation("Forest A|2024-09-02T10:00:00Z", "me", False, self.log)[0], 404)
+
+    def test_other_user_forbidden_admin_allowed(self):
+        self.assertEqual(api.delete_observation("Forest A|2024-09-02T10:00:00Z", "other", False, self.log)[0], 403)
+        self.assertEqual(api.delete_observation("issue-7", "other", False, self.log)[0], 403)
+        self.assertEqual(api.delete_observation("issue-7", "boss", True, self.log)[0], 200)
+        self.assertEqual(api.delete_observation("", "boss", True, self.log)[0], 400)
+
+    def test_delete_requires_auth_config(self):
+        self.assertEqual(api.handle_delete_request(b"{}", {}, self.log)[0], 403)
+        import os
+        os.environ["OBSERVATION_API_KEY"] = "secret"
+        try:
+            self.assertEqual(api.handle_delete_request(b"{}", {}, self.log)[0], 401)
+            body = json.dumps({"id": "issue-7"}).encode()
+            self.assertEqual(api.handle_delete_request(body, {"Authorization": "Bearer " + "secret"}, self.log)[0], 200)
+        finally:
+            del os.environ["OBSERVATION_API_KEY"]
+
+
 if __name__ == "__main__":
     unittest.main()

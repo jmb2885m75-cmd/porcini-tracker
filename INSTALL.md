@@ -30,7 +30,7 @@ and writes `porcini_report.html`. A separate GitHub issue workflow validates har
 
 1. Fork/clone the repository. Python 3.10+ and `pip install requests` are required for local runs.
 2. Configure `LOCATIONS` (name, `latitude`, `longitude`, `elevation_m`, `tree_species`, `tree_density`, `aspect`,
-   `soil_pH`, `past_harvests`, `last_seen_fly_agaric`) and `ALERT_THRESHOLD` (default 65) in the JSON configuration.
+   `soil_pH`, `past_harvests`, `last_seen_fly_agaric`) and `ALERT_THRESHOLD` (default 55) in the JSON configuration.
    Optional `FRIDAY_POLICY`: `thursday_alerted_only` (default; Friday confirmation only for spots alerted on Thursday) or
    `all_above_threshold` (Friday confirmation for every spot at or above `ALERT_THRESHOLD`).
    Harvest entries: `date`, `yield_tier` (small/medium/large), `cap_stage` (`buttons_young`, `prime`, `old_overripe`), optional `weight_g`, `notes`.

@@ -23593,9 +23593,9 @@
           "temperature_2m_max": 20.8,
           "temperature_2m_min": 3.6,
           "wind_speed_10m_max": 10.3,
-          "soil_temperature_0_to_7cm_mean": 12.9,
+          "soil_temperature_0_to_7cm_mean": 13.1,
           "relative_humidity_2m_mean": 80,
-          "soil_moisture_0_to_7cm_mean": 0.233,
+          "soil_moisture_0_to_7cm_mean": 0.234,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
         },
@@ -23606,9 +23606,9 @@
           "temperature_2m_max": 20.8,
           "temperature_2m_min": 8.3,
           "wind_speed_10m_max": 8.3,
-          "soil_temperature_0_to_7cm_mean": 13.4,
+          "soil_temperature_0_to_7cm_mean": 13.5,
           "relative_humidity_2m_mean": 81,
-          "soil_moisture_0_to_7cm_mean": 0.228,
+          "soil_moisture_0_to_7cm_mean": 0.229,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
         },
@@ -23619,9 +23619,9 @@
           "temperature_2m_max": 21.3,
           "temperature_2m_min": 7.9,
           "wind_speed_10m_max": 7.9,
-          "soil_temperature_0_to_7cm_mean": 13.2,
+          "soil_temperature_0_to_7cm_mean": 12.9,
           "relative_humidity_2m_mean": 79,
-          "soil_moisture_0_to_7cm_mean": 0.225,
+          "soil_moisture_0_to_7cm_mean": 0.226,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
         },
@@ -23632,9 +23632,9 @@
           "temperature_2m_max": 15.0,
           "temperature_2m_min": 7.1,
           "wind_speed_10m_max": 17.3,
-          "soil_temperature_0_to_7cm_mean": 13.2,
+          "soil_temperature_0_to_7cm_mean": 12.8,
           "relative_humidity_2m_mean": 89,
-          "soil_moisture_0_to_7cm_mean": 0.222,
+          "soil_moisture_0_to_7cm_mean": 0.231,
           "precip_peak_2h_mm": 3.0,
           "precip_peak_basis": "hourly"
         },
@@ -23645,9 +23645,9 @@
           "temperature_2m_max": 13.9,
           "temperature_2m_min": 7.9,
           "wind_speed_10m_max": 15.9,
-          "soil_temperature_0_to_7cm_mean": 12.0,
+          "soil_temperature_0_to_7cm_mean": 11.3,
           "relative_humidity_2m_mean": 72,
-          "soil_moisture_0_to_7cm_mean": 0.223,
+          "soil_moisture_0_to_7cm_mean": 0.25,
           "precip_peak_2h_mm": 1.32,
           "precip_peak_basis": "hourly"
         },
@@ -23658,9 +23658,9 @@
           "temperature_2m_max": 14.8,
           "temperature_2m_min": 8.6,
           "wind_speed_10m_max": 14.5,
-          "soil_temperature_0_to_7cm_mean": 12.7,
+          "soil_temperature_0_to_7cm_mean": 12.2,
           "relative_humidity_2m_mean": 81,
-          "soil_moisture_0_to_7cm_mean": 0.232,
+          "soil_moisture_0_to_7cm_mean": 0.285,
           "precip_peak_2h_mm": 0.73,
           "precip_peak_basis": "hourly"
         },
@@ -23671,9 +23671,9 @@
           "temperature_2m_max": 13.7,
           "temperature_2m_min": 8.0,
           "wind_speed_10m_max": 16.1,
-          "soil_temperature_0_to_7cm_mean": 12.0,
+          "soil_temperature_0_to_7cm_mean": 11.4,
           "relative_humidity_2m_mean": 76,
-          "soil_moisture_0_to_7cm_mean": 0.241,
+          "soil_moisture_0_to_7cm_mean": 0.341,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
         }
@@ -37676,9 +37676,9 @@
           "temperature_2m_max": 20.9,
           "temperature_2m_min": 6.0,
           "wind_speed_10m_max": 10.6,
-          "soil_temperature_0_to_7cm_mean": 13.4,
+          "soil_temperature_0_to_7cm_mean": 13.6,
           "relative_humidity_2m_mean": 75,
-          "soil_moisture_0_to_7cm_mean": 0.21,
+          "soil_moisture_0_to_7cm_mean": 0.216,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
         },
@@ -37689,9 +37689,9 @@
           "temperature_2m_max": 21.4,
           "temperature_2m_min": 7.1,
           "wind_speed_10m_max": 6.5,
-          "soil_temperature_0_to_7cm_mean": 13.7,
+          "soil_temperature_0_to_7cm_mean": 13.9,
           "relative_humidity_2m_mean": 76,
-          "soil_moisture_0_to_7cm_mean": 0.202,
+          "soil_moisture_0_to_7cm_mean": 0.208,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
         },
@@ -37702,9 +37702,9 @@
           "temperature_2m_max": 21.5,
           "temperature_2m_min": 8.2,
           "wind_speed_10m_max": 8.1,
-          "soil_temperature_0_to_7cm_mean": 13.5,
+          "soil_temperature_0_to_7cm_mean": 13.1,
           "relative_humidity_2m_mean": 76,
-          "soil_moisture_0_to_7cm_mean": 0.197,
+          "soil_moisture_0_to_7cm_mean": 0.204,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
         },
@@ -37715,9 +37715,9 @@
           "temperature_2m_max": 15.9,
           "temperature_2m_min": 8.4,
           "wind_speed_10m_max": 17.1,
-          "soil_temperature_0_to_7cm_mean": 13.4,
+          "soil_temperature_0_to_7cm_mean": 12.8,
           "relative_humidity_2m_mean": 86,
-          "soil_moisture_0_to_7cm_mean": 0.192,
+          "soil_moisture_0_to_7cm_mean": 0.213,
           "precip_peak_2h_mm": 2.8,
           "precip_peak_basis": "hourly"
         },
@@ -37728,9 +37728,9 @@
           "temperature_2m_max": 14.4,
           "temperature_2m_min": 7.9,
           "wind_speed_10m_max": 15.7,
-          "soil_temperature_0_to_7cm_mean": 12.0,
+          "soil_temperature_0_to_7cm_mean": 11.1,
           "relative_humidity_2m_mean": 72,
-          "soil_moisture_0_to_7cm_mean": 0.189,
+          "soil_moisture_0_to_7cm_mean": 0.238,
           "precip_peak_2h_mm": 0.55,
           "precip_peak_basis": "hourly"
         },
@@ -37741,9 +37741,9 @@
           "temperature_2m_max": 14.7,
           "temperature_2m_min": 8.8,
           "wind_speed_10m_max": 16.2,
-          "soil_temperature_0_to_7cm_mean": 12.6,
+          "soil_temperature_0_to_7cm_mean": 12.5,
           "relative_humidity_2m_mean": 78,
-          "soil_moisture_0_to_7cm_mean": 0.201,
+          "soil_moisture_0_to_7cm_mean": 0.258,
           "precip_peak_2h_mm": 1.0,
           "precip_peak_basis": "hourly"
         },
@@ -37754,9 +37754,9 @@
           "temperature_2m_max": 13.4,
           "temperature_2m_min": 8.1,
           "wind_speed_10m_max": 16.7,
-          "soil_temperature_0_to_7cm_mean": 11.9,
+          "soil_temperature_0_to_7cm_mean": 11.7,
           "relative_humidity_2m_mean": 75,
-          "soil_moisture_0_to_7cm_mean": 0.213,
+          "soil_moisture_0_to_7cm_mean": 0.29,
           "precip_peak_2h_mm": 0.2,
           "precip_peak_basis": "hourly"
         }
@@ -42170,20 +42170,20 @@
           "source": "forecast"
         },
         "2026-10-07": {
-          "score": 14,
-          "status": "💧 Too dry – low soil moisture",
+          "score": 24,
+          "status": "⚠️ Watch closely",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         },
         "2026-10-08": {
-          "score": 19,
-          "status": "💧 Too dry – low soil moisture",
+          "score": 29,
+          "status": "⚠️ Watch closely",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         },
         "2026-10-09": {
-          "score": 20,
-          "status": "💧 Too dry – low soil moisture",
+          "score": 30,
+          "status": "⚠️ Watch closely",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         },
@@ -49138,7 +49138,7 @@
   },
   "schema_version": 3,
   "meta": {
-    "last_run_utc": "2026-10-05T07:07:33Z",
+    "last_run_utc": "2026-10-05T07:08:05Z",
     "last_run_mode": "default",
     "model_version": 12
   }

@@ -130,7 +130,7 @@ FLUSH_DEPLETION_TIERS = ((1, 40), (3, 30), (7, 20), (14, 10))
 DEFAULT_DEPLETION_RECOVERY_DAYS = 14
 SMALL_HARVEST_DEPLETION_RECOVERY_DAYS = 10
 DEFAULT_EARLY_HARVEST_PENALTY_FACTOR = 0.5
-MODEL_VERSION = 13  # 13: rain saturation 60 mm, soil ramp, frost/heat, graded post-flush, host-tree matching; 12: flush depletion, lighter no-find penalty; 11: temp ranges, split rain, humidity, post-flush, seasonal params; 10: formatted status labels
+MODEL_VERSION = 14  # 14: progressive/repeated frost penalty; 13: rain saturation 60 mm, soil ramp, frost/heat, graded post-flush, host-tree matching; 12: flush depletion, lighter no-find penalty; 11: temp ranges, split rain, humidity, post-flush, seasonal params; 10: formatted status labels
 ARCHIVE_LAG_DAYS = 5
 SOURCE_ARCHIVE = "archive"
 SOURCE_FORECAST = "forecast"
@@ -184,7 +184,18 @@ LONG_TERM_RAIN_MIN_SAMPLES = 20
 FLUSH_RAIN_SCORE_MAX = 30
 RAIN_SATURATION_MM = 60.0  # rain total at which the rain score saturates
 VERY_FAVOURABLE_THRESHOLD = 75
+# Frost handling (porcini mycelium stops fruiting after hard/repeated freezes; caps freeze and rot):
+# a hard-freeze night (Tmin < FROST_TMIN_C) within the last FROST_RECENT_DAYS complete days costs FROST_PENALTY,
+# a lighter sub-zero night (Tmin < FROST_LIGHT_TMIN_C) costs FROST_LIGHT_PENALTY, and each further sub-zero
+# night in the last FROST_REPEAT_WINDOW_DAYS adds FROST_REPEAT_PENALTY_PER_NIGHT (capped), so one cold snap in a
+# mild autumn is damped only a little while repeated freezes suppress the score.
 FROST_TMIN_C = -2.0
+FROST_LIGHT_TMIN_C = 0.0
+FROST_RECENT_DAYS = 3
+FROST_REPEAT_WINDOW_DAYS = 14
+FROST_REPEAT_PENALTY_PER_NIGHT = 3
+FROST_REPEAT_PENALTY_MAX = 15
+FROST_LIGHT_PENALTY = 4
 HEAT_TMAX_C = 25.0
 FROST_PENALTY = 10
 HEAT_PENALTY = 5
@@ -658,6 +669,26 @@ def has_runoff(hist: History, day: date) -> bool:
     return False
 
 
+def frost_penalty(hist: History, day: date) -> int:
+    """Points to subtract for freezing nights in the recent window of complete days before `day`.
+
+    Combines a hard-freeze/light-frost penalty for the last FROST_RECENT_DAYS with a progressive penalty for
+    the number of sub-zero nights in the last FROST_REPEAT_WINDOW_DAYS. Days without Tmin are ignored.
+    """
+    def tmins(days: int) -> List[float]:
+        return [float(r["temperature_2m_min"]) for r in hist.window(day - timedelta(days=1), days) if r.get("temperature_2m_min") is not None]
+
+    recent = tmins(FROST_RECENT_DAYS)
+    penalty = 0
+    if any(t < FROST_TMIN_C for t in recent):
+        penalty += FROST_PENALTY
+    elif any(t < FROST_LIGHT_TMIN_C for t in recent):
+        penalty += FROST_LIGHT_PENALTY
+    frost_nights = sum(1 for t in tmins(FROST_REPEAT_WINDOW_DAYS) if t < FROST_LIGHT_TMIN_C)
+    penalty += min(FROST_REPEAT_PENALTY_MAX, FROST_REPEAT_PENALTY_PER_NIGHT * max(0, frost_nights - 1))
+    return penalty
+
+
 def _temp_range(value: Any) -> Optional[Tuple[float, float]]:
     try:
         low, high = float(value[0]), float(value[1])
@@ -837,9 +868,8 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
     if has_runoff(hist, d):
         score -= 5
 
+    score -= frost_penalty(hist, d)
     recent_days = hist.window(d - timedelta(days=1), 3)
-    if any(r.get("temperature_2m_min") is not None and float(r["temperature_2m_min"]) < FROST_TMIN_C for r in recent_days):
-        score -= FROST_PENALTY
     if any(r.get("temperature_2m_max") is not None and float(r["temperature_2m_max"]) > HEAT_TMAX_C for r in recent_days):
         score -= HEAT_PENALTY
 
@@ -923,6 +953,25 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
     if not status or status == "🟡 Monitoring":
         status = "✅ Viable conditions" if score >= DEFAULT_ALERT_THRESHOLD else "⚠️ Watch closely"
     return int(score), status, quality
+
+
+def score_breakdown(location: Dict[str, Any], daily: Dict[str, Any], hist: History) -> Dict[str, int]:
+    """Diagnostics: the weather-driven terms of calculate_score_for_day for one day (excludes harvest-log adjustments)."""
+    d = parse_date(daily["date"])
+    seasonal = get_seasonal_params(d, location)
+    rain = observed_rainfall_total(hist, d, seasonal["rain_window"])
+    recent = observed_rainfall_total(hist, d, RECENT_RAIN_WINDOW_DAYS)
+    temp = mean_air_temperature(hist, d, FLUSH_TEMPERATURE_WINDOW_DAYS)
+    soil = daily.get("soil_moisture_0_to_7cm_mean")
+    out = {
+        "rain": round(RECENT_RAIN_WEIGHT * rainfall_score((recent or 0) * seasonal["rain_window"] / RECENT_RAIN_WINDOW_DAYS)
+                      + BACKGROUND_RAIN_WEIGHT * rainfall_score(rain or 0)),
+        "rain_distribution": rainfall_distribution_score(hist, d, seasonal["rain_window"]) if rain is not None else 0,
+        "temperature": temperature_score(temp, seasonal["optimal_temp_range"]) if temp is not None else 0,
+        "soil_moisture": soil_moisture_points(float(soil)) if soil is not None else 0,
+        "frost": -frost_penalty(hist, d),
+    }
+    return out
 
 
 def location_signature(location: Dict[str, Any]) -> str:

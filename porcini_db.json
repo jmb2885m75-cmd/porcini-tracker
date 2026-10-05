@@ -50496,19 +50496,19 @@
           "source": "sample"
         },
         "2023-10-06": {
-          "score": 23,
+          "score": 33,
           "status": "💧 Too dry – low soil moisture",
           "quality": "",
           "source": "sample"
         },
         "2023-10-07": {
-          "score": 27,
+          "score": 32,
           "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "sample"
         },
         "2023-10-08": {
-          "score": 25,
+          "score": 30,
           "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "sample"
@@ -50520,13 +50520,13 @@
           "source": "sample"
         },
         "2023-10-10": {
-          "score": 31,
-          "status": "🌱 Flush depleted after harvest",
+          "score": 41,
+          "status": "⚠️ Watch closely",
           "quality": "",
           "source": "sample"
         },
         "2023-10-11": {
-          "score": 43,
+          "score": 53,
           "status": "💧 Too dry – low soil moisture",
           "quality": "",
           "source": "sample"
@@ -50538,43 +50538,43 @@
           "source": "sample"
         },
         "2023-10-13": {
-          "score": 58,
+          "score": 53,
           "status": "💧 Too dry – low soil moisture",
           "quality": "",
           "source": "sample"
         },
         "2023-10-14": {
-          "score": 58,
+          "score": 53,
           "status": "💧 Too dry – low soil moisture",
           "quality": "",
           "source": "sample"
         },
         "2023-10-15": {
-          "score": 58,
+          "score": 53,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-10-16": {
-          "score": 55,
+          "score": 50,
           "status": "💧 Too dry – low soil moisture",
           "quality": "",
           "source": "sample"
         },
         "2023-10-17": {
-          "score": 58,
+          "score": 53,
           "status": "💧 Too dry – low soil moisture",
           "quality": "",
           "source": "sample"
         },
         "2023-10-18": {
-          "score": 33,
+          "score": 35,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-10-19": {
-          "score": 28,
+          "score": 32,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
@@ -52698,32 +52698,32 @@
           "source": "archive"
         },
         "2024-10-07": {
-          "score": 61,
-          "status": "✅ Viable conditions",
+          "score": 41,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-10-08": {
-          "score": 62,
-          "status": "✅ Viable conditions",
+          "score": 47,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-10-09": {
-          "score": 63,
-          "status": "✅ Viable conditions",
+          "score": 48,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "",
           "source": "archive"
         },
         "2024-10-10": {
-          "score": 68,
-          "status": "✅ Viable conditions",
+          "score": 58,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "",
           "source": "archive"
         },
         "2024-10-11": {
-          "score": 67,
-          "status": "✅ Viable conditions",
+          "score": 57,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "",
           "source": "archive"
         },
@@ -57108,7 +57108,7 @@
           "source": "forecast"
         }
       },
-      "scores_signature": "13:b4f0fc460eae",
+      "scores_signature": "13:c1044583e3f1",
       "backtest": {
         "threshold": 65,
         "observed_days": 8,
@@ -57118,25 +57118,24 @@
         "no_finds_above_threshold": 0,
         "find_hit_rate": 0.143,
         "no_find_above_threshold_rate": 0.0,
-        "mean_score_on_find_days": 51.9,
+        "mean_score_on_find_days": 54.0,
         "mean_score_on_no_find_days": 26.0,
         "suggested_threshold": 45,
-        "true_false_negatives": 3,
+        "true_false_negatives": 2,
         "genuine_miss_dates": [
-          "2023-10-05",
           "2023-11-10",
           "2025-09-18"
         ],
-        "post_harvest_low_find_days": 3,
+        "post_harvest_low_find_days": 4,
         "post_harvest_false_positives": 0,
         "find_weekday_counts": {
           "Mon": 0,
           "Tue": 0,
           "Wed": 0,
-          "Thu": 2,
+          "Thu": 1,
           "Fri": 4,
           "Sat": 0,
-          "Sun": 1
+          "Sun": 2
         }
       }
     },
@@ -89028,7 +89027,7 @@
   },
   "schema_version": 3,
   "meta": {
-    "last_run_utc": "2026-10-05T11:09:57Z",
+    "last_run_utc": "2026-10-05T11:22:10Z",
     "last_run_mode": "default",
     "model_version": 13
   }

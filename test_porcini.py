@@ -232,7 +232,7 @@ class ScoringTests(unittest.TestCase):
         for record in h.window(day - timedelta(days=1), 26):
             record["precipitation_sum"] = 0.0
         dry_score = p.calculate_score_for_day(LOC, h.get(day), h, [])[0]
-        self.assertEqual(wet_score - dry_score, 8)
+        self.assertEqual(wet_score - dry_score, 13)
 
     def test_temperature_score_uses_20_day_mean_air_temperature(self):
         recs = series(date(2025, 9, 1), 50, temperature_2m_max=20.0, temperature_2m_min=6.0)
@@ -333,7 +333,7 @@ class ScoringTests(unittest.TestCase):
         baseline = p.calculate_score_for_day(LOC, recs[-1], hist, [])
         dry_day = dict(recs[-1], soil_moisture_0_to_7cm_mean=0.195, precipitation_sum=0.0)
         dry = p.calculate_score_for_day(LOC, dry_day, hist, [])
-        self.assertEqual(dry[0], baseline[0] - 10)
+        self.assertEqual(dry[0], baseline[0] - 10 - p.soil_moisture_points(recs[-1]["soil_moisture_0_to_7cm_mean"]))
         self.assertEqual(dry[1], "💧 Too dry – low soil moisture")
         self.assertTrue(dry[1].startswith("💧"))
         self.assertFalse(dry[1].isupper())
@@ -367,17 +367,34 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(p.status_category("💧 Too dry – low soil moisture"), "dry")
         self.assertEqual(p.status_category("🍂 Exhaustion / post-flush cooling off"), "exhausted")
 
+    def test_soil_moisture_ramp_host_trees_and_season_override(self):
+        self.assertEqual([p.soil_moisture_points(v) for v in (0.1, 0.2, 0.28, 0.35, 0.5)], [-10, -10, 0, 5, 5])
+        self.assertTrue(p.is_host_tree("Silver Birch"))
+        self.assertFalse(p.is_host_tree("firethorn"))
+        self.assertFalse(p.month_day_window(date(2025, 8, 20), {"season_start": "09-01"}))
+        self.assertTrue(p.month_day_window(date(2025, 12, 10), {"season_end": "12-15"}))
+        self.assertTrue(p.month_day_window(date(2025, 8, 20), {"season_start": "bad"}))
+
+    def test_frost_penalty_and_invalid_alert_threshold(self):
+        recs = series(date(2025, 8, 20), 60, precipitation_sum=3.0)
+        hist = p.History(recs)
+        base = p.calculate_score_for_day(LOC, recs[-1], hist, [])[0]
+        for r in hist.window(date.fromisoformat(recs[-1]["date"]) - timedelta(days=1), 1):
+            r["temperature_2m_min"] = -5.0
+        self.assertEqual(p.calculate_score_for_day(LOC, recs[-1], hist, [])[0], base - p.FROST_PENALTY)
+        self.assertEqual(p.alert_threshold({"ALERT_THRESHOLD": "abc"}), p.DEFAULT_ALERT_THRESHOLD)
+
     def test_high_soil_moisture_adds_five_points(self):
         recs = series(date(2025, 8, 20), 60, precipitation_sum=3.0)
         hist = p.History(recs)
         baseline = p.calculate_score_for_day(LOC, recs[-1], hist, [])[0]
         wet_day = dict(recs[-1], soil_moisture_0_to_7cm_mean=0.36)
-        self.assertEqual(p.calculate_score_for_day(LOC, wet_day, hist, [])[0], baseline + 5)
+        self.assertEqual(p.calculate_score_for_day(LOC, wet_day, hist, [])[0], baseline + 5 - p.soil_moisture_points(recs[-1]["soil_moisture_0_to_7cm_mean"]))
 
     def test_rain_score_saturates_without_inventing_a_wet_penalty(self):
         self.assertEqual(p.rainfall_score(0), 0)
-        self.assertEqual(p.rainfall_score(50), 15)
-        self.assertEqual(p.rainfall_score(100), p.FLUSH_RAIN_SCORE_MAX)
+        self.assertEqual(p.rainfall_score(30), 15)
+        self.assertEqual(p.rainfall_score(60), p.FLUSH_RAIN_SCORE_MAX)
         self.assertEqual(p.rainfall_score(250), p.FLUSH_RAIN_SCORE_MAX)
         self.assertEqual(p.rainfall_score(-5), 0)
 

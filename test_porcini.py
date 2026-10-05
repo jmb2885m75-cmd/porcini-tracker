@@ -433,7 +433,7 @@ class ScoringTests(unittest.TestCase):
 
     def test_frost_penalty_threshold_edges(self):
         warm = [5.0] * 14
-        for tmin, expected in ((0.0, 0), (-0.1, p.FROST_LIGHT_PENALTY), (-2.0, p.FROST_LIGHT_PENALTY), (-2.1, p.FROST_PENALTY)):
+        for tmin, expected in ((0.0, 0), (-0.1, p.FROST_LIGHT_PENALTY), (p.FROST_TMIN_C, p.FROST_LIGHT_PENALTY), (-1.9, p.FROST_PENALTY), (p.FROST_TMIN_C - 0.1, p.FROST_PENALTY)):
             hist, day = self._frost_hist(warm[:-1] + [tmin])
             self.assertEqual(p.frost_penalty(hist, day), expected, tmin)
         hist, day = self._frost_hist([None] * 14)
@@ -460,6 +460,59 @@ class ScoringTests(unittest.TestCase):
         self.assertGreaterEqual(mild_score, 45)
         self.assertLessEqual(frozen_score, mild_score - p.FROST_PENALTY - p.FROST_REPEAT_PENALTY_MAX)
         self.assertEqual(p.score_breakdown(LOC, freezing.get(day), freezing)["frost"], -(p.FROST_PENALTY + p.FROST_REPEAT_PENALTY_MAX))
+
+    def test_late_season_decay_ramp_and_hemisphere(self):
+        north = {"latitude": 52.4}
+        self.assertEqual(p.late_season_decay_penalty(date(2024, 11, 15), north), 0)
+        self.assertEqual(p.late_season_decay_penalty(date(2024, 10, 20), north), 0)
+        self.assertEqual(p.late_season_decay_penalty(date(2024, 12, 10), north), p.LATE_SEASON_DECAY_MAX)
+        self.assertEqual(p.late_season_decay_penalty(date(2024, 12, 20), north), p.LATE_SEASON_DECAY_MAX)
+        self.assertTrue(0 < p.late_season_decay_penalty(date(2024, 11, 28), north) < p.LATE_SEASON_DECAY_MAX)
+        self.assertEqual(p.late_season_decay_penalty(date(2024, 11, 28), {"latitude": -35.0}), 0)
+
+    def test_nov_28_2024_after_frost_is_no_longer_favourable(self):
+        recs = series(date(2024, 9, 1), 90, precipitation_sum=4.0)
+        for r in recs:
+            r["temperature_2m_min"] = 4.0
+            r["temperature_2m_max"] = 10.0
+        for r in recs:
+            if r["date"] in ("2024-11-21", "2024-11-22", "2024-11-23"):
+                r["temperature_2m_min"] = -1.9
+        hist = p.History(recs)
+        day = date(2024, 11, 28)
+        daily = hist.get(day)
+        score = p.calculate_score_for_day(LOC, daily, hist, [])[0]
+        no_frost = p.History([dict(r, temperature_2m_min=4.0) for r in recs])
+        mild_score = p.calculate_score_for_day(LOC, daily, no_frost, [])[0]
+        self.assertLess(score, p.VERY_FAVOURABLE_THRESHOLD)
+        self.assertLess(score, p.DEFAULT_ALERT_THRESHOLD)
+        self.assertLessEqual(score, mild_score - p.late_season_decay_penalty(day, LOC))
+        breakdown = p.score_breakdown(LOC, daily, hist)
+        self.assertEqual(breakdown["late_season_decay"], -p.late_season_decay_penalty(day, LOC))
+        self.assertLess(breakdown["frost"], 0)
+
+    def test_hard_freeze_in_late_season_ends_season_but_not_in_mild_autumn(self):
+        recs = series(date(2024, 9, 1), 90, precipitation_sum=4.0)
+        for r in recs:
+            r["temperature_2m_min"] = -1.9 if r["date"] == "2024-11-26" else 4.0
+        hist = p.History(recs)
+        late = p.calculate_score_for_day(LOC, hist.get(date(2024, 11, 28)), hist, [])
+        self.assertEqual(p.score_verdict_tag(late[0], late[1]), p.VERDICT_SPECIAL_TAGS["terminated"])
+        early = p.calculate_score_for_day(LOC, hist.get(date(2024, 11, 10)), hist, [])
+        self.assertNotEqual(p.status_category(early[1]), "terminated")
+        recs2 = [dict(r, temperature_2m_min=-1.9 if r["date"] == "2024-10-20" else 4.0) for r in recs]
+        hist2 = p.History(recs2)
+        mid = p.calculate_score_for_day(LOC, hist2.get(date(2024, 10, 22)), hist2, [])
+        self.assertNotEqual(p.status_category(mid[1]), "terminated")
+
+    def test_mild_early_season_score_unchanged_by_decay(self):
+        recs = series(date(2024, 9, 1), 90, precipitation_sum=4.0)
+        hist = p.History(recs)
+        for day in (date(2024, 10, 10), date(2024, 11, 10), date(2024, 11, 15)):
+            self.assertEqual(p.score_breakdown(LOC, hist.get(day), hist)["late_season_decay"], 0)
+        daily = hist.get(date(2024, 11, 10))
+        self.assertEqual(p.calculate_score_for_day(LOC, daily, hist, [])[0],
+                         p.calculate_score_for_day(dict(LOC, latitude=-35.0), daily, hist, [])[0])
 
     def test_high_soil_moisture_adds_five_points(self):
         recs = series(date(2025, 8, 20), 60, precipitation_sum=3.0)

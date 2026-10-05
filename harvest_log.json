@@ -53,15 +53,6 @@
     },
     {
       "location": "Fangschleuse",
-      "date": "2023-10-05",
-      "observation_type": "harvest",
-      "yield_tier": "small",
-      "cap_stage": "buttons_young",
-      "submitted_at": "2026-10-05T09:17:24Z",
-      "reporter": "jmb2885m75-cmd"
-    },
-    {
-      "location": "Fangschleuse",
       "date": "2023-11-10",
       "observation_type": "harvest",
       "yield_tier": "small",

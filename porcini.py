@@ -112,8 +112,12 @@ def month_day_window(dt: date) -> bool:
 SCHEMA_VERSION = 3
 # Bump when the scoring rules change; forces every stored daily score to be recomputed.
 # Score penalty applied 1..N days after a visit that found nothing (flush not started yet)
-NO_FIND_PENALTY = (25, 20, 15, 10, 5)
-MODEL_VERSION = 11  # 11: temp ranges, split rain, humidity, post-flush, seasonal params; 10: formatted status labels
+NO_FIND_PENALTY = (10, 5)
+# Flush depletion after a harvest: (max days since harvest, penalty)
+FLUSH_DEPLETION_TIERS = ((1, 40), (3, 30), (7, 20), (14, 10))
+DEFAULT_DEPLETION_RECOVERY_DAYS = 14
+DEFAULT_EARLY_HARVEST_PENALTY_FACTOR = 0.5
+MODEL_VERSION = 12  # 12: flush depletion, lighter no-find penalty; 11: temp ranges, split rain, humidity, post-flush, seasonal params; 10: formatted status labels
 ARCHIVE_LAG_DAYS = 5
 SOURCE_ARCHIVE = "archive"
 SOURCE_FORECAST = "forecast"
@@ -702,6 +706,44 @@ def days_since_last_flush(past_harvests: List[Dict[str, Any]], day: date) -> Opt
     return min(deltas) if deltas else None
 
 
+def flush_depletion_penalty(harvest_dates: List[date], day: date, recovery_days: int = DEFAULT_DEPLETION_RECOVERY_DAYS) -> int:
+    """Negative score adjustment after a harvest: the fruiting bodies are gone and the substrate must recover."""
+    earlier = [h for h in harvest_dates if h < day]
+    if not earlier:
+        return 0
+    days_since = (day - max(earlier)).days
+    if days_since > recovery_days:
+        return 0
+    for max_days, penalty in FLUSH_DEPLETION_TIERS:
+        if days_since <= max_days:
+            return -penalty
+    return 0
+
+
+def depletion_penalty_for_day(location: Dict[str, Any], past_harvests: List[Dict[str, Any]], day: date) -> int:
+    """Depletion penalty from the most recent find, softened for small or buttons_young harvests."""
+    finds = [
+        h for h in past_harvests
+        if h.get("observation_type") in (None, "harvest") and h.get("yield_tier") in {"small", "medium", "large"}
+        and valid_date_string(h.get("date")) and parse_date(h["date"]) < day
+    ]
+    if not finds:
+        return 0
+    latest = max(finds, key=lambda h: parse_date(h["date"]))
+    try:
+        recovery_days = int(location.get("depletion_recovery_days", DEFAULT_DEPLETION_RECOVERY_DAYS))
+    except (TypeError, ValueError):
+        recovery_days = DEFAULT_DEPLETION_RECOVERY_DAYS
+    penalty = flush_depletion_penalty([parse_date(latest["date"])], day, recovery_days)
+    if penalty and (latest.get("cap_stage") == "buttons_young" or latest.get("yield_tier") == "small"):
+        try:
+            factor = float(location.get("early_harvest_penalty_factor", DEFAULT_EARLY_HARVEST_PENALTY_FACTOR))
+        except (TypeError, ValueError):
+            factor = DEFAULT_EARLY_HARVEST_PENALTY_FACTOR
+        penalty = round(penalty * max(0.0, min(1.0, factor)))
+    return penalty
+
+
 def rainfall_score(rainfall: float) -> int:
     """Give up to 30 points for recent rain, saturating at 100 mm without an uncalibrated wet penalty."""
     scaled = max(0.0, min(FLUSH_RAIN_SCORE_MAX, rainfall * FLUSH_RAIN_SCORE_MAX / 100))
@@ -792,6 +834,12 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
             score -= 10
             status = "🍂 Exhaustion / post-flush cooling off"
 
+    depletion = depletion_penalty_for_day(location, past_harvests, d)
+    if depletion:
+        score += depletion
+        if status == "🟡 Monitoring":
+            status = "🌱 Flush depleted after harvest"
+
     # Prior medium/large finds at this site add a modest affinity signal.
     positive = sum(
         weight_by_recency(parse_date(h["date"]), d) for h in past_harvests
@@ -868,8 +916,9 @@ def backtest_accuracy(location: Dict[str, Any], records: List[Dict[str, Any]],
                       harvests: List[Dict[str, Any]], threshold: int) -> Dict[str, Any]:
     """Compare scores only with dated visits; unvisited days are unknown, not failures.
 
-    The score for a visit date is recomputed without that date's observation to avoid
-    evaluating a no-find against a score that the same no-find already capped.
+    Find days are scored with their harvest known; no-find days are recomputed without their own
+    observation to avoid evaluating a no-find against a score it already capped. Find days are
+    split by whether an earlier harvest (flush depletion) was still suppressing the score.
     """
     hist = History(records)
     outcomes: Dict[str, bool] = {}
@@ -890,13 +939,17 @@ def backtest_accuracy(location: Dict[str, Any], records: List[Dict[str, Any]],
             continue
         prior_observations = [
             observation for observation in harvests
-            if valid_date_string(observation.get("date")) and observation["date"] != day
+            if valid_date_string(observation.get("date")) and (found or observation["date"] != day)
         ]
         score, _, _ = calculate_score_for_day(location, daily, hist, prior_observations)
-        evaluated.append((score, found))
+        post_harvest = depletion_penalty_for_day(location, harvests, parse_date(day)) < 0
+        evaluated.append((score, found, post_harvest, day))
 
-    finds = [score for score, found in evaluated if found]
-    no_finds = [score for score, found in evaluated if not found]
+    finds = [score for score, found, _, _ in evaluated if found]
+    no_finds = [score for score, found, _, _ in evaluated if not found]
+    true_false_negatives = [d for score, found, post, d in evaluated if found and not post and score < threshold]
+    post_harvest_low_finds = [d for score, found, post, d in evaluated if found and post and score < threshold]
+    post_harvest_false_positives = [d for score, found, post, d in evaluated if not found and post and score >= threshold]
     suggested_threshold = None
     if finds:
         ordered = sorted(finds)
@@ -915,6 +968,10 @@ def backtest_accuracy(location: Dict[str, Any], records: List[Dict[str, Any]],
         "mean_score_on_find_days": round(sum(finds) / len(finds), 1) if finds else None,
         "mean_score_on_no_find_days": round(sum(no_finds) / len(no_finds), 1) if no_finds else None,
         "suggested_threshold": suggested_threshold,
+        "true_false_negatives": len(true_false_negatives),
+        "genuine_miss_dates": true_false_negatives,
+        "post_harvest_low_find_days": len(post_harvest_low_finds),
+        "post_harvest_false_positives": len(post_harvest_false_positives),
         "find_weekday_counts": find_weekday_counts(location, harvests),
     }
 
@@ -1412,7 +1469,7 @@ __OBSERVATION_LOG__
       score: ['How the forecast score works', [
         'The weather feed supplies 7 forecast days in total (including today) and the previous 7 days of recent weather. That means it can score up to 6 calendar days after today; beyond that, this dashboard has no forward weather forecast. Older observed weather is kept in the archive.',
         'For each scored day, the model uses rain from the 26 complete days before that date and mean air temperature from the 20 complete days before it, when at least 80% of daily values are present. Forecast rain/temperature on the scored date itself do not count. Temperature is scored against an optimal range that varies by season (or a per-location optimal_temp_range). Air humidity above 85% adds a small bonus and below 60% a small penalty, and a find 7–14 days earlier with still-favourable conditions adds a post-flush persistence bonus. A seasonally matched 90-day rainfall comparison adds a modest drought penalty when enough prior-year records exist. The score also includes measured soil moisture, a modest host-tree/site signal, and field observations.',
-        'The score does not vary by weekday or lunar phase. The cited preprint found associations in one central European beech-forest setting; applying it elsewhere needs local validation. No-find observations cap that date at 20 and reduce scores for five following days.',
+        'The score does not vary by weekday or lunar phase. The cited preprint found associations in one central European beech-forest setting; applying it elsewhere needs local validation. No-find observations cap that date at 20 and slightly lower the next two days. After a harvest the flush is depleted, so scores drop by up to 40 points and recover over about 14 days (smaller for small or young-button finds); that is depletion logic, not a prediction error.',
         'The displayed 0–100 value is a favourability index, not a measured chance of finding mushrooms or a probability. The default alert threshold is 55 index points; the index and its thresholds are not locally calibrated.',
         'Verdict guide below 25 Not worth it; 25–44 Unlikely; 45–59 Long shot; 60 up to the alert threshold Worth a look; at or above ALERT_THRESHOLD (65 unless configured; 75 minimum for the top tier) Favourable conditions; 75+ Very favourable conditions. The alert boundary follows ALERT_THRESHOLD.',
         'The chart’s light rain and temperature lines add weather context on their own visible-range scales; missing readings leave gaps, and the score line remains the main signal.',
@@ -1421,7 +1478,7 @@ __OBSERVATION_LOG__
       ]],
       observations: ['How observations affect the forecast', [
         'A visit with no mushrooms is valid evidence, not missing data. On that date it caps the score at 20, even if weather or other bonuses would have made it higher.',
-        'A no-find observation also lowers scores on the next five days (the effect fades from day to day). It does not change unrelated dates.',
+        'A no-find observation also lowers scores slightly on the next two days. A harvest depletes the flush: scores fall 40/30/20/10 points over the following ~14 days while the mycelium recovers. It does not change unrelated dates.',
         'A recent button-stage find modestly raises scores for a few days; an old/overripe find modestly lowers them. Repeated medium or large finds can add a small site-familiarity bonus. These weights are heuristic, not calibrated.',
         '🍄 marks a recorded find and ❌ marks a visit where none were found. Draft observations stay in this browser until submitted; synced ones are already in the shared log.'
       ]]
@@ -1647,7 +1704,7 @@ __OBSERVATION_LOG__
     }
     function backtest() {
       var b = loc.backtest || {};
-      $('backtest').textContent = b.observed_days ? 'Observed visits only (unvisited days are unknown): ' + b.finds_above_threshold + '/' + b.find_days + ' find-days and ' + b.no_finds_above_threshold + '/' + b.no_find_days + ' no-find days scored at least ' + b.threshold + '/100. Scores exclude the same-day observation. Small, potentially biased sample; not calibrated.' : 'Backtest: no recorded visit days with a stored weather record yet.';
+      $('backtest').textContent = b.observed_days ? 'Observed visits only (unvisited days are unknown): ' + b.finds_above_threshold + '/' + b.find_days + ' find-days and ' + b.no_finds_above_threshold + '/' + b.no_find_days + ' no-find days scored at least ' + b.threshold + '/100. Find-day scores include the harvest; no-find scores exclude their own observation. After a find, scores drop for up to 14 days (flush depletion). Small, potentially biased sample; not calibrated.' : 'Backtest: no recorded visit days with a stored weather record yet.';
     }
     function refresh() { fillRange(); draw(); rows(); backtest(); weatherOverview(); renderTimeline(); }
     function showLocation(index) {

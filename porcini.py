@@ -10,6 +10,7 @@ import html
 import json
 import math
 import os
+import re
 import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -103,17 +104,28 @@ def parse_date(value: str) -> date:
     return parse_user_date(value)
 
 
-def month_day_window(dt: date) -> bool:
-    aug_15 = date(dt.year, 8, 15)
-    dec_01 = date(dt.year, 12, 1)
-    return aug_15 <= dt <= dec_01
+def _month_day(value: Any, default: Tuple[int, int]) -> Tuple[int, int]:
+    try:
+        month, day = (int(part) for part in str(value).split("-"))
+        date(2001, month, day)
+        return month, day
+    except (TypeError, ValueError):
+        return default
+
+
+def month_day_window(dt: date, location: Optional[Dict[str, Any]] = None) -> bool:
+    """Season window: Aug 15 – Dec 1 unless the location sets `season_start`/`season_end` as "MM-DD"."""
+    location = location or {}
+    start = _month_day(location.get("season_start"), (8, 15))
+    end = _month_day(location.get("season_end"), (12, 1))
+    return start <= (dt.month, dt.day) <= end
 
 
 SCHEMA_VERSION = 3
 # Bump when the scoring rules change; forces every stored daily score to be recomputed.
 # Score penalty applied 1..N days after a visit that found nothing (flush not started yet)
 NO_FIND_PENALTY = (25, 20, 15, 10, 5)
-MODEL_VERSION = 11  # 11: temp ranges, split rain, humidity, post-flush, seasonal params; 10: formatted status labels
+MODEL_VERSION = 12  # 12: rain saturation 60 mm, soil ramp, frost/heat, graded post-flush, host-tree matching; 11: 11: temp ranges, split rain, humidity, post-flush, seasonal params; 10: formatted status labels
 ARCHIVE_LAG_DAYS = 5
 SOURCE_ARCHIVE = "archive"
 SOURCE_FORECAST = "forecast"
@@ -153,7 +165,8 @@ HUMIDITY_LOW = 60
 POST_FLUSH_MIN_DAYS = 7
 POST_FLUSH_MAX_DAYS = 14
 POST_FLUSH_BONUS = 10
-POST_FLUSH_MIN_BASE_SCORE = 40  # only boost when the weather-based score is already reasonable
+POST_FLUSH_FULL_BASE_SCORE = 40  # full bonus from this weather-based score upward
+POST_FLUSH_RAMP = 15  # bonus scales linearly from 0 at (full - ramp)
 CALIBRATION_HIT_RATE_MIN = 0.70
 CALIBRATION_MIN_FIND_DAYS = 5
 RUNOFF_MIN_DAY_MM = 15.0
@@ -163,6 +176,13 @@ LONG_TERM_RAIN_WINDOW_DAYS = 90
 LONG_TERM_RAIN_SEASON_RADIUS_DAYS = 15
 LONG_TERM_RAIN_MIN_SAMPLES = 20
 FLUSH_RAIN_SCORE_MAX = 30
+RAIN_SATURATION_MM = 60.0  # rain total at which the rain score saturates
+VERY_FAVOURABLE_THRESHOLD = 75
+FROST_TMIN_C = -2.0
+HEAT_TMAX_C = 25.0
+FROST_PENALTY = 10
+HEAT_PENALTY = 5
+SOIL_DRY, SOIL_MID, SOIL_WET = 0.20, 0.28, 0.35
 FLUSH_TEMPERATURE_SCORE_MAX = 20
 DROUGHT_SCORE_PENALTY_MAX = 10
 VERDICT_LOW_TIERS = (
@@ -703,9 +723,25 @@ def days_since_last_flush(past_harvests: List[Dict[str, Any]], day: date) -> Opt
 
 
 def rainfall_score(rainfall: float) -> int:
-    """Give up to 30 points for recent rain, saturating at 100 mm without an uncalibrated wet penalty."""
-    scaled = max(0.0, min(FLUSH_RAIN_SCORE_MAX, rainfall * FLUSH_RAIN_SCORE_MAX / 100))
+    """Give up to 30 points for recent rain, saturating at RAIN_SATURATION_MM without an uncalibrated wet penalty."""
+    scaled = max(0.0, min(FLUSH_RAIN_SCORE_MAX, rainfall * FLUSH_RAIN_SCORE_MAX / RAIN_SATURATION_MM))
     return round(scaled)
+
+
+def soil_moisture_points(moisture: float) -> int:
+    """Continuous soil-moisture adjustment: -10 at/below 0.20, 0 at 0.28, +5 at/above 0.35."""
+    if moisture <= SOIL_DRY:
+        return -10
+    if moisture >= SOIL_WET:
+        return 5
+    if moisture < SOIL_MID:
+        return round(-10 * (SOIL_MID - moisture) / (SOIL_MID - SOIL_DRY))
+    return round(5 * (moisture - SOIL_MID) / (SOIL_WET - SOIL_MID))
+
+
+def is_host_tree(name: str) -> bool:
+    """Whole-word match so e.g. "firethorn" or "soak" do not count as fir/oak."""
+    return any(word in HOST_TREES for word in re.findall(r"[a-zà-ÿ]+", name.lower()))
 
 
 def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], historical: Any, past_harvests: List[Dict[str, Any]]) -> Tuple[int, str, str]:
@@ -720,7 +756,7 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
         h.get("observation_type") == "no_mushrooms" and valid_date_string(h.get("date")) and parse_date(h["date"]) == d
         for h in past_harvests
     )
-    if not month_day_window(d):
+    if not month_day_window(d, location):
         return 0, "❌ Outside mushroom season", ""
 
     seasonal = get_seasonal_params(d, location)
@@ -750,6 +786,12 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
     if has_runoff(hist, d):
         score -= 5
 
+    recent_days = hist.window(d - timedelta(days=1), 3)
+    if any(r.get("temperature_2m_min") is not None and float(r["temperature_2m_min"]) < FROST_TMIN_C for r in recent_days):
+        score -= FROST_PENALTY
+    if any(r.get("temperature_2m_max") is not None and float(r["temperature_2m_max"]) > HEAT_TMAX_C for r in recent_days):
+        score -= HEAT_PENALTY
+
     humidity = daily.get("relative_humidity_2m_mean")
     if humidity is not None:
         if humidity > HUMIDITY_HIGH:
@@ -759,19 +801,18 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
 
     soil_moisture = daily.get("soil_moisture_0_to_7cm_mean")
     if soil_moisture is not None:
-        if soil_moisture > 0.35:
-            score += 5
-        elif soil_moisture <= 0.20:
-            score -= 10
+        score += soil_moisture_points(float(soil_moisture))
+        if soil_moisture <= SOIL_DRY:
             status = "💧 Too dry – low soil moisture"
 
     tree_species = location.get("tree_species", [])
     normalized_species = {str(tree).strip().lower() for tree in tree_species} if isinstance(tree_species, list) else set()
-    if any(any(host in tree for host in HOST_TREES) for tree in normalized_species):
+    if any(is_host_tree(tree) for tree in normalized_species):
         score += 10
-    if str(location.get("soil_pH", "")).strip().lower() == "alkaline":
+    if str(location.get("soil_pH") or "").strip().lower() in ("alkaline", "basic", "calcareous"):
         score -= 5
 
+    no_find_penalty = 0
     for harvest in past_harvests:
         harvest_date = harvest.get("date")
         if not valid_date_string(harvest_date):
@@ -782,7 +823,7 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
                 score = min(score, 20)
                 status = "🔎 No mushrooms found (field observation)"
             elif 1 <= delta_days <= len(NO_FIND_PENALTY):
-                score -= NO_FIND_PENALTY[delta_days - 1]
+                no_find_penalty = max(no_find_penalty, NO_FIND_PENALTY[delta_days - 1])
                 if status == "🟡 Monitoring":
                     status = "🔎 Recent empty visit lowers odds"
             continue
@@ -791,6 +832,8 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
         elif harvest.get("cap_stage") == "old_overripe" and 1 <= delta_days <= 7:
             score -= 10
             status = "🍂 Exhaustion / post-flush cooling off"
+
+    score -= no_find_penalty
 
     # Prior medium/large finds at this site add a modest affinity signal.
     positive = sum(
@@ -804,8 +847,8 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
     # Post-flush persistence: a find 7-14 days ago plus still-favourable conditions suggests a continuing flush.
     since_flush = days_since_last_flush(past_harvests, d)
     if (since_flush is not None and POST_FLUSH_MIN_DAYS <= since_flush <= POST_FLUSH_MAX_DAYS
-            and score >= POST_FLUSH_MIN_BASE_SCORE and not no_find_today):
-        score += POST_FLUSH_BONUS
+            and score > POST_FLUSH_FULL_BASE_SCORE - POST_FLUSH_RAMP and not no_find_today):
+        score += round(POST_FLUSH_BONUS * min(1.0, (score - (POST_FLUSH_FULL_BASE_SCORE - POST_FLUSH_RAMP)) / POST_FLUSH_RAMP))
         if status == "🟡 Monitoring":
             status = "🔄 Post-flush conditions persist"
 
@@ -828,7 +871,7 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
 
 def location_signature(location: Dict[str, Any]) -> str:
     """Fingerprint of the config fields that influence scores; a change recomputes the stored series."""
-    keys = ("tree_species", "soil_pH", "past_harvests", "optimal_temp_range", "seasonal_params")
+    keys = ("tree_species", "soil_pH", "past_harvests", "optimal_temp_range", "seasonal_params", "season_start", "season_end")
     blob = json.dumps({k: location.get(k) for k in keys}, sort_keys=True, default=str)
     return f"{MODEL_VERSION}:{hashlib.sha1(blob.encode('utf-8')).hexdigest()[:12]}"
 
@@ -1067,7 +1110,7 @@ def score_verdict_tag(score: int, status: Optional[str], threshold: int = 65) ->
     for upper_bound, label in VERDICT_LOW_TIERS:
         if score < upper_bound:
             return label
-    if score >= max(75, threshold):
+    if score >= max(VERY_FAVOURABLE_THRESHOLD, threshold):
         return VERDICT_DEFINITE_GO
     if score >= threshold:
         return VERDICT_GO
@@ -1809,11 +1852,19 @@ __OBSERVATION_LOG__
 """
 
 
+def alert_threshold(cfg: Dict[str, Any]) -> int:
+    """ALERT_THRESHOLD as an int in 0–100; invalid values fall back to the default."""
+    try:
+        return max(0, min(100, int(cfg.get("ALERT_THRESHOLD", DEFAULT_ALERT_THRESHOLD))))
+    except (TypeError, ValueError):
+        return DEFAULT_ALERT_THRESHOLD
+
+
 def dashboard_payload(cfg: Dict[str, Any], analysis: List[Dict[str, Any]], mode: str) -> Dict[str, Any]:
     def rnd(value: Any) -> Any:
         return round(value, 2) if isinstance(value, float) else value
 
-    threshold = int(cfg.get("ALERT_THRESHOLD", DEFAULT_ALERT_THRESHOLD))
+    threshold = alert_threshold(cfg)
     locations = []
     for item in analysis:
         records = item.get("records", [])
@@ -1896,7 +1947,7 @@ def render_observation_log(entries: List[Dict[str, Any]], repo: str) -> str:
 
 def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]], alert_message: str = "", alert_will_send: bool = False, mode: str = MODE_DEFAULT, harvest_log: Optional[Dict[str, Any]] = None) -> str:
     """Self-contained dashboard (inline CSS/JS/data, no CDN). Static hosting; observations are POSTed to api.py and stored in harvest_log.json."""
-    threshold = int(cfg.get("ALERT_THRESHOLD", DEFAULT_ALERT_THRESHOLD))
+    threshold = alert_threshold(cfg)
     cards = []
     for item in analysis:
         available = item["best_day"] != "N/A"
@@ -2005,7 +2056,7 @@ def main() -> int:
     mode = detect_run_mode(now) if args.mode == "auto" else args.mode
     print(f"[INFO] Run mode: {mode}")
 
-    threshold = int(cfg.get("ALERT_THRESHOLD", DEFAULT_ALERT_THRESHOLD))
+    threshold = alert_threshold(cfg)
     friday_policy = resolve_friday_policy(cfg)
     dashboard_url = resolve_dashboard_url()
 

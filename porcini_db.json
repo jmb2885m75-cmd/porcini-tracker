@@ -48739,7 +48739,7 @@
           "temperature_2m_min": 3.6,
           "wind_speed_10m_max": 10.5,
           "soil_temperature_0_to_7cm_mean": 12.6,
-          "relative_humidity_2m_mean": 81,
+          "relative_humidity_2m_mean": 80,
           "soil_moisture_0_to_7cm_mean": 0.233,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
@@ -48748,11 +48748,11 @@
           "date": "2026-10-06",
           "source": "forecast",
           "precipitation_sum": 0.0,
-          "temperature_2m_max": 21.0,
-          "temperature_2m_min": 8.3,
+          "temperature_2m_max": 21.2,
+          "temperature_2m_min": 8.5,
           "wind_speed_10m_max": 8.6,
           "soil_temperature_0_to_7cm_mean": 12.9,
-          "relative_humidity_2m_mean": 80,
+          "relative_humidity_2m_mean": 79,
           "soil_moisture_0_to_7cm_mean": 0.229,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
@@ -48761,11 +48761,11 @@
           "date": "2026-10-07",
           "source": "forecast",
           "precipitation_sum": 0.0,
-          "temperature_2m_max": 20.2,
-          "temperature_2m_min": 7.9,
-          "wind_speed_10m_max": 9.2,
+          "temperature_2m_max": 20.9,
+          "temperature_2m_min": 8.0,
+          "wind_speed_10m_max": 10.1,
           "soil_temperature_0_to_7cm_mean": 12.9,
-          "relative_humidity_2m_mean": 83,
+          "relative_humidity_2m_mean": 81,
           "soil_moisture_0_to_7cm_mean": 0.226,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
@@ -50742,97 +50742,97 @@
           "source": "sample"
         },
         "2023-11-16": {
-          "score": 34,
-          "status": "💧 Too dry – low soil moisture",
-          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
-          "source": "sample"
-        },
-        "2023-11-17": {
-          "score": 30,
-          "status": "💧 Too dry – low soil moisture",
-          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
-          "source": "sample"
-        },
-        "2023-11-18": {
-          "score": 22,
-          "status": "💧 Too dry – low soil moisture",
-          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
-          "source": "sample"
-        },
-        "2023-11-19": {
-          "score": 23,
-          "status": "💧 Too dry – low soil moisture",
-          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
-          "source": "sample"
-        },
-        "2023-11-20": {
-          "score": 28,
-          "status": "💧 Too dry – low soil moisture",
-          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
-          "source": "sample"
-        },
-        "2023-11-21": {
-          "score": 24,
-          "status": "💧 Too dry – low soil moisture",
-          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
-          "source": "sample"
-        },
-        "2023-11-22": {
-          "score": 24,
-          "status": "💧 Too dry – low soil moisture",
-          "quality": "",
-          "source": "sample"
-        },
-        "2023-11-23": {
-          "score": 29,
-          "status": "💧 Too dry – low soil moisture",
-          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
-          "source": "sample"
-        },
-        "2023-11-24": {
-          "score": 24,
-          "status": "💧 Too dry – low soil moisture",
-          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
-          "source": "sample"
-        },
-        "2023-11-25": {
           "score": 32,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
+        "2023-11-17": {
+          "score": 25,
+          "status": "💧 Too dry – low soil moisture",
+          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
+          "source": "sample"
+        },
+        "2023-11-18": {
+          "score": 18,
+          "status": "💧 Too dry – low soil moisture",
+          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
+          "source": "sample"
+        },
+        "2023-11-19": {
+          "score": 18,
+          "status": "💧 Too dry – low soil moisture",
+          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
+          "source": "sample"
+        },
+        "2023-11-20": {
+          "score": 22,
+          "status": "💧 Too dry – low soil moisture",
+          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
+          "source": "sample"
+        },
+        "2023-11-21": {
+          "score": 17,
+          "status": "💧 Too dry – low soil moisture",
+          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
+          "source": "sample"
+        },
+        "2023-11-22": {
+          "score": 17,
+          "status": "💧 Too dry – low soil moisture",
+          "quality": "",
+          "source": "sample"
+        },
+        "2023-11-23": {
+          "score": 21,
+          "status": "💧 Too dry – low soil moisture",
+          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
+          "source": "sample"
+        },
+        "2023-11-24": {
+          "score": 16,
+          "status": "💧 Too dry – low soil moisture",
+          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
+          "source": "sample"
+        },
+        "2023-11-25": {
+          "score": 21,
+          "status": "💧 Too dry – low soil moisture",
+          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
+          "source": "sample"
+        },
         "2023-11-26": {
-          "score": 27,
+          "score": 17,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-27": {
-          "score": 19,
-          "status": "💧 Too dry – low soil moisture",
+          "score": 9,
+          "status": "❄️ Season terminated by frost",
           "quality": "",
           "source": "sample"
         },
         "2023-11-28": {
-          "score": 15,
-          "status": "💧 Too dry – low soil moisture",
+          "score": 3,
+          "status": "❄️ Season terminated by frost",
           "quality": "",
           "source": "sample"
         },
         "2023-11-29": {
-          "score": 15,
-          "status": "💧 Too dry – low soil moisture",
+          "score": 3,
+          "status": "❄️ Season terminated by frost",
           "quality": "",
           "source": "sample"
         },
         "2023-11-30": {
-          "score": 21,
+          "score": 9,
           "status": "💧 Too dry – low soil moisture",
           "quality": "",
           "source": "sample"
         },
         "2023-12-01": {
-          "score": 47,
+          "score": 27,
           "status": "💧 Too dry – low soil moisture",
           "quality": "",
           "source": "sample"
@@ -52938,97 +52938,97 @@
           "source": "archive"
         },
         "2024-11-16": {
-          "score": 20,
+          "score": 19,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-17": {
-          "score": 26,
+          "score": 25,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-18": {
-          "score": 28,
+          "score": 26,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-19": {
-          "score": 37,
+          "score": 35,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-20": {
-          "score": 51,
+          "score": 48,
           "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-11-21": {
-          "score": 44,
+          "score": 40,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-22": {
-          "score": 37,
-          "status": "⚠️ Watch closely",
+          "score": 27,
+          "status": "❄️ Season terminated by frost",
           "quality": "",
           "source": "archive"
         },
         "2024-11-23": {
-          "score": 33,
-          "status": "⚠️ Watch closely",
+          "score": 21,
+          "status": "❄️ Season terminated by frost",
           "quality": "",
           "source": "archive"
         },
         "2024-11-24": {
-          "score": 33,
-          "status": "⚠️ Watch closely",
+          "score": 20,
+          "status": "❄️ Season terminated by frost",
           "quality": "",
           "source": "archive"
         },
         "2024-11-25": {
-          "score": 37,
+          "score": 29,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-26": {
-          "score": 47,
+          "score": 38,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-27": {
-          "score": 49,
+          "score": 40,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-28": {
-          "score": 57,
-          "status": "✅ Viable conditions",
+          "score": 47,
+          "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-11-29": {
-          "score": 53,
+          "score": 43,
           "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-11-30": {
-          "score": 52,
+          "score": 41,
           "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-12-01": {
-          "score": 45,
+          "score": 32,
           "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
@@ -55128,97 +55128,97 @@
           "source": "archive"
         },
         "2025-11-16": {
-          "score": 69,
+          "score": 68,
           "status": "✅ Viable conditions",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2025-11-17": {
-          "score": 72,
+          "score": 71,
           "status": "✅ Viable conditions",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2025-11-18": {
-          "score": 72,
+          "score": 70,
           "status": "✅ Viable conditions",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2025-11-19": {
-          "score": 67,
+          "score": 65,
           "status": "✅ Viable conditions",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2025-11-20": {
-          "score": 72,
+          "score": 69,
           "status": "✅ Viable conditions",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2025-11-21": {
-          "score": 70,
+          "score": 66,
           "status": "✅ Viable conditions",
           "quality": "",
           "source": "archive"
         },
         "2025-11-22": {
-          "score": 58,
-          "status": "✅ Viable conditions",
+          "score": 53,
+          "status": "❄️ Season terminated by frost",
           "quality": "",
           "source": "archive"
         },
         "2025-11-23": {
-          "score": 37,
-          "status": "⚠️ Watch closely",
+          "score": 30,
+          "status": "❄️ Season terminated by frost",
           "quality": "",
           "source": "archive"
         },
         "2025-11-24": {
-          "score": 27,
-          "status": "⚠️ Watch closely",
+          "score": 19,
+          "status": "❄️ Season terminated by frost",
           "quality": "",
           "source": "archive"
         },
         "2025-11-25": {
-          "score": 29,
-          "status": "⚠️ Watch closely",
+          "score": 19,
+          "status": "❄️ Season terminated by frost",
           "quality": "",
           "source": "archive"
         },
         "2025-11-26": {
-          "score": 23,
-          "status": "⚠️ Watch closely",
+          "score": 11,
+          "status": "❄️ Season terminated by frost",
           "quality": "",
           "source": "archive"
         },
         "2025-11-27": {
-          "score": 15,
-          "status": "⚠️ Watch closely",
+          "score": 3,
+          "status": "❄️ Season terminated by frost",
           "quality": "",
           "source": "archive"
         },
         "2025-11-28": {
-          "score": 15,
+          "score": 2,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-11-29": {
-          "score": 21,
+          "score": 8,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-11-30": {
-          "score": 27,
+          "score": 13,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-12-01": {
-          "score": 36,
+          "score": 21,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
@@ -57108,7 +57108,7 @@
           "source": "forecast"
         }
       },
-      "scores_signature": "14:abe5bd48d133",
+      "scores_signature": "15:abe5bd48d133",
       "backtest": {
         "threshold": 55,
         "observed_days": 9,
@@ -57118,7 +57118,7 @@
         "no_finds_above_threshold": 0,
         "find_hit_rate": 0.625,
         "no_find_above_threshold_rate": 0.0,
-        "mean_score_on_find_days": 53.1,
+        "mean_score_on_find_days": 52.5,
         "mean_score_on_no_find_days": 26.0,
         "suggested_threshold": 45,
         "true_false_negatives": 1,
@@ -73728,7 +73728,7 @@
           "temperature_2m_min": 6.0,
           "wind_speed_10m_max": 9.9,
           "soil_temperature_0_to_7cm_mean": 13.2,
-          "relative_humidity_2m_mean": 76,
+          "relative_humidity_2m_mean": 74,
           "soil_moisture_0_to_7cm_mean": 0.21,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
@@ -73737,11 +73737,11 @@
           "date": "2026-10-06",
           "source": "forecast",
           "precipitation_sum": 0.0,
-          "temperature_2m_max": 21.5,
-          "temperature_2m_min": 7.4,
-          "wind_speed_10m_max": 7.1,
+          "temperature_2m_max": 22.0,
+          "temperature_2m_min": 7.3,
+          "wind_speed_10m_max": 7.3,
           "soil_temperature_0_to_7cm_mean": 13.3,
-          "relative_humidity_2m_mean": 76,
+          "relative_humidity_2m_mean": 75,
           "soil_moisture_0_to_7cm_mean": 0.203,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
@@ -73750,11 +73750,11 @@
           "date": "2026-10-07",
           "source": "forecast",
           "precipitation_sum": 0.0,
-          "temperature_2m_max": 21.0,
-          "temperature_2m_min": 7.9,
+          "temperature_2m_max": 21.1,
+          "temperature_2m_min": 7.5,
           "wind_speed_10m_max": 10.1,
           "soil_temperature_0_to_7cm_mean": 13.4,
-          "relative_humidity_2m_mean": 80,
+          "relative_humidity_2m_mean": 78,
           "soil_moisture_0_to_7cm_mean": 0.198,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
@@ -75725,104 +75725,104 @@
           "source": "sample"
         },
         "2023-11-15": {
-          "score": 43,
+          "score": 42,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-16": {
-          "score": 46,
+          "score": 44,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-17": {
-          "score": 45,
+          "score": 43,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-18": {
-          "score": 35,
-          "status": "💧 Too dry – low soil moisture",
+          "score": 31,
+          "status": "❄️ Season terminated by frost",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-19": {
-          "score": 35,
-          "status": "💧 Too dry – low soil moisture",
+          "score": 31,
+          "status": "❄️ Season terminated by frost",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-20": {
-          "score": 31,
-          "status": "💧 Too dry – low soil moisture",
+          "score": 25,
+          "status": "❄️ Season terminated by frost",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-21": {
-          "score": 31,
+          "score": 24,
           "status": "💧 Too dry – low soil moisture",
           "quality": "",
           "source": "sample"
         },
         "2023-11-22": {
-          "score": 20,
+          "score": 12,
           "status": "💧 Too dry – low soil moisture",
           "quality": "",
           "source": "sample"
         },
         "2023-11-23": {
-          "score": 19,
+          "score": 10,
           "status": "💧 Too dry – low soil moisture",
           "quality": "",
           "source": "sample"
         },
         "2023-11-24": {
-          "score": 19,
+          "score": 10,
           "status": "💧 Too dry – low soil moisture",
           "quality": "",
           "source": "sample"
         },
         "2023-11-25": {
-          "score": 18,
+          "score": 8,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-26": {
-          "score": 20,
+          "score": 10,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-27": {
-          "score": 19,
+          "score": 9,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-28": {
-          "score": 6,
-          "status": "💧 Too dry – low soil moisture",
+          "score": 0,
+          "status": "❄️ Season terminated by frost",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-29": {
-          "score": 5,
-          "status": "💧 Too dry – low soil moisture",
+          "score": 0,
+          "status": "❄️ Season terminated by frost",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-30": {
-          "score": 7,
-          "status": "💧 Too dry – low soil moisture",
+          "score": 0,
+          "status": "❄️ Season terminated by frost",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-12-01": {
-          "score": 11,
-          "status": "💧 Too dry – low soil moisture",
+          "score": 0,
+          "status": "❄️ Season terminated by frost",
           "quality": "",
           "source": "sample"
         },
@@ -77927,98 +77927,98 @@
           "source": "archive"
         },
         "2024-11-16": {
-          "score": 24,
+          "score": 23,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-17": {
-          "score": 31,
+          "score": 30,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-18": {
-          "score": 35,
+          "score": 33,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-19": {
-          "score": 40,
-          "status": "⚠️ Watch closely",
-          "quality": "",
-          "source": "archive"
-        },
-        "2024-11-20": {
-          "score": 51,
-          "status": "⚠️ Watch closely",
-          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
-          "source": "archive"
-        },
-        "2024-11-21": {
-          "score": 46,
-          "status": "⚠️ Watch closely",
-          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
-          "source": "archive"
-        },
-        "2024-11-22": {
-          "score": 42,
-          "status": "⚠️ Watch closely",
-          "quality": "",
-          "source": "archive"
-        },
-        "2024-11-23": {
           "score": 38,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
-        "2024-11-24": {
-          "score": 34,
+        "2024-11-20": {
+          "score": 48,
           "status": "⚠️ Watch closely",
+          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
+          "source": "archive"
+        },
+        "2024-11-21": {
+          "score": 42,
+          "status": "⚠️ Watch closely",
+          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
+          "source": "archive"
+        },
+        "2024-11-22": {
+          "score": 32,
+          "status": "❄️ Season terminated by frost",
+          "quality": "",
+          "source": "archive"
+        },
+        "2024-11-23": {
+          "score": 26,
+          "status": "❄️ Season terminated by frost",
+          "quality": "",
+          "source": "archive"
+        },
+        "2024-11-24": {
+          "score": 21,
+          "status": "❄️ Season terminated by frost",
           "quality": "",
           "source": "archive"
         },
         "2024-11-25": {
+          "score": 21,
+          "status": "❄️ Season terminated by frost",
+          "quality": "",
+          "source": "archive"
+        },
+        "2024-11-26": {
           "score": 35,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
-        "2024-11-26": {
-          "score": 44,
-          "status": "⚠️ Watch closely",
-          "quality": "",
-          "source": "archive"
-        },
         "2024-11-27": {
-          "score": 48,
+          "score": 39,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-28": {
-          "score": 52,
+          "score": 42,
           "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-11-29": {
-          "score": 55,
-          "status": "✅ Viable conditions",
+          "score": 45,
+          "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-11-30": {
-          "score": 60,
-          "status": "✅ Viable conditions",
+          "score": 49,
+          "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-12-01": {
-          "score": 58,
-          "status": "✅ Viable conditions",
+          "score": 45,
+          "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
@@ -80117,97 +80117,97 @@
           "source": "archive"
         },
         "2025-11-16": {
-          "score": 64,
+          "score": 63,
           "status": "✅ Viable conditions",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2025-11-17": {
-          "score": 71,
+          "score": 70,
           "status": "✅ Viable conditions",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2025-11-18": {
-          "score": 66,
+          "score": 64,
           "status": "✅ Viable conditions",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2025-11-19": {
-          "score": 66,
+          "score": 64,
           "status": "✅ Viable conditions",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2025-11-20": {
-          "score": 71,
+          "score": 68,
           "status": "✅ Viable conditions",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2025-11-21": {
-          "score": 67,
-          "status": "✅ Viable conditions",
+          "score": 57,
+          "status": "❄️ Season terminated by frost",
           "quality": "",
           "source": "archive"
         },
         "2025-11-22": {
-          "score": 55,
-          "status": "✅ Viable conditions",
+          "score": 50,
+          "status": "❄️ Season terminated by frost",
           "quality": "",
           "source": "archive"
         },
         "2025-11-23": {
-          "score": 41,
-          "status": "⚠️ Watch closely",
+          "score": 34,
+          "status": "❄️ Season terminated by frost",
           "quality": "",
           "source": "archive"
         },
         "2025-11-24": {
-          "score": 29,
-          "status": "⚠️ Watch closely",
+          "score": 21,
+          "status": "❄️ Season terminated by frost",
           "quality": "",
           "source": "archive"
         },
         "2025-11-25": {
-          "score": 32,
-          "status": "⚠️ Watch closely",
+          "score": 22,
+          "status": "❄️ Season terminated by frost",
           "quality": "",
           "source": "archive"
         },
         "2025-11-26": {
-          "score": 21,
-          "status": "⚠️ Watch closely",
+          "score": 9,
+          "status": "❄️ Season terminated by frost",
           "quality": "",
           "source": "archive"
         },
         "2025-11-27": {
-          "score": 15,
-          "status": "⚠️ Watch closely",
+          "score": 3,
+          "status": "❄️ Season terminated by frost",
           "quality": "",
           "source": "archive"
         },
         "2025-11-28": {
-          "score": 17,
+          "score": 4,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-11-29": {
-          "score": 23,
+          "score": 10,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-11-30": {
-          "score": 29,
+          "score": 15,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-12-01": {
-          "score": 37,
+          "score": 22,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
@@ -82097,7 +82097,7 @@
           "source": "forecast"
         }
       },
-      "scores_signature": "14:8084989a5985",
+      "scores_signature": "15:8084989a5985",
       "backtest": {
         "threshold": 55,
         "observed_days": 1,
@@ -89041,8 +89041,8 @@
   },
   "schema_version": 3,
   "meta": {
-    "last_run_utc": "2026-10-05T15:52:37Z",
+    "last_run_utc": "2026-10-05T16:25:22Z",
     "last_run_mode": "default",
-    "model_version": 14
+    "model_version": 15
   }
 }

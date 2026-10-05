@@ -47,6 +47,13 @@ class MergeTests(unittest.TestCase):
         merged = p.merge_records([rec("2025-09-01", precipitation_sum=9)], [rec("2025-09-01", p.SOURCE_FORECAST, precipitation_sum=1)])
         self.assertEqual(merged[0]["precipitation_sum"], 9)
 
+    def test_archive_replaces_sample_record(self):
+        sample = rec("2025-09-01", p.SOURCE_SAMPLE, precipitation_sum=1)
+        archive = rec("2025-09-01", p.SOURCE_ARCHIVE, precipitation_sum=9)
+        merged = p.merge_records([sample], [archive])
+        self.assertEqual(merged[0]["source"], p.SOURCE_ARCHIVE)
+        self.assertEqual(merged[0]["precipitation_sum"], 9)
+
     def test_empty_archive_lag_record_ignored(self):
         merged = p.merge_records([rec("2025-09-01", p.SOURCE_FORECAST)], [rec("2025-09-01", temperature_2m_max=None)])
         self.assertEqual(merged[0]["source"], p.SOURCE_FORECAST)
@@ -81,7 +88,7 @@ class HistoricalWeatherTests(unittest.TestCase):
             records = [r for r in location["daily_records"] if r["date"].startswith("2023-")]
             self.assertEqual([r["date"] for r in records], expected_dates, name)
             self.assertTrue(all(required_fields <= r.keys() for r in records), name)
-            self.assertTrue(all(r["source"] == p.SOURCE_ARCHIVE for r in records), name)
+            self.assertTrue(all(r["source"] == p.SOURCE_SAMPLE for r in records), name)
             self.assertTrue(all(day in location["daily_scores"] for day in expected_dates), name)
 
     def test_dashboard_payload_includes_2023_score_dates(self):
@@ -90,7 +97,14 @@ class HistoricalWeatherTests(unittest.TestCase):
         self.assertIsNotNone(match)
         payload = json.loads(match.group(1))
         for location in payload["locations"]:
+            records = [row for row in location["records"] if row[0].startswith("2023-")]
+            dates = {row[0] for row in records}
             self.assertTrue(any(score[0].startswith("2023-") for score in location["scores"]), location["name"])
+            self.assertEqual(len(dates), 365, location["name"])
+            self.assertEqual(len(records), 365, location["name"])
+            self.assertTrue(all(row[8] == p.SOURCE_SAMPLE for row in records))
+        self.assertIn("<option>sample</option>", report)
+        self.assertIn("generated example weather, not observations", report)
 
 
 class AntiSpamTests(unittest.TestCase):
@@ -544,6 +558,14 @@ class ScoringTests(unittest.TestCase):
         recs[-1]["source"] = p.SOURCE_FORECAST
         store["daily_scores"][recs[-1]["date"]]["source"] = p.SOURCE_FORECAST
         self.assertEqual(p.update_daily_scores(LOC, recs, store), 1)  # forecast days are
+
+    def test_sample_daily_scores_are_incrementally_cached(self):
+        records = [rec("2025-09-01", p.SOURCE_SAMPLE)]
+        store = {}
+        self.assertEqual(p.update_daily_scores(LOC, records, store), 1)
+        self.assertEqual(p.update_daily_scores(LOC, records, store), 0)
+        records[0]["source"] = p.SOURCE_ARCHIVE
+        self.assertEqual(p.update_daily_scores(LOC, records, store), 1)
 
 
 class RunoffBackfillTests(unittest.TestCase):

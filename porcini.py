@@ -133,9 +133,10 @@ MODEL_VERSION = 13  # 13: rain saturation 60 mm, soil ramp, frost/heat, graded p
 ARCHIVE_LAG_DAYS = 5
 SOURCE_ARCHIVE = "archive"
 SOURCE_FORECAST = "forecast"
-# Merge policy for the same date (see merge_records): archive > forecast; a newer forecast
-# replaces an older forecast; forecast-only (future / not yet archived) dates are preserved.
-SOURCE_RANK = {SOURCE_FORECAST: 1, SOURCE_ARCHIVE: 2}
+SOURCE_SAMPLE = "sample"
+# Merge policy for the same date (see merge_records): archive > forecast > sample.
+# A newer forecast replaces an older forecast; sample-only dates remain available.
+SOURCE_RANK = {SOURCE_SAMPLE: 0, SOURCE_FORECAST: 1, SOURCE_ARCHIVE: 2}
 
 MODE_DEFAULT = "default"
 MODE_OUTLOOK = "weekend_outlook"
@@ -432,14 +433,15 @@ def has_observation(record: Dict[str, Any]) -> bool:
 
 
 def merge_records(records: List[Dict[str, Any]], new_records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Stitch archive and forecast data into one series, one record per date.
+    """Stitch sample, archive, and forecast data into one series, one record per date.
 
     Policy (explicit, per date):
       * archive observations replace forecast placeholders for the same date;
       * a forecast never replaces an archive record;
+      * forecasts and archive observations replace sample data for the same date;
       * a newer forecast replaces an older forecast (forecasts get revised);
       * an archive record with no observation (archive lag returns nulls) is ignored;
-      * dates covered only by forecast data (recent/future) are preserved.
+      * dates covered only by forecast or sample data are preserved.
     """
     by_date: Dict[str, Dict[str, Any]] = {}
     for item in list(records) + list(new_records):
@@ -942,7 +944,8 @@ def update_daily_scores(location: Dict[str, Any], records: List[Dict[str, Any]],
     for rec in records:
         d = rec["date"]
         prev = scores.get(d)
-        if d not in force and isinstance(prev, dict) and prev.get("source") == SOURCE_ARCHIVE and rec["source"] == SOURCE_ARCHIVE:
+        if (d not in force and isinstance(prev, dict) and prev.get("source") == rec["source"]
+                and rec["source"] in (SOURCE_ARCHIVE, SOURCE_SAMPLE)):
             result[d] = prev
             continue
         score, status, quality = calculate_score_for_day(location, rec, hist, harvests)
@@ -1439,7 +1442,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     <h2>🔎 Observation Browser <button class="info-button" type="button" data-info="observations" aria-label="How field observations affect the score" aria-haspopup="dialog" aria-controls="info-dialog">ⓘ</button></h2>
     <div class="card">
       <div class="toolbar"><label for="q">Date filter<input id="q" placeholder="ISO prefix, e.g. 2025-09" /></label>
-      <label for="src">Weather source<select id="src"><option value="">All sources</option><option>archive</option><option>forecast</option></select></label></div>
+      <label for="src">Weather source<select id="src"><option value="">All sources</option><option>archive</option><option>forecast</option><option>sample</option></select></label></div>
       <div class="table-wrap"><table class="observation-table"><thead><tr><th>Date</th><th>Index</th><th>Tmax</th><th>Rain mm</th><th>Wind</th><th>Soil °C</th><th>RH %</th><th>Source</th></tr></thead><tbody id="rows"></tbody></table></div>
       <div class="toolbar"><button id="prev">&laquo; Previous</button><button id="next">Next &raquo;</button><span id="pageinfo" class="meta"></span></div>
     </div>
@@ -1506,7 +1509,7 @@ __OBSERVATION_LOG__
         'A 90-day rainfall comparison can apply a modest drought penalty when rain is unusually low against seasonally comparable prior-year periods. It is omitted until enough local archive data is available.',
         'Measured 0–7 cm soil moisture is a smaller supporting signal. Soil texture and local calibration affect what a given volumetric moisture value means; soil temperature does not directly add score points.',
         'Concentrated heavy rain can apply a small runoff penalty. No new high-rain cutoff is assumed without local observations. Aspect/canopy rain-retention adjustments are not used.',
-        'Weather source “archive” means recorded past weather; “forecast” means weather-model data. Weather inputs guide the score; they do not confirm mushrooms are present.'
+        'Weather source “archive” means recorded past weather; “forecast” means weather-model data; “sample” means generated example weather, not observations. Weather inputs guide the score; they do not confirm mushrooms are present.'
       ]],
       score: ['How the forecast score works', [
         'The weather feed supplies 7 forecast days in total (including today) and the previous 7 days of recent weather. That means it can score up to 6 calendar days after today; beyond that, this dashboard has no forward weather forecast. Older observed weather is kept in the archive.',

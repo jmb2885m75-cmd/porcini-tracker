@@ -57110,33 +57110,30 @@
       },
       "scores_signature": "13:c1044583e3f1",
       "backtest": {
-        "threshold": 65,
+        "threshold": 55,
         "observed_days": 8,
         "find_days": 7,
         "no_find_days": 1,
-        "finds_above_threshold": 1,
+        "finds_above_threshold": 4,
         "no_finds_above_threshold": 0,
-        "find_hit_rate": 0.143,
+        "find_hit_rate": 0.571,
         "no_find_above_threshold_rate": 0.0,
         "mean_score_on_find_days": 54.0,
         "mean_score_on_no_find_days": 26.0,
         "suggested_threshold": 45,
-        "true_false_negatives": 2,
+        "true_false_negatives": 1,
         "genuine_miss_dates": [
-          "2023-11-10",
-          "2025-09-18"
+          "2023-11-10"
         ],
-        "post_harvest_low_find_days": 4,
+        "post_harvest_low_find_days": 2,
         "post_harvest_low_find_dates": [
           "2023-11-17",
-          "2024-10-11",
-          "2024-10-18",
           "2025-09-28"
         ],
         "find_breakdown": {
-          "above_threshold": 1,
-          "post_harvest_below_threshold": 4,
-          "genuine_below_threshold": 2
+          "above_threshold": 4,
+          "post_harvest_below_threshold": 2,
+          "genuine_below_threshold": 1
         },
         "post_harvest_false_positives": 0,
         "find_weekday_counts": {
@@ -82102,7 +82099,7 @@
       },
       "scores_signature": "13:8084989a5985",
       "backtest": {
-        "threshold": 65,
+        "threshold": 55,
         "observed_days": 1,
         "find_days": 0,
         "no_find_days": 1,
@@ -89044,7 +89041,7 @@
   },
   "schema_version": 3,
   "meta": {
-    "last_run_utc": "2026-10-05T11:29:51Z",
+    "last_run_utc": "2026-10-05T11:32:56Z",
     "last_run_mode": "default",
     "model_version": 13
   }

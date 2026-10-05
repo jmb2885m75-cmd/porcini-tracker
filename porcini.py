@@ -130,7 +130,7 @@ FLUSH_DEPLETION_TIERS = ((1, 40), (3, 30), (7, 20), (14, 10))
 DEFAULT_DEPLETION_RECOVERY_DAYS = 14
 SMALL_HARVEST_DEPLETION_RECOVERY_DAYS = 10
 DEFAULT_EARLY_HARVEST_PENALTY_FACTOR = 0.5
-MODEL_VERSION = 14  # 14: progressive/repeated frost penalty; 13: rain saturation 60 mm, soil ramp, frost/heat, graded post-flush, host-tree matching; 12: flush depletion, lighter no-find penalty; 11: temp ranges, split rain, humidity, post-flush, seasonal params; 10: formatted status labels
+MODEL_VERSION = 15  # 15: hard freeze at -1.5C, stronger repeat-freeze penalty, late-season decay; 14: progressive/repeated frost penalty; 13: rain saturation 60 mm, soil ramp, frost/heat, graded post-flush, host-tree matching; 12: flush depletion, lighter no-find penalty; 11: temp ranges, split rain, humidity, post-flush, seasonal params; 10: formatted status labels
 ARCHIVE_LAG_DAYS = 5
 SOURCE_ARCHIVE = "archive"
 SOURCE_FORECAST = "forecast"
@@ -189,12 +189,17 @@ VERY_FAVOURABLE_THRESHOLD = 75
 # a lighter sub-zero night (Tmin < FROST_LIGHT_TMIN_C) costs FROST_LIGHT_PENALTY, and each further sub-zero
 # night in the last FROST_REPEAT_WINDOW_DAYS adds FROST_REPEAT_PENALTY_PER_NIGHT (capped), so one cold snap in a
 # mild autumn is damped only a little while repeated freezes suppress the score.
-FROST_TMIN_C = -2.0
+# Late-season decay (northern hemisphere only): a penalty ramping linearly from 0 on LATE_SEASON_DECAY_START to
+# LATE_SEASON_DECAY_MAX on LATE_SEASON_DECAY_END. A hard freeze in the recent window during the decay ramp ends the season.
+FROST_TMIN_C = -1.5
 FROST_LIGHT_TMIN_C = 0.0
 FROST_RECENT_DAYS = 3
 FROST_REPEAT_WINDOW_DAYS = 14
-FROST_REPEAT_PENALTY_PER_NIGHT = 3
-FROST_REPEAT_PENALTY_MAX = 15
+FROST_REPEAT_PENALTY_PER_NIGHT = 4
+FROST_REPEAT_PENALTY_MAX = 20
+LATE_SEASON_DECAY_START = (11, 15)
+LATE_SEASON_DECAY_END = (12, 10)
+LATE_SEASON_DECAY_MAX = 15
 FROST_LIGHT_PENALTY = 4
 HEAT_TMAX_C = 25.0
 FROST_PENALTY = 10
@@ -669,6 +674,33 @@ def has_runoff(hist: History, day: date) -> bool:
     return False
 
 
+def is_northern_hemisphere(location: Optional[Dict[str, Any]] = None) -> bool:
+    """Locations without a usable latitude are treated as northern hemisphere."""
+    try:
+        return float((location or {}).get("latitude", 1.0)) >= 0
+    except (TypeError, ValueError):
+        return True
+
+
+def late_season_decay_penalty(day: date, location: Optional[Dict[str, Any]] = None) -> int:
+    """Linear 0..LATE_SEASON_DECAY_MAX penalty between LATE_SEASON_DECAY_START and LATE_SEASON_DECAY_END (northern hemisphere)."""
+    if not is_northern_hemisphere(location):
+        return 0
+    start = date(day.year, *LATE_SEASON_DECAY_START)
+    end = date(day.year, *LATE_SEASON_DECAY_END)
+    if day <= start:
+        return 0
+    if day >= end:
+        return LATE_SEASON_DECAY_MAX
+    return round(LATE_SEASON_DECAY_MAX * (day - start).days / (end - start).days)
+
+
+def hard_freeze_recent(hist: History, day: date) -> bool:
+    """True if any of the last FROST_RECENT_DAYS complete days before `day` had Tmin below FROST_TMIN_C."""
+    return any(r.get("temperature_2m_min") is not None and float(r["temperature_2m_min"]) < FROST_TMIN_C
+               for r in hist.window(day - timedelta(days=1), FROST_RECENT_DAYS))
+
+
 def frost_penalty(hist: History, day: date) -> int:
     """Points to subtract for freezing nights in the recent window of complete days before `day`.
 
@@ -869,6 +901,8 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
         score -= 5
 
     score -= frost_penalty(hist, d)
+    decay = late_season_decay_penalty(d, location)
+    score -= decay
     recent_days = hist.window(d - timedelta(days=1), 3)
     if any(r.get("temperature_2m_max") is not None and float(r["temperature_2m_max"]) > HEAT_TMAX_C for r in recent_days):
         score -= HEAT_PENALTY
@@ -885,6 +919,8 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
         score += soil_moisture_points(float(soil_moisture))
         if soil_moisture <= SOIL_DRY:
             status = "💧 Too dry – low soil moisture"
+    if decay > 0 and hard_freeze_recent(hist, d):
+        status = "❄️ Season terminated by frost"
 
     tree_species = location.get("tree_species", [])
     normalized_species = {str(tree).strip().lower() for tree in tree_species} if isinstance(tree_species, list) else set()
@@ -970,6 +1006,7 @@ def score_breakdown(location: Dict[str, Any], daily: Dict[str, Any], hist: Histo
         "temperature": temperature_score(temp, seasonal["optimal_temp_range"]) if temp is not None else 0,
         "soil_moisture": soil_moisture_points(float(soil)) if soil is not None else 0,
         "frost": -frost_penalty(hist, d),
+        "late_season_decay": -late_season_decay_penalty(d, location),
     }
     return out
 

@@ -128,6 +128,7 @@ NO_FIND_PENALTY = (10, 5)
 # Flush depletion after a harvest: (max days since harvest, penalty)
 FLUSH_DEPLETION_TIERS = ((1, 40), (3, 30), (7, 20), (14, 10))
 DEFAULT_DEPLETION_RECOVERY_DAYS = 14
+SMALL_HARVEST_DEPLETION_RECOVERY_DAYS = 10
 DEFAULT_EARLY_HARVEST_PENALTY_FACTOR = 0.5
 MODEL_VERSION = 13  # 13: rain saturation 60 mm, soil ramp, frost/heat, graded post-flush, host-tree matching; 12: flush depletion, lighter no-find penalty; 11: temp ranges, split rain, humidity, post-flush, seasonal params; 10: formatted status labels
 ARCHIVE_LAG_DAYS = 5
@@ -173,7 +174,7 @@ POST_FLUSH_BONUS = 10
 POST_FLUSH_FULL_BASE_SCORE = 40  # full bonus from this weather-based score upward
 POST_FLUSH_RAMP = 15  # bonus scales linearly from 0 at (full - ramp)
 CALIBRATION_HIT_RATE_MIN = 0.70
-CALIBRATION_MIN_FIND_DAYS = 5
+CALIBRATION_MIN_FIND_DAYS = 3
 RUNOFF_MIN_DAY_MM = 15.0
 FLUSH_RAIN_WINDOW_DAYS = 26
 FLUSH_TEMPERATURE_WINDOW_DAYS = 20
@@ -756,6 +757,12 @@ def depletion_penalty_for_day(location: Dict[str, Any], past_harvests: List[Dict
         recovery_days = int(location.get("depletion_recovery_days", DEFAULT_DEPLETION_RECOVERY_DAYS))
     except (TypeError, ValueError):
         recovery_days = DEFAULT_DEPLETION_RECOVERY_DAYS
+    if latest.get("cap_stage") == "buttons_young" or latest.get("yield_tier") == "small":
+        try:
+            small_days = int(location.get("small_harvest_depletion_recovery_days", SMALL_HARVEST_DEPLETION_RECOVERY_DAYS))
+        except (TypeError, ValueError):
+            small_days = SMALL_HARVEST_DEPLETION_RECOVERY_DAYS
+        recovery_days = min(recovery_days, small_days)
     penalty = flush_depletion_penalty([parse_date(latest["date"])], day, recovery_days)
     if penalty and (latest.get("cap_stage") == "buttons_young" or latest.get("yield_tier") == "small"):
         try:
@@ -1016,6 +1023,12 @@ def backtest_accuracy(location: Dict[str, Any], records: List[Dict[str, Any]],
         "true_false_negatives": len(true_false_negatives),
         "genuine_miss_dates": true_false_negatives,
         "post_harvest_low_find_days": len(post_harvest_low_finds),
+        "post_harvest_low_find_dates": post_harvest_low_finds,
+        "find_breakdown": {
+            "above_threshold": finds_above,
+            "post_harvest_below_threshold": len(post_harvest_low_finds),
+            "genuine_below_threshold": len(true_false_negatives),
+        },
         "post_harvest_false_positives": len(post_harvest_false_positives),
         "find_weekday_counts": find_weekday_counts(location, harvests),
     }
@@ -1045,6 +1058,22 @@ def calibration_messages(name: str, backtest: Dict[str, Any], location: Optional
         if suggested is not None and suggested < backtest.get("threshold", 0):
             message += f"; consider ALERT_THRESHOLD={suggested}"
         messages.append(message)
+        post_low = backtest.get("post_harvest_low_find_days") or 0
+        genuine = backtest.get("true_false_negatives") or 0
+        if post_low and post_low >= genuine:
+            messages.append(
+                f"[WARN] {name}: {post_low} low find-days followed an earlier harvest and {genuine} did not; "
+                "depletion is likely suppressing scores, so adjust depletion before lowering the threshold")
+        elif genuine:
+            messages.append(
+                f"[WARN] {name}: {genuine} low find-days had no recent harvest and {post_low} did; "
+                "scores are low across the board, so a lower threshold would help more than depletion changes")
+    mean_find = backtest.get("mean_score_on_find_days")
+    mean_no_find = backtest.get("mean_score_on_no_find_days")
+    if find_days >= CALIBRATION_MIN_FIND_DAYS and mean_find is not None and mean_no_find is not None and mean_find <= mean_no_find:
+        messages.append(
+            f"[WARN] {name}: mean score on find days ({mean_find}) is not above no-find days ({mean_no_find}); "
+            "the score does not differentiate finds from non-finds, so lowering the threshold may only add false alerts")
     counts = backtest.get("find_weekday_counts") or {}
     total = sum(counts.values())
     if total >= CALIBRATION_MIN_FIND_DAYS:

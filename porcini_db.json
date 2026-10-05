@@ -57127,6 +57127,17 @@
           "2025-09-18"
         ],
         "post_harvest_low_find_days": 4,
+        "post_harvest_low_find_dates": [
+          "2023-11-17",
+          "2024-10-11",
+          "2024-10-18",
+          "2025-09-28"
+        ],
+        "find_breakdown": {
+          "above_threshold": 1,
+          "post_harvest_below_threshold": 4,
+          "genuine_below_threshold": 2
+        },
         "post_harvest_false_positives": 0,
         "find_weekday_counts": {
           "Mon": 0,
@@ -82105,6 +82116,12 @@
         "true_false_negatives": 0,
         "genuine_miss_dates": [],
         "post_harvest_low_find_days": 0,
+        "post_harvest_low_find_dates": [],
+        "find_breakdown": {
+          "above_threshold": 0,
+          "post_harvest_below_threshold": 0,
+          "genuine_below_threshold": 0
+        },
         "post_harvest_false_positives": 0,
         "find_weekday_counts": {
           "Mon": 0,
@@ -89027,7 +89044,7 @@
   },
   "schema_version": 3,
   "meta": {
-    "last_run_utc": "2026-10-05T11:22:10Z",
+    "last_run_utc": "2026-10-05T11:29:26Z",
     "last_run_mode": "default",
     "model_version": 13
   }

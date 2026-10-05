@@ -425,6 +425,42 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(p.calculate_score_for_day(LOC, recs[-1], hist, [])[0], base - p.FROST_PENALTY)
         self.assertEqual(p.alert_threshold({"ALERT_THRESHOLD": "abc"}), p.DEFAULT_ALERT_THRESHOLD)
 
+    def _frost_hist(self, tmins):
+        recs = series(date(2025, 11, 1), len(tmins) + 1, precipitation_sum=3.0)
+        for r, t in zip(recs, tmins):
+            r["temperature_2m_min"] = t
+        return p.History(recs), date.fromisoformat(recs[-1]["date"])
+
+    def test_frost_penalty_threshold_edges(self):
+        warm = [5.0] * 14
+        for tmin, expected in ((0.0, 0), (-0.1, p.FROST_LIGHT_PENALTY), (-2.0, p.FROST_LIGHT_PENALTY), (-2.1, p.FROST_PENALTY)):
+            hist, day = self._frost_hist(warm[:-1] + [tmin])
+            self.assertEqual(p.frost_penalty(hist, day), expected, tmin)
+        hist, day = self._frost_hist([None] * 14)
+        self.assertEqual(p.frost_penalty(hist, day), 0)
+
+    def test_repeated_frost_nights_add_capped_penalty(self):
+        hist, day = self._frost_hist([5.0] * 10 + [-1.0, 5.0, 5.0, -1.0])
+        self.assertEqual(p.frost_penalty(hist, day), p.FROST_LIGHT_PENALTY + p.FROST_REPEAT_PENALTY_PER_NIGHT)
+        hist, day = self._frost_hist([-5.0] * 14)
+        self.assertEqual(p.frost_penalty(hist, day), p.FROST_PENALTY + p.FROST_REPEAT_PENALTY_MAX)
+
+    def test_repeated_freezing_suppresses_late_peak_but_mild_late_season_stays_moderate(self):
+        def late_hist(tmin):
+            recs = series(date(2025, 10, 20), 40, precipitation_sum=3.0)
+            for r in recs:
+                r["temperature_2m_min"] = tmin(r["date"])
+                r["temperature_2m_max"] = 11.0
+            return p.History(recs)
+        mild = late_hist(lambda d: 5.0)
+        freezing = late_hist(lambda d: -4.0 if d >= "2025-11-10" else 5.0)
+        day = date(2025, 11, 21)
+        mild_score = p.calculate_score_for_day(LOC, mild.get(day), mild, [])[0]
+        frozen_score = p.calculate_score_for_day(LOC, freezing.get(day), freezing, [])[0]
+        self.assertGreaterEqual(mild_score, 45)
+        self.assertLessEqual(frozen_score, mild_score - p.FROST_PENALTY - p.FROST_REPEAT_PENALTY_MAX)
+        self.assertEqual(p.score_breakdown(LOC, freezing.get(day), freezing)["frost"], -(p.FROST_PENALTY + p.FROST_REPEAT_PENALTY_MAX))
+
     def test_high_soil_moisture_adds_five_points(self):
         recs = series(date(2025, 8, 20), 60, precipitation_sum=3.0)
         hist = p.History(recs)

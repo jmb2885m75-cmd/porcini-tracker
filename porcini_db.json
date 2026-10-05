@@ -48761,11 +48761,11 @@
           "date": "2026-10-07",
           "source": "forecast",
           "precipitation_sum": 0.0,
-          "temperature_2m_max": 21.8,
+          "temperature_2m_max": 20.2,
           "temperature_2m_min": 7.9,
           "wind_speed_10m_max": 8.3,
           "soil_temperature_0_to_7cm_mean": 12.9,
-          "relative_humidity_2m_mean": 81,
+          "relative_humidity_2m_mean": 83,
           "soil_moisture_0_to_7cm_mean": 0.226,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
@@ -48773,25 +48773,25 @@
         {
           "date": "2026-10-08",
           "source": "forecast",
-          "precipitation_sum": 7.3,
-          "temperature_2m_max": 14.6,
-          "temperature_2m_min": 8.0,
+          "precipitation_sum": 2.5,
+          "temperature_2m_max": 16.0,
+          "temperature_2m_min": 7.6,
           "wind_speed_10m_max": 19.7,
           "soil_temperature_0_to_7cm_mean": 13.0,
-          "relative_humidity_2m_mean": 81,
+          "relative_humidity_2m_mean": 80,
           "soil_moisture_0_to_7cm_mean": 0.225,
-          "precip_peak_2h_mm": 4.3,
+          "precip_peak_2h_mm": 0.9,
           "precip_peak_basis": "hourly"
         },
         {
           "date": "2026-10-09",
           "source": "forecast",
-          "precipitation_sum": 1.8,
-          "temperature_2m_max": 12.4,
-          "temperature_2m_min": 8.9,
+          "precipitation_sum": 2.1,
+          "temperature_2m_max": 11.9,
+          "temperature_2m_min": 9.0,
           "wind_speed_10m_max": 19.5,
           "soil_temperature_0_to_7cm_mean": 12.0,
-          "relative_humidity_2m_mean": 77,
+          "relative_humidity_2m_mean": 79,
           "soil_moisture_0_to_7cm_mean": 0.227,
           "precip_peak_2h_mm": 1.0,
           "precip_peak_basis": "hourly"
@@ -48799,14 +48799,14 @@
         {
           "date": "2026-10-10",
           "source": "forecast",
-          "precipitation_sum": 3.0,
+          "precipitation_sum": 2.7,
           "temperature_2m_max": 14.8,
           "temperature_2m_min": 8.6,
           "wind_speed_10m_max": 14.5,
           "soil_temperature_0_to_7cm_mean": 12.6,
-          "relative_humidity_2m_mean": 81,
+          "relative_humidity_2m_mean": 82,
           "soil_moisture_0_to_7cm_mean": 0.248,
-          "precip_peak_2h_mm": 1.9,
+          "precip_peak_2h_mm": 1.6,
           "precip_peak_basis": "hourly"
         },
         {
@@ -50580,19 +50580,19 @@
           "source": "sample"
         },
         "2023-10-20": {
-          "score": 33,
-          "status": "💧 Too dry – low soil moisture",
-          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
-          "source": "sample"
-        },
-        "2023-10-21": {
           "score": 29,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
+        "2023-10-21": {
+          "score": 25,
+          "status": "💧 Too dry – low soil moisture",
+          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
+          "source": "sample"
+        },
         "2023-10-22": {
-          "score": 27,
+          "score": 23,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
@@ -50712,19 +50712,19 @@
           "source": "sample"
         },
         "2023-11-11": {
-          "score": 32,
+          "score": 28,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-12": {
-          "score": 37,
+          "score": 33,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-13": {
-          "score": 37,
+          "score": 33,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
@@ -50742,97 +50742,97 @@
           "source": "sample"
         },
         "2023-11-16": {
-          "score": 41,
+          "score": 34,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-17": {
-          "score": 47,
+          "score": 30,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-18": {
-          "score": 32,
+          "score": 22,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-19": {
-          "score": 36,
+          "score": 23,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-20": {
-          "score": 41,
+          "score": 28,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-21": {
-          "score": 37,
+          "score": 24,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-22": {
-          "score": 33,
+          "score": 24,
           "status": "💧 Too dry – low soil moisture",
           "quality": "",
           "source": "sample"
         },
         "2023-11-23": {
-          "score": 38,
+          "score": 29,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-24": {
-          "score": 38,
+          "score": 24,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-25": {
-          "score": 42,
+          "score": 32,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-26": {
-          "score": 37,
+          "score": 27,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-27": {
-          "score": 30,
+          "score": 19,
           "status": "💧 Too dry – low soil moisture",
           "quality": "",
           "source": "sample"
         },
         "2023-11-28": {
-          "score": 28,
+          "score": 15,
           "status": "💧 Too dry – low soil moisture",
           "quality": "",
           "source": "sample"
         },
         "2023-11-29": {
-          "score": 28,
+          "score": 15,
           "status": "💧 Too dry – low soil moisture",
           "quality": "",
           "source": "sample"
         },
         "2023-11-30": {
-          "score": 40,
+          "score": 21,
           "status": "💧 Too dry – low soil moisture",
           "quality": "",
           "source": "sample"
         },
         "2023-12-01": {
-          "score": 54,
+          "score": 47,
           "status": "💧 Too dry – low soil moisture",
           "quality": "",
           "source": "sample"
@@ -52974,62 +52974,62 @@
           "source": "archive"
         },
         "2024-11-22": {
-          "score": 41,
+          "score": 37,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-23": {
-          "score": 40,
+          "score": 33,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-24": {
-          "score": 43,
+          "score": 33,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-25": {
-          "score": 47,
+          "score": 37,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-26": {
-          "score": 57,
-          "status": "✅ Viable conditions",
+          "score": 47,
+          "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-27": {
-          "score": 55,
-          "status": "✅ Viable conditions",
+          "score": 49,
+          "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-28": {
-          "score": 63,
+          "score": 57,
           "status": "✅ Viable conditions",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-11-29": {
-          "score": 59,
-          "status": "✅ Viable conditions",
+          "score": 53,
+          "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-11-30": {
-          "score": 58,
-          "status": "✅ Viable conditions",
+          "score": 52,
+          "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-12-01": {
-          "score": 58,
-          "status": "✅ Viable conditions",
+          "score": 45,
+          "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
@@ -54966,19 +54966,19 @@
           "source": "archive"
         },
         "2025-10-20": {
-          "score": 43,
+          "score": 37,
           "status": "🌱 Flush depleted after harvest",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2025-10-21": {
-          "score": 51,
+          "score": 45,
           "status": "🔄 Post-flush conditions persist",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2025-10-22": {
-          "score": 56,
+          "score": 52,
           "status": "🔄 Post-flush conditions persist",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
@@ -55158,67 +55158,67 @@
           "source": "archive"
         },
         "2025-11-21": {
-          "score": 74,
+          "score": 70,
           "status": "✅ Viable conditions",
           "quality": "",
           "source": "archive"
         },
         "2025-11-22": {
-          "score": 61,
+          "score": 58,
           "status": "✅ Viable conditions",
           "quality": "",
           "source": "archive"
         },
         "2025-11-23": {
-          "score": 43,
+          "score": 37,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-11-24": {
-          "score": 36,
+          "score": 27,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-11-25": {
-          "score": 41,
+          "score": 29,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-11-26": {
-          "score": 38,
+          "score": 23,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-11-27": {
-          "score": 30,
+          "score": 15,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-11-28": {
-          "score": 34,
+          "score": 15,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-11-29": {
-          "score": 40,
+          "score": 21,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-11-30": {
-          "score": 42,
+          "score": 27,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-12-01": {
-          "score": 51,
+          "score": 36,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
@@ -57090,25 +57090,25 @@
           "source": "forecast"
         },
         "2026-10-09": {
-          "score": 33,
+          "score": 27,
           "status": "⚠️ Watch closely",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         },
         "2026-10-10": {
-          "score": 38,
+          "score": 33,
           "status": "⚠️ Watch closely",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         },
         "2026-10-11": {
-          "score": 44,
+          "score": 39,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "forecast"
         }
       },
-      "scores_signature": "13:abe5bd48d133",
+      "scores_signature": "14:abe5bd48d133",
       "backtest": {
         "threshold": 55,
         "observed_days": 9,
@@ -57118,7 +57118,7 @@
         "no_finds_above_threshold": 0,
         "find_hit_rate": 0.625,
         "no_find_above_threshold_rate": 0.0,
-        "mean_score_on_find_days": 55.2,
+        "mean_score_on_find_days": 53.1,
         "mean_score_on_no_find_days": 26.0,
         "suggested_threshold": 45,
         "true_false_negatives": 1,
@@ -73750,11 +73750,11 @@
           "date": "2026-10-07",
           "source": "forecast",
           "precipitation_sum": 0.0,
-          "temperature_2m_max": 21.5,
+          "temperature_2m_max": 21.0,
           "temperature_2m_min": 7.9,
           "wind_speed_10m_max": 8.7,
           "soil_temperature_0_to_7cm_mean": 13.4,
-          "relative_humidity_2m_mean": 78,
+          "relative_humidity_2m_mean": 80,
           "soil_moisture_0_to_7cm_mean": 0.198,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
@@ -73762,25 +73762,25 @@
         {
           "date": "2026-10-08",
           "source": "forecast",
-          "precipitation_sum": 6.9,
-          "temperature_2m_max": 14.8,
-          "temperature_2m_min": 9.6,
+          "precipitation_sum": 2.3,
+          "temperature_2m_max": 16.4,
+          "temperature_2m_min": 9.7,
           "wind_speed_10m_max": 17.9,
           "soil_temperature_0_to_7cm_mean": 13.2,
-          "relative_humidity_2m_mean": 77,
+          "relative_humidity_2m_mean": 79,
           "soil_moisture_0_to_7cm_mean": 0.199,
-          "precip_peak_2h_mm": 4.2,
+          "precip_peak_2h_mm": 0.8,
           "precip_peak_basis": "hourly"
         },
         {
           "date": "2026-10-09",
           "source": "forecast",
           "precipitation_sum": 2.7,
-          "temperature_2m_max": 12.2,
+          "temperature_2m_max": 12.5,
           "temperature_2m_min": 8.7,
           "wind_speed_10m_max": 17.3,
           "soil_temperature_0_to_7cm_mean": 12.0,
-          "relative_humidity_2m_mean": 78,
+          "relative_humidity_2m_mean": 79,
           "soil_moisture_0_to_7cm_mean": 0.201,
           "precip_peak_2h_mm": 1.2,
           "precip_peak_basis": "hourly"
@@ -73788,14 +73788,14 @@
         {
           "date": "2026-10-10",
           "source": "forecast",
-          "precipitation_sum": 4.95,
+          "precipitation_sum": 3.9,
           "temperature_2m_max": 14.7,
           "temperature_2m_min": 8.8,
           "wind_speed_10m_max": 16.2,
           "soil_temperature_0_to_7cm_mean": 12.6,
-          "relative_humidity_2m_mean": 78,
+          "relative_humidity_2m_mean": 79,
           "soil_moisture_0_to_7cm_mean": 0.22,
-          "precip_peak_2h_mm": 2.48,
+          "precip_peak_2h_mm": 1.6,
           "precip_peak_basis": "hourly"
         },
         {
@@ -75725,103 +75725,103 @@
           "source": "sample"
         },
         "2023-11-15": {
-          "score": 50,
+          "score": 43,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-16": {
-          "score": 53,
+          "score": 46,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-17": {
-          "score": 52,
+          "score": 45,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-18": {
-          "score": 41,
+          "score": 35,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-19": {
-          "score": 41,
+          "score": 35,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-20": {
-          "score": 40,
+          "score": 31,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2023-11-21": {
-          "score": 44,
+          "score": 31,
           "status": "💧 Too dry – low soil moisture",
           "quality": "",
           "source": "sample"
         },
         "2023-11-22": {
-          "score": 36,
+          "score": 20,
           "status": "💧 Too dry – low soil moisture",
           "quality": "",
           "source": "sample"
         },
         "2023-11-23": {
-          "score": 35,
+          "score": 19,
           "status": "💧 Too dry – low soil moisture",
           "quality": "",
           "source": "sample"
         },
         "2023-11-24": {
-          "score": 35,
+          "score": 19,
           "status": "💧 Too dry – low soil moisture",
           "quality": "",
           "source": "sample"
         },
         "2023-11-25": {
-          "score": 30,
-          "status": "💧 Too dry – low soil moisture",
-          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
-          "source": "sample"
-        },
-        "2023-11-26": {
-          "score": 29,
-          "status": "💧 Too dry – low soil moisture",
-          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
-          "source": "sample"
-        },
-        "2023-11-27": {
-          "score": 28,
-          "status": "💧 Too dry – low soil moisture",
-          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
-          "source": "sample"
-        },
-        "2023-11-28": {
           "score": 18,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
-        "2023-11-29": {
-          "score": 17,
+        "2023-11-26": {
+          "score": 20,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
-        "2023-11-30": {
+        "2023-11-27": {
           "score": 19,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
+        "2023-11-28": {
+          "score": 6,
+          "status": "💧 Too dry – low soil moisture",
+          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
+          "source": "sample"
+        },
+        "2023-11-29": {
+          "score": 5,
+          "status": "💧 Too dry – low soil moisture",
+          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
+          "source": "sample"
+        },
+        "2023-11-30": {
+          "score": 7,
+          "status": "💧 Too dry – low soil moisture",
+          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
+          "source": "sample"
+        },
         "2023-12-01": {
-          "score": 26,
+          "score": 11,
           "status": "💧 Too dry – low soil moisture",
           "quality": "",
           "source": "sample"
@@ -77627,19 +77627,19 @@
           "source": "sample"
         },
         "2024-09-27": {
-          "score": 23,
+          "score": 19,
           "status": "💧 Too dry – low soil moisture",
           "quality": "",
           "source": "sample"
         },
         "2024-09-28": {
-          "score": 26,
+          "score": 22,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
         },
         "2024-09-29": {
-          "score": 23,
+          "score": 19,
           "status": "💧 Too dry – low soil moisture",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "sample"
@@ -77663,127 +77663,127 @@
           "source": "sample"
         },
         "2024-10-03": {
-          "score": 20,
+          "score": 53,
+          "status": "⚠️ Watch closely",
+          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
+          "source": "archive"
+        },
+        "2024-10-04": {
+          "score": 51,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
-        "2024-10-04": {
-          "score": 15,
-          "status": "⚠️ Watch closely",
-          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
-          "source": "archive"
-        },
         "2024-10-05": {
-          "score": 15,
+          "score": 51,
           "status": "⚠️ Watch closely",
-          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
+          "quality": "",
           "source": "archive"
         },
         "2024-10-06": {
-          "score": 14,
+          "score": 50,
           "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-10-07": {
-          "score": 19,
+          "score": 51,
           "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-10-08": {
-          "score": 20,
+          "score": 52,
           "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-10-09": {
-          "score": 45,
-          "status": "⚠️ Watch closely",
+          "score": 61,
+          "status": "✅ Viable conditions",
           "quality": "",
           "source": "archive"
         },
         "2024-10-10": {
-          "score": 45,
-          "status": "⚠️ Watch closely",
+          "score": 62,
+          "status": "✅ Viable conditions",
           "quality": "",
           "source": "archive"
         },
         "2024-10-11": {
-          "score": 45,
-          "status": "⚠️ Watch closely",
+          "score": 63,
+          "status": "✅ Viable conditions",
           "quality": "",
           "source": "archive"
         },
         "2024-10-12": {
-          "score": 45,
-          "status": "⚠️ Watch closely",
+          "score": 63,
+          "status": "✅ Viable conditions",
           "quality": "",
           "source": "archive"
         },
         "2024-10-13": {
-          "score": 45,
-          "status": "⚠️ Watch closely",
+          "score": 63,
+          "status": "✅ Viable conditions",
           "quality": "",
           "source": "archive"
         },
         "2024-10-14": {
-          "score": 45,
-          "status": "⚠️ Watch closely",
+          "score": 65,
+          "status": "✅ Viable conditions",
           "quality": "",
           "source": "archive"
         },
         "2024-10-15": {
-          "score": 45,
-          "status": "⚠️ Watch closely",
+          "score": 63,
+          "status": "✅ Viable conditions",
           "quality": "",
           "source": "archive"
         },
         "2024-10-16": {
-          "score": 45,
-          "status": "⚠️ Watch closely",
+          "score": 63,
+          "status": "✅ Viable conditions",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-10-17": {
-          "score": 39,
-          "status": "⚠️ Watch closely",
+          "score": 59,
+          "status": "✅ Viable conditions",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-10-18": {
-          "score": 28,
+          "score": 52,
           "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-10-19": {
-          "score": 46,
+          "score": 51,
           "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-10-20": {
-          "score": 46,
+          "score": 50,
           "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-10-21": {
-          "score": 36,
+          "score": 44,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-10-22": {
-          "score": 39,
+          "score": 46,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-10-23": {
-          "score": 43,
+          "score": 50,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
@@ -77837,187 +77837,187 @@
           "source": "archive"
         },
         "2024-11-01": {
-          "score": 44,
+          "score": 43,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-02": {
-          "score": 43,
+          "score": 41,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-03": {
-          "score": 43,
+          "score": 41,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-04": {
-          "score": 44,
+          "score": 41,
           "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-11-05": {
-          "score": 43,
+          "score": 39,
           "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-11-06": {
-          "score": 40,
+          "score": 36,
           "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-11-07": {
-          "score": 40,
+          "score": 35,
           "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-11-08": {
-          "score": 40,
+          "score": 34,
           "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-11-09": {
-          "score": 39,
+          "score": 32,
           "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-11-10": {
-          "score": 39,
+          "score": 32,
           "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-11-11": {
-          "score": 40,
+          "score": 32,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-12": {
-          "score": 39,
+          "score": 30,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-13": {
-          "score": 38,
+          "score": 29,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-14": {
-          "score": 39,
+          "score": 29,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-15": {
-          "score": 41,
+          "score": 31,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-16": {
-          "score": 34,
+          "score": 24,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-17": {
-          "score": 41,
+          "score": 31,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-18": {
-          "score": 45,
+          "score": 35,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-19": {
-          "score": 50,
+          "score": 40,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-20": {
-          "score": 61,
-          "status": "✅ Viable conditions",
+          "score": 51,
+          "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-11-21": {
-          "score": 55,
-          "status": "✅ Viable conditions",
+          "score": 46,
+          "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-11-22": {
-          "score": 55,
-          "status": "✅ Viable conditions",
+          "score": 42,
+          "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-23": {
-          "score": 55,
-          "status": "✅ Viable conditions",
+          "score": 38,
+          "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-24": {
-          "score": 54,
+          "score": 34,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-25": {
-          "score": 54,
+          "score": 35,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-26": {
-          "score": 63,
-          "status": "✅ Viable conditions",
+          "score": 44,
+          "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-27": {
-          "score": 63,
-          "status": "✅ Viable conditions",
+          "score": 48,
+          "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2024-11-28": {
-          "score": 64,
-          "status": "✅ Viable conditions",
+          "score": 52,
+          "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-11-29": {
-          "score": 61,
+          "score": 55,
           "status": "✅ Viable conditions",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-11-30": {
-          "score": 66,
+          "score": 60,
           "status": "✅ Viable conditions",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2024-12-01": {
-          "score": 71,
+          "score": 58,
           "status": "✅ Viable conditions",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
@@ -79967,157 +79967,157 @@
           "source": "archive"
         },
         "2025-10-22": {
-          "score": 51,
+          "score": 50,
           "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2025-10-23": {
-          "score": 46,
+          "score": 44,
           "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2025-10-24": {
-          "score": 47,
+          "score": 45,
           "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2025-10-25": {
-          "score": 47,
+          "score": 44,
           "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2025-10-26": {
-          "score": 50,
+          "score": 47,
           "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2025-10-27": {
-          "score": 61,
+          "score": 58,
           "status": "✅ Viable conditions",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2025-10-28": {
-          "score": 63,
+          "score": 60,
           "status": "✅ Viable conditions",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2025-10-29": {
-          "score": 65,
+          "score": 63,
           "status": "✅ Viable conditions",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2025-10-30": {
-          "score": 65,
-          "status": "✅ Viable conditions",
-          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
-          "source": "archive"
-        },
-        "2025-10-31": {
-          "score": 66,
-          "status": "✅ Viable conditions",
-          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
-          "source": "archive"
-        },
-        "2025-11-01": {
-          "score": 65,
-          "status": "✅ Viable conditions",
-          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
-          "source": "archive"
-        },
-        "2025-11-02": {
-          "score": 70,
-          "status": "✅ Viable conditions",
-          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
-          "source": "archive"
-        },
-        "2025-11-03": {
-          "score": 65,
-          "status": "✅ Viable conditions",
-          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
-          "source": "archive"
-        },
-        "2025-11-04": {
           "score": 62,
           "status": "✅ Viable conditions",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
+        "2025-10-31": {
+          "score": 63,
+          "status": "✅ Viable conditions",
+          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
+          "source": "archive"
+        },
+        "2025-11-01": {
+          "score": 62,
+          "status": "✅ Viable conditions",
+          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
+          "source": "archive"
+        },
+        "2025-11-02": {
+          "score": 67,
+          "status": "✅ Viable conditions",
+          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
+          "source": "archive"
+        },
+        "2025-11-03": {
+          "score": 62,
+          "status": "✅ Viable conditions",
+          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
+          "source": "archive"
+        },
+        "2025-11-04": {
+          "score": 59,
+          "status": "✅ Viable conditions",
+          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
+          "source": "archive"
+        },
         "2025-11-05": {
-          "score": 56,
-          "status": "✅ Viable conditions",
-          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
-          "source": "archive"
-        },
-        "2025-11-06": {
-          "score": 56,
-          "status": "✅ Viable conditions",
-          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
-          "source": "archive"
-        },
-        "2025-11-07": {
-          "score": 50,
-          "status": "⚠️ Watch closely",
-          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
-          "source": "archive"
-        },
-        "2025-11-08": {
-          "score": 54,
-          "status": "⚠️ Watch closely",
-          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
-          "source": "archive"
-        },
-        "2025-11-09": {
-          "score": 50,
-          "status": "⚠️ Watch closely",
-          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
-          "source": "archive"
-        },
-        "2025-11-10": {
-          "score": 48,
-          "status": "⚠️ Watch closely",
-          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
-          "source": "archive"
-        },
-        "2025-11-11": {
-          "score": 49,
-          "status": "⚠️ Watch closely",
-          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
-          "source": "archive"
-        },
-        "2025-11-12": {
           "score": 53,
           "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
+        "2025-11-06": {
+          "score": 53,
+          "status": "⚠️ Watch closely",
+          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
+          "source": "archive"
+        },
+        "2025-11-07": {
+          "score": 46,
+          "status": "⚠️ Watch closely",
+          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
+          "source": "archive"
+        },
+        "2025-11-08": {
+          "score": 50,
+          "status": "⚠️ Watch closely",
+          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
+          "source": "archive"
+        },
+        "2025-11-09": {
+          "score": 46,
+          "status": "⚠️ Watch closely",
+          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
+          "source": "archive"
+        },
+        "2025-11-10": {
+          "score": 44,
+          "status": "⚠️ Watch closely",
+          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
+          "source": "archive"
+        },
+        "2025-11-11": {
+          "score": 45,
+          "status": "⚠️ Watch closely",
+          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
+          "source": "archive"
+        },
+        "2025-11-12": {
+          "score": 49,
+          "status": "⚠️ Watch closely",
+          "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
+          "source": "archive"
+        },
         "2025-11-13": {
-          "score": 47,
+          "score": 42,
           "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2025-11-14": {
-          "score": 47,
+          "score": 42,
           "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2025-11-15": {
-          "score": 54,
+          "score": 49,
           "status": "⚠️ Watch closely",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
         },
         "2025-11-16": {
-          "score": 66,
+          "score": 64,
           "status": "✅ Viable conditions",
           "quality": "💎 PRIME QUALITY - Firm, bug-free caps expected.",
           "source": "archive"
@@ -80147,67 +80147,67 @@
           "source": "archive"
         },
         "2025-11-21": {
-          "score": 71,
+          "score": 67,
           "status": "✅ Viable conditions",
           "quality": "",
           "source": "archive"
         },
         "2025-11-22": {
-          "score": 58,
+          "score": 55,
           "status": "✅ Viable conditions",
           "quality": "",
           "source": "archive"
         },
         "2025-11-23": {
-          "score": 47,
+          "score": 41,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-11-24": {
-          "score": 38,
+          "score": 29,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-11-25": {
-          "score": 44,
+          "score": 32,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-11-26": {
-          "score": 36,
+          "score": 21,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-11-27": {
-          "score": 30,
+          "score": 15,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-11-28": {
-          "score": 36,
+          "score": 17,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-11-29": {
-          "score": 42,
+          "score": 23,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-11-30": {
-          "score": 44,
+          "score": 29,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-12-01": {
-          "score": 52,
+          "score": 37,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
@@ -81749,283 +81749,283 @@
           "source": "archive"
         },
         "2026-08-15": {
-          "score": 0,
+          "score": 4,
           "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
         "2026-08-16": {
-          "score": 0,
+          "score": 4,
           "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
         "2026-08-17": {
-          "score": 5,
+          "score": 12,
           "status": "⚠️ Watch closely",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
         "2026-08-18": {
-          "score": 5,
+          "score": 12,
           "status": "⚠️ Watch closely",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
         "2026-08-19": {
-          "score": 18,
-          "status": "⚠️ Watch closely",
-          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
-          "source": "archive"
-        },
-        "2026-08-20": {
-          "score": 30,
-          "status": "⚠️ Watch closely",
-          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
-          "source": "archive"
-        },
-        "2026-08-21": {
-          "score": 27,
-          "status": "⚠️ Watch closely",
-          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
-          "source": "archive"
-        },
-        "2026-08-22": {
-          "score": 26,
-          "status": "⚠️ Watch closely",
-          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
-          "source": "archive"
-        },
-        "2026-08-23": {
           "score": 25,
           "status": "⚠️ Watch closely",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
+        "2026-08-20": {
+          "score": 38,
+          "status": "⚠️ Watch closely",
+          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
+          "source": "archive"
+        },
+        "2026-08-21": {
+          "score": 36,
+          "status": "⚠️ Watch closely",
+          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
+          "source": "archive"
+        },
+        "2026-08-22": {
+          "score": 36,
+          "status": "⚠️ Watch closely",
+          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
+          "source": "archive"
+        },
+        "2026-08-23": {
+          "score": 35,
+          "status": "⚠️ Watch closely",
+          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
+          "source": "archive"
+        },
         "2026-08-24": {
-          "score": 21,
+          "score": 31,
           "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
         "2026-08-25": {
-          "score": 27,
+          "score": 37,
           "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
         "2026-08-26": {
-          "score": 26,
+          "score": 36,
           "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
         "2026-08-27": {
-          "score": 17,
+          "score": 27,
           "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
         "2026-08-28": {
-          "score": 10,
+          "score": 20,
           "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
         "2026-08-29": {
-          "score": 10,
+          "score": 20,
           "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
         "2026-08-30": {
-          "score": 11,
+          "score": 21,
           "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
         "2026-08-31": {
-          "score": 13,
+          "score": 23,
           "status": "⚠️ Watch closely",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
         "2026-09-01": {
-          "score": 18,
+          "score": 28,
           "status": "⚠️ Watch closely",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
         "2026-09-02": {
-          "score": 19,
-          "status": "⚠️ Watch closely",
-          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
-          "source": "archive"
-        },
-        "2026-09-03": {
-          "score": 22,
-          "status": "⚠️ Watch closely",
-          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
-          "source": "archive"
-        },
-        "2026-09-04": {
-          "score": 24,
-          "status": "⚠️ Watch closely",
-          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
-          "source": "archive"
-        },
-        "2026-09-05": {
-          "score": 33,
-          "status": "⚠️ Watch closely",
-          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
-          "source": "archive"
-        },
-        "2026-09-06": {
-          "score": 36,
-          "status": "⚠️ Watch closely",
-          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
-          "source": "archive"
-        },
-        "2026-09-07": {
-          "score": 34,
-          "status": "⚠️ Watch closely",
-          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
-          "source": "archive"
-        },
-        "2026-09-08": {
-          "score": 36,
-          "status": "⚠️ Watch closely",
-          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
-          "source": "archive"
-        },
-        "2026-09-09": {
-          "score": 20,
-          "status": "⚠️ Watch closely",
-          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
-          "source": "archive"
-        },
-        "2026-09-10": {
-          "score": 21,
-          "status": "⚠️ Watch closely",
-          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
-          "source": "archive"
-        },
-        "2026-09-11": {
-          "score": 22,
-          "status": "⚠️ Watch closely",
-          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
-          "source": "archive"
-        },
-        "2026-09-12": {
-          "score": 22,
-          "status": "⚠️ Watch closely",
-          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
-          "source": "archive"
-        },
-        "2026-09-13": {
-          "score": 23,
-          "status": "⚠️ Watch closely",
-          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
-          "source": "archive"
-        },
-        "2026-09-14": {
-          "score": 26,
-          "status": "⚠️ Watch closely",
-          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
-          "source": "archive"
-        },
-        "2026-09-15": {
-          "score": 22,
-          "status": "⚠️ Watch closely",
-          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
-          "source": "archive"
-        },
-        "2026-09-16": {
-          "score": 23,
-          "status": "⚠️ Watch closely",
-          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
-          "source": "archive"
-        },
-        "2026-09-17": {
-          "score": 30,
-          "status": "⚠️ Watch closely",
-          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
-          "source": "archive"
-        },
-        "2026-09-18": {
-          "score": 28,
-          "status": "⚠️ Watch closely",
-          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
-          "source": "archive"
-        },
-        "2026-09-19": {
-          "score": 24,
-          "status": "⚠️ Watch closely",
-          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
-          "source": "archive"
-        },
-        "2026-09-20": {
-          "score": 23,
-          "status": "⚠️ Watch closely",
-          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
-          "source": "archive"
-        },
-        "2026-09-21": {
-          "score": 27,
-          "status": "⚠️ Watch closely",
-          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
-          "source": "archive"
-        },
-        "2026-09-22": {
           "score": 29,
           "status": "⚠️ Watch closely",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
-        "2026-09-23": {
-          "score": 28,
-          "status": "⚠️ Watch closely",
-          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
-          "source": "archive"
-        },
-        "2026-09-24": {
+        "2026-09-03": {
           "score": 32,
           "status": "⚠️ Watch closely",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
-        "2026-09-25": {
-          "score": 42,
+        "2026-09-04": {
+          "score": 34,
           "status": "⚠️ Watch closely",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
-        "2026-09-26": {
+        "2026-09-05": {
           "score": 43,
           "status": "⚠️ Watch closely",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
-        "2026-09-27": {
-          "score": 41,
+        "2026-09-06": {
+          "score": 46,
           "status": "⚠️ Watch closely",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
-        "2026-09-28": {
+        "2026-09-07": {
+          "score": 44,
+          "status": "⚠️ Watch closely",
+          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
+          "source": "archive"
+        },
+        "2026-09-08": {
+          "score": 46,
+          "status": "⚠️ Watch closely",
+          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
+          "source": "archive"
+        },
+        "2026-09-09": {
+          "score": 30,
+          "status": "⚠️ Watch closely",
+          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
+          "source": "archive"
+        },
+        "2026-09-10": {
+          "score": 31,
+          "status": "⚠️ Watch closely",
+          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
+          "source": "archive"
+        },
+        "2026-09-11": {
+          "score": 32,
+          "status": "⚠️ Watch closely",
+          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
+          "source": "archive"
+        },
+        "2026-09-12": {
+          "score": 32,
+          "status": "⚠️ Watch closely",
+          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
+          "source": "archive"
+        },
+        "2026-09-13": {
           "score": 33,
           "status": "⚠️ Watch closely",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
+        "2026-09-14": {
+          "score": 36,
+          "status": "⚠️ Watch closely",
+          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
+          "source": "archive"
+        },
+        "2026-09-15": {
+          "score": 32,
+          "status": "⚠️ Watch closely",
+          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
+          "source": "archive"
+        },
+        "2026-09-16": {
+          "score": 33,
+          "status": "⚠️ Watch closely",
+          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
+          "source": "archive"
+        },
+        "2026-09-17": {
+          "score": 40,
+          "status": "⚠️ Watch closely",
+          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
+          "source": "archive"
+        },
+        "2026-09-18": {
+          "score": 38,
+          "status": "⚠️ Watch closely",
+          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
+          "source": "archive"
+        },
+        "2026-09-19": {
+          "score": 34,
+          "status": "⚠️ Watch closely",
+          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
+          "source": "archive"
+        },
+        "2026-09-20": {
+          "score": 31,
+          "status": "⚠️ Watch closely",
+          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
+          "source": "archive"
+        },
+        "2026-09-21": {
+          "score": 35,
+          "status": "⚠️ Watch closely",
+          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
+          "source": "archive"
+        },
+        "2026-09-22": {
+          "score": 37,
+          "status": "⚠️ Watch closely",
+          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
+          "source": "archive"
+        },
+        "2026-09-23": {
+          "score": 35,
+          "status": "⚠️ Watch closely",
+          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
+          "source": "archive"
+        },
+        "2026-09-24": {
+          "score": 39,
+          "status": "⚠️ Watch closely",
+          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
+          "source": "archive"
+        },
+        "2026-09-25": {
+          "score": 52,
+          "status": "⚠️ Watch closely",
+          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
+          "source": "archive"
+        },
+        "2026-09-26": {
+          "score": 53,
+          "status": "⚠️ Watch closely",
+          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
+          "source": "archive"
+        },
+        "2026-09-27": {
+          "score": 51,
+          "status": "⚠️ Watch closely",
+          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
+          "source": "archive"
+        },
+        "2026-09-28": {
+          "score": 43,
+          "status": "⚠️ Watch closely",
+          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
+          "source": "archive"
+        },
         "2026-09-29": {
-          "score": 27,
+          "score": 36,
           "status": "⚠️ Watch closely",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
         },
         "2026-09-30": {
-          "score": 22,
+          "score": 31,
           "status": "💧 Too dry – low soil moisture",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "archive"
@@ -82079,25 +82079,25 @@
           "source": "forecast"
         },
         "2026-10-09": {
-          "score": 32,
+          "score": 26,
           "status": "⚠️ Watch closely",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         },
         "2026-10-10": {
-          "score": 39,
+          "score": 31,
           "status": "⚠️ Watch closely",
           "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         },
         "2026-10-11": {
-          "score": 49,
+          "score": 39,
           "status": "⚠️ Watch closely",
-          "quality": "",
+          "quality": "⚠️ HIGH MAGGOT RISK - Harvest early while small.",
           "source": "forecast"
         }
       },
-      "scores_signature": "13:8084989a5985",
+      "scores_signature": "14:8084989a5985",
       "backtest": {
         "threshold": 55,
         "observed_days": 1,
@@ -89041,8 +89041,8 @@
   },
   "schema_version": 3,
   "meta": {
-    "last_run_utc": "2026-10-05T15:14:19Z",
+    "last_run_utc": "2026-10-05T15:45:11Z",
     "last_run_mode": "default",
-    "model_version": 13
+    "model_version": 14
   }
 }

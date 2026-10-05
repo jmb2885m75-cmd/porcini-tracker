@@ -13,13 +13,13 @@
     "Fangschleuse": {
       "last_alert_date": "2026-10-03",
       "last_alert_mode": "default",
-      "last_score": 54,
+      "last_score": 42,
       "last_status": "⚠️ Watch closely"
     },
     "Zosse": {
       "last_alert_date": "2026-10-03",
       "last_alert_mode": "default",
-      "last_score": 42,
+      "last_score": 34,
       "last_status": "⚠️ Watch closely"
     }
   }

@@ -322,7 +322,8 @@ class ScoringTests(unittest.TestCase):
         find = [{"date": (date.fromisoformat(day["date"]) - timedelta(days=10)).isoformat(), "yield_tier": "small"}]
         base = p.calculate_score_for_day(LOC, day, h, [])
         boosted = p.calculate_score_for_day(LOC, day, h, find)
-        self.assertEqual(boosted[0], base[0] + p.POST_FLUSH_BONUS)
+        # small yield 10 days ago: halved depletion penalty (-10 * 0.5) offsets part of the bonus
+        self.assertEqual(boosted[0], base[0] + p.POST_FLUSH_BONUS - 5)
         msgs = p.calibration_messages("A", {"find_hit_rate": 0.4, "find_days": 6, "threshold": 55, "suggested_threshold": 45})
         self.assertIn("ALERT_THRESHOLD=45", msgs[0])
 
@@ -427,7 +428,7 @@ class ScoringTests(unittest.TestCase):
 
     def test_backtest_uses_visits_only_and_excludes_same_day_observation(self):
         recs = series(date(2025, 8, 1), 60, precipitation_sum=5.0)
-        found = {"date": "2025-09-25", "observation_type": "harvest", "yield_tier": "small"}
+        found = {"date": "2025-09-05", "observation_type": "harvest", "yield_tier": "small"}
         no_find = {"date": "2025-09-26", "observation_type": "no_mushrooms"}
         results = p.backtest_accuracy(LOC, recs, [found, no_find], 40)
         self.assertEqual(results["observed_days"], 2)
@@ -436,6 +437,33 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(results["finds_above_threshold"], 1)
         self.assertEqual(results["no_finds_above_threshold"], 1)
         self.assertGreater(results["mean_score_on_no_find_days"], 20)
+
+    def test_flush_depletion_penalty_tiers(self):
+        h = [date(2025, 9, 18)]
+        expected = {0: 0, 1: -40, 2: -30, 3: -30, 4: -20, 7: -20, 8: -10, 14: -10, 15: 0}
+        for days, penalty in expected.items():
+            self.assertEqual(p.flush_depletion_penalty(h, h[0] + timedelta(days=days)), penalty, days)
+        self.assertEqual(p.flush_depletion_penalty([], date(2025, 9, 20)), 0)
+
+    def test_depletion_lowers_scores_after_harvest_but_not_on_harvest_day(self):
+        recs = series(date(2025, 8, 1), 60, precipitation_sum=5.0)
+        h = p.History(recs)
+        find = [{"date": "2025-09-18", "observation_type": "harvest", "yield_tier": "large", "cap_stage": "prime"}]
+        base = lambda d: p.calculate_score_for_day(LOC, h.get(date.fromisoformat(d)), h, [])[0]
+        with_find = lambda d: p.calculate_score_for_day(LOC, h.get(date.fromisoformat(d)), h, find)
+        self.assertEqual(with_find("2025-09-18")[0], base("2025-09-18"))
+        self.assertLess(with_find("2025-09-19")[0], base("2025-09-19"))
+        self.assertIn("depleted", with_find("2025-09-19")[1])
+        small = [dict(find[0], yield_tier="small")]
+        self.assertGreater(p.calculate_score_for_day(LOC, h.get(date(2025, 9, 19)), h, small)[0], with_find("2025-09-19")[0])
+
+    def test_backtest_separates_post_harvest_days(self):
+        recs = series(date(2025, 8, 1), 60, precipitation_sum=5.0)
+        found = {"date": "2025-09-18", "observation_type": "harvest", "yield_tier": "large"}
+        second = {"date": "2025-09-20", "observation_type": "harvest", "yield_tier": "large"}
+        results = p.backtest_accuracy(LOC, recs, [found, second], 200)
+        self.assertEqual(results["true_false_negatives"], 1)
+        self.assertEqual(results["post_harvest_low_find_days"], 1)
 
     def test_affinity_limited_to_two_years(self):
         recs = series(date(2025, 8, 20), 60, precipitation_sum=3.0)

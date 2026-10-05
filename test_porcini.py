@@ -1,4 +1,6 @@
 """Lightweight self-checks. Run: python -m unittest test_porcini -v (no network needed)."""
+import json
+import re
 import unittest
 from datetime import date, datetime, timedelta, timezone
 from unittest.mock import Mock, patch
@@ -64,6 +66,31 @@ class IntegrityTests(unittest.TestCase):
         self.assertEqual(p.check_db_integrity(db, date(2025, 9, 5)), [])
         db["locations"]["A"]["daily_records"] = [recs[0], recs[0], recs[3]]
         self.assertTrue(p.check_db_integrity(db, date(2025, 9, 5)))
+
+
+class HistoricalWeatherTests(unittest.TestCase):
+    def test_2023_weather_covers_full_year_and_has_scores(self):
+        db = p.load_json(p.DB_PATH, {})
+        expected_dates = [(date(2023, 1, 1) + timedelta(days=i)).isoformat() for i in range(365)]
+        required_fields = {
+            "date", "temperature_2m_max", "temperature_2m_min", "precipitation_sum",
+            "wind_speed_10m_max", "soil_temperature_0_to_7cm_mean",
+            "relative_humidity_2m_mean", "soil_moisture_0_to_7cm_mean", "source",
+        }
+        for name, location in db["locations"].items():
+            records = [r for r in location["daily_records"] if r["date"].startswith("2023-")]
+            self.assertEqual([r["date"] for r in records], expected_dates, name)
+            self.assertTrue(all(required_fields <= r.keys() for r in records), name)
+            self.assertTrue(all(r["source"] == p.SOURCE_ARCHIVE for r in records), name)
+            self.assertTrue(all(day in location["daily_scores"] for day in expected_dates), name)
+
+    def test_dashboard_payload_includes_2023_score_dates(self):
+        report = p.REPORT_PATH.read_text(encoding="utf-8")
+        match = re.search(r'<script id="porcini-data" type="application/json">(.*?)</script>', report, re.S)
+        self.assertIsNotNone(match)
+        payload = json.loads(match.group(1))
+        for location in payload["locations"]:
+            self.assertTrue(any(score[0].startswith("2023-") for score in location["scores"]), location["name"])
 
 
 class AntiSpamTests(unittest.TestCase):

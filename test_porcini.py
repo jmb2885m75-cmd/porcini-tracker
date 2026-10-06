@@ -130,6 +130,14 @@ class PrivacyTests(unittest.TestCase):
             p.ensure_location_history("Location 1", db, 12.3, 45.6, 7, date(2025, 9, 20))
         self.assertFalse(self.contains_coordinate_field(db))
 
+    def test_database_load_strips_coordinates_from_unconfigured_locations(self):
+        legacy = {"locations": {"Location 99": {
+            "latitude": 1.2, "longitude": 3.4, "elevation_m": 5, "daily_records": [],
+        }}}
+        with patch.object(p, "load_json_safe", return_value=legacy):
+            loaded = p.load_or_init_db()
+        self.assertFalse(self.contains_coordinate_field(loaded))
+
 
 class HistoricalWeatherTests(unittest.TestCase):
     def test_2023_weather_covers_full_year_and_has_scores(self):
@@ -826,6 +834,66 @@ class ForecastSnapshotTests(unittest.TestCase):
         self.assertIn("WARNING: sample too small", output.getvalue())
 
 
+class ForecastUncertaintyAndTimingTests(unittest.TestCase):
+    def test_rain_window_mix_counts_archive_and_forecast_days(self):
+        target = date(2025, 10, 1)
+        records = series(target - timedelta(days=26), 27)
+        for record in records[-7:]:
+            record["source"] = p.SOURCE_FORECAST
+        mix = p.forecast_rain_window_mix(records, {}, target)
+        self.assertEqual(mix, {
+            "forecast_days": 6, "archive_days": 20, "window_days": 26, "coverage_days": 26,
+        })
+        self.assertTrue(p.heavily_forecast_dependent(mix))
+        self.assertFalse(p.heavily_forecast_dependent({
+            "forecast_days": 2, "archive_days": 24, "window_days": 26, "coverage_days": 26,
+        }))
+
+    def test_rain_window_mix_uses_seasonal_window_and_available_rain_only(self):
+        target = date(2025, 9, 20)
+        records = series(target - timedelta(days=14), 15)
+        for record in records[-4:]:
+            record["source"] = p.SOURCE_FORECAST
+        records[-2]["precipitation_sum"] = None
+        mix = p.forecast_rain_window_mix(records, {}, target)
+        self.assertEqual(mix["window_days"], 14)
+        self.assertEqual(mix["forecast_days"], 2)
+        self.assertEqual(mix["archive_days"], 11)
+        self.assertEqual(mix["coverage_days"], 13)
+
+    def test_dashboard_payload_exposes_forecast_rain_provenance(self):
+        target = date(2025, 10, 1)
+        records = series(target - timedelta(days=26), 27)
+        for record in records[-7:]:
+            record["source"] = p.SOURCE_FORECAST
+        item = {
+            "name": "Actual Spot", "records": records, "scores": {}, "harvests": [],
+            "backtest": {},
+        }
+        payload = p.dashboard_payload({"LOCATIONS": [{"name": "Actual Spot"}]}, [item], p.MODE_DEFAULT)
+        self.assertEqual(payload["locations"][0]["name"], "Location 1")
+        self.assertIn([p.iso_date(target), 6, 20, 26, 26], payload["locations"][0]["rain_mix"])
+
+    def test_flush_timing_reports_first_forecast_crossing_only(self):
+        today = date(2025, 9, 1)
+        records = [
+            rec(p.iso_date(today), p.SOURCE_FORECAST),
+            rec(p.iso_date(today + timedelta(days=1)), p.SOURCE_FORECAST),
+            rec(p.iso_date(today + timedelta(days=2)), p.SOURCE_FORECAST),
+        ]
+        scores = {
+            p.iso_date(today): {"score": 40},
+            p.iso_date(today + timedelta(days=1)): {"score": 50},
+            p.iso_date(today + timedelta(days=2)): {"score": 65},
+        }
+        self.assertEqual(p.estimate_days_until_threshold(records, scores, today, 60), 2)
+        scores[p.iso_date(today)]["score"] = 60
+        self.assertEqual(p.estimate_days_until_threshold(records, scores, today, 60), 0)
+        scores[p.iso_date(today)]["score"] = 40
+        scores[p.iso_date(today + timedelta(days=2))]["score"] = 55
+        self.assertIsNone(p.estimate_days_until_threshold(records, scores, today, 60))
+
+
 class RunoffBackfillTests(unittest.TestCase):
     @staticmethod
     def hourly(day, peak):
@@ -914,6 +982,48 @@ class WeatherFailureTests(unittest.TestCase):
         ):
             self.assertEqual(p.main(), 1)
         self.assertIn("more than 3 days old", send.call_args.args[1])
+
+    def test_main_applies_configured_alert_gap(self):
+        cfg = {
+            "MIN_ALERT_GAP_DAYS": 2,
+            "LOCATIONS": [{"name": "Synthetic spot", "latitude": 1, "longitude": 2}],
+        }
+        today = datetime.now(timezone.utc).date()
+        records = [rec(p.iso_date(today), p.SOURCE_FORECAST)]
+        db = {"locations": {"Location 1": {}}}
+
+        def update_scores(location, daily_records, store):
+            store["daily_scores"] = {
+                p.iso_date(today): {"score": 70, "status": "✅ Viable conditions", "source": p.SOURCE_FORECAST}
+            }
+            return 1
+
+        with (
+            patch("sys.argv", ["porcini.py"]),
+            patch.object(p, "load_config", return_value=cfg),
+            patch.object(p, "load_or_init_db", return_value=db),
+            patch.object(p, "build_alert_state", return_value={"locations": {"Location 1": {}}}),
+            patch.object(p, "load_harvest_log", return_value={"harvests": []}),
+            patch.object(p, "ensure_location_history", return_value=records),
+            patch.object(p, "update_daily_scores", side_effect=update_scores),
+            patch.object(p, "backtest_accuracy", return_value={}),
+            patch.object(p, "calibration_messages", return_value=[]),
+            patch.object(p, "find_weekend_best", return_value=(
+                70, p.format_display_date(today), "✅ Viable conditions", ""
+            )),
+            patch.object(p, "should_alert_for_location", return_value=False) as should_alert,
+            patch.object(p, "check_db_integrity", return_value=[]),
+            patch.object(p, "save_json"),
+            patch.object(p, "generate_dashboard_html", return_value=""),
+            patch.object(p, "inject_alert_into_index"),
+            patch("pathlib.Path.write_text"),
+        ):
+            self.assertEqual(p.main(), 0)
+        self.assertEqual(should_alert.call_args.args[-1], 2)
+        self.assertEqual(
+            db["forecast_snapshots"][-1]["scores"]["Location 1"],
+            [[p.iso_date(today), 70]],
+        )
 
     def test_empty_fetch_does_not_replace_history_with_empty_data(self):
         db = {"locations": {}}

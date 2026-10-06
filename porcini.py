@@ -36,6 +36,7 @@ ARCHIVE_API_URL = "https://archive-api.open-meteo.com/v1/archive"
 FORECAST_API_URL = "https://api.open-meteo.com/v1/forecast"
 MAX_FORECAST_SNAPSHOTS = 30
 BACKTEST_MIN_CLASS_SAMPLES = 5
+HEAVY_FORECAST_RAIN_SHARE = 0.2
 
 INITIAL_ARCHIVE_DAYS = 730
 
@@ -455,6 +456,10 @@ def load_or_init_db() -> Dict[str, Any]:
     moved = migrate_legacy_entries(db)
     if moved:
         print(f"[INFO] Quarantined {moved} legacy top-level entries under '{LEGACY_KEY}'")
+    for location in db["locations"].values():
+        if isinstance(location, dict):
+            for key in ("latitude", "longitude", "elevation_m"):
+                location.pop(key, None)
     db["schema_version"] = SCHEMA_VERSION
     return db
 
@@ -665,6 +670,24 @@ def observed_rainfall_total(hist: History, day: date, days: int) -> Optional[flo
     if len(values) < math.ceil(days * 0.8):
         return None
     return sum(float(value) for value in values)
+
+
+def forecast_rain_window_mix(records: List[Dict[str, Any]], location: Dict[str, Any], day: date) -> Dict[str, int]:
+    window_days = get_seasonal_params(day, location)["rain_window"]
+    window = History(records).window(day - timedelta(days=1), window_days)
+    usable = [record for record in window if record.get("precipitation_sum") is not None]
+    forecast_days = sum(record.get("source") == SOURCE_FORECAST for record in usable)
+    archive_days = sum(record.get("source") == SOURCE_ARCHIVE for record in usable)
+    return {
+        "forecast_days": forecast_days,
+        "archive_days": archive_days,
+        "window_days": window_days,
+        "coverage_days": len(usable),
+    }
+
+
+def heavily_forecast_dependent(mix: Dict[str, int]) -> bool:
+    return mix["window_days"] > 0 and mix["forecast_days"] / mix["window_days"] >= HEAVY_FORECAST_RAIN_SHARE
 
 
 def mean_air_temperature(hist: History, day: date, days: int) -> Optional[float]:
@@ -1349,6 +1372,28 @@ def find_weekend_best(location: Dict[str, Any], records: List[Dict[str, Any]], h
     return score, format_display_date(best_date), status, flag
 
 
+def estimate_days_until_threshold(records: List[Dict[str, Any]], scores: Dict[str, Any],
+                                  today: date, threshold: int) -> Optional[int]:
+    previous = None
+    for day, value in sorted(scores.items()):
+        if valid_date_string(day) and parse_date(day) <= today:
+            previous = int(value.get("score", 0))
+    if previous is not None and previous >= threshold:
+        return 0
+    for record in sorted(records, key=lambda item: item.get("date", "")):
+        day = record.get("date")
+        if record.get("source") != SOURCE_FORECAST or not valid_date_string(day) or parse_date(day) <= today:
+            continue
+        current = scores.get(day)
+        if not isinstance(current, dict):
+            continue
+        current_score = int(current.get("score", 0))
+        if previous is not None and previous < threshold <= current_score:
+            return (parse_date(day) - today).days
+        previous = current_score
+    return None
+
+
 def explain_score(location: Dict[str, Any], records: List[Dict[str, Any]], best_day: str, status: str) -> str:
     """Return concise weather context for a scored day."""
     try:
@@ -1641,6 +1686,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     .timeline-day { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; width: 42px; min-height: 80px; padding: 14px 3px 5px; margin: 0; border-radius: 7px; }
     .timeline-day.weekend { background: #273449; }
     .timeline-day.forecast { border-style: dashed; }
+    .timeline-day.low-confidence { background-image: repeating-linear-gradient(135deg, transparent, transparent 6px, rgb(251 191 36 / 18%) 6px, rgb(251 191 36 / 18%) 9px); }
     .timeline-day.selected { outline: 2px solid var(--accent); outline-offset: 1px; }
     .timeline-day.today::after { content: "Today"; position: absolute; top: 0; color: var(--focus); font-size: .65rem; }
     .timeline-day .month { position: absolute; top: 0; font-size: .65rem; color: var(--accent); }
@@ -1711,6 +1757,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
         <label class="legend-chip"><input id="temp-toggle" type="checkbox" checked> <span class="line-key line-temp"></span>Temperature</label>
         <span class="legend-chip">🍄 Found</span><span class="legend-chip">❌ No find</span>
         <span class="legend-chip">Solid: recorded · Dashed: forecast</span>
+        <span class="legend-chip">Striped: forecast-heavy rain window (lower confidence)</span>
       </div>
       <div class="meta">Choose a date or use previous/next; arrow keys also move through days.</div>
       <div class="toolbar">
@@ -1849,6 +1896,7 @@ __OBSERVATION_LOG__
       return h;
     }
     function recMap() { var m = {}; loc.records.forEach(function (r) { m[r[0]] = r; }); return m; }
+    function rainMixMap() { var m = {}; (loc.rain_mix || []).forEach(function (r) { m[r[0]] = r; }); return m; }
     function scoreMap() { var m = {}; loc.scores.forEach(function (r) { m[r[0]] = r; }); return m; }
     function weatherOverview() {
       var body = $('weather-rows'), today = new Date().toISOString().slice(0, 10);
@@ -1912,7 +1960,7 @@ __OBSERVATION_LOG__
       var start = Math.max(0, center - 17), end = Math.min(days.length, start + 35);
       start = Math.max(0, end - 35);
       activeTimelineDates = days.slice(start, end).map(function (r) { return r[0]; });
-      var timeline = $('timeline'), records = recMap(), scores = scoreMap(), visits = harvestsFor();
+      var timeline = $('timeline'), records = recMap(), scores = scoreMap(), rainMix = rainMixMap(), visits = harvestsFor();
       timeline.textContent = '';
       activeTimelineDates.forEach(function (d, i) {
         var row = scores[d], weather = records[d], observations = visits.filter(function (h) { return h.date === d; });
@@ -1921,6 +1969,11 @@ __OBSERVATION_LOG__
         var weekday = new Date(d + 'T00:00:00Z').getUTCDay();
         if (weekday === 0 || weekday === 6) day.classList.add('weekend');
         if (weather && weather[8] === 'forecast') day.classList.add('forecast');
+        var mix = rainMix[d], confidenceTip = '';
+        if (mix && mix[3] > 0 && mix[1] / mix[3] >= __HEAVY_FORECAST_RAIN_SHARE__) {
+          day.classList.add('low-confidence');
+          confidenceTip = 'Lower confidence: preceding rain window uses forecast rain for ' + mix[1] + ' of ' + mix[3] + ' days; archive data covers ' + mix[2] + ' days.';
+        }
         if (d === selectedDate) day.classList.add('selected');
         if (d === new Date().toISOString().slice(0, 10)) day.classList.add('today');
         day.setAttribute('aria-pressed', d === selectedDate ? 'true' : 'false');
@@ -1935,7 +1988,7 @@ __OBSERVATION_LOG__
         var bar = document.createElement('span'), score = row ? row[1] : 0;
         bar.style.width = Math.max(0, Math.min(100, score)) + '%'; bar.style.background = row ? row[5] : '';
         heat.appendChild(bar); day.appendChild(heat);
-        day.title = fmtDate(d) + (row ? ', favourability index ' + score + ' of 100' : '') + (observations.length ? ', ' + observations.map(function (h) { return h.observation_type === 'no_mushrooms' ? 'no mushrooms found' : 'mushrooms found'; }).join(', ') : '');
+        day.title = fmtDate(d) + (row ? ', favourability index ' + score + ' of 100' : '') + (observations.length ? ', ' + observations.map(function (h) { return h.observation_type === 'no_mushrooms' ? 'no mushrooms found' : 'mushrooms found'; }).join(', ') : '') + (confidenceTip ? '. ' + confidenceTip : '');
         day.setAttribute('aria-label', day.title);
         day.addEventListener('click', function () { selectedDate = d; renderTimeline(); var button = Array.prototype.find.call($('timeline').children, function (item) { return item.getAttribute('aria-label').indexOf(fmtDate(d)) === 0; }); if (button) button.focus(); });
         timeline.appendChild(day);
@@ -2211,12 +2264,13 @@ def dashboard_payload(cfg: Dict[str, Any], analysis: List[Dict[str, Any]], mode:
         return round(value, 2) if isinstance(value, float) else value
 
     threshold = alert_threshold(cfg)
-    minimum_gap_days = configured_alert_gap_days(cfg)
     locations = []
     for index, item in enumerate(analysis):
         records = item.get("records", [])
         scores = item.get("scores", {})
         alias = public_location_alias(index)
+        configured = cfg.get("LOCATIONS", [])
+        location = configured[index] if index < len(configured) and isinstance(configured[index], dict) else {}
         harvests = [dict(h, location=alias) for h in item.get("harvests", [])]
         locations.append({
             "name": alias,
@@ -2225,6 +2279,11 @@ def dashboard_payload(cfg: Dict[str, Any], analysis: List[Dict[str, Any]], mode:
                        for d, v in sorted(scores.items())],
             # [date, tmax, tmin, rain, wind, soil_temp, rh, soil_moisture, source]
             "records": [[r["date"]] + [rnd(r.get(k)) for k in ("temperature_2m_max", "temperature_2m_min", "precipitation_sum", "wind_speed_10m_max", "soil_temperature_0_to_7cm_mean", "relative_humidity_2m_mean", "soil_moisture_0_to_7cm_mean")] + [r.get("source", "")] for r in records],
+            "rain_mix": [
+                [r["date"], mix["forecast_days"], mix["archive_days"], mix["window_days"], mix["coverage_days"]]
+                for r in records if r.get("source") == SOURCE_FORECAST
+                for mix in [forecast_rain_window_mix(records, location, parse_date(r["date"]))]
+            ],
             "harvests": harvests,
             "backtest": item.get("backtest", {}),
         })
@@ -2313,9 +2372,14 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]],
             verdict = f"<div><span class='badge {'go' if go else 'nogo'}'>{'GO' if go else 'NO-GO'}</span></div>"
         quality = f"<div class='meta'>{html.escape(item['quality'])}</div>" if item.get("quality") else ""
         explanation = f"<div class='meta score-explanation'>{html.escape(item['explanation'])}</div>" if item.get("explanation") else ""
+        timing_days = item.get("flush_timing_days")
+        timing = (
+            f"<div class='meta flush-timing'>Estimated days until score crosses ALERT_THRESHOLD: {timing_days} (heuristic)</div>"
+            if isinstance(timing_days, int) else ""
+        )
         cards.append(
             f"<div class='card'><div class='score-line'>{score_display}</div><div class='name'>{html.escape(public_location_alias(index))}</div>{verdict}"
-            f"<div class='meta best-day'>Best day<strong>{html.escape(str(item['best_day']))}</strong></div><div class='meta'>Status: {html.escape(str(item['status']))}</div>{explanation}{quality}"
+            f"<div class='meta best-day'>Best day<strong>{html.escape(str(item['best_day']))}</strong></div><div class='meta'>Status: {html.escape(str(item['status']))}</div>{explanation}{quality}{timing}"
             f"<div class='meta'>Moisture: {item['soil_moisture']:.2f} m³/m³</div></div>"
         )
     alert_status = "This message will be sent with this run." if alert_will_send else "Preview only: no alert is triggered by this run."
@@ -2341,6 +2405,7 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]],
     return (
         DASHBOARD_TEMPLATE
         .replace("__CSP_NONCE__", nonce)
+        .replace("__HEAVY_FORECAST_RAIN_SHARE__", str(HEAVY_FORECAST_RAIN_SHARE))
         .replace("__MODE_LABEL__", html.escape(MODE_LABELS.get(mode, MODE_LABELS[MODE_DEFAULT])))
         .replace("__GENERATED__", (lambda n: f"{format_display_date(n)} {n:%H:%M}")(datetime.now(timezone.utc)))
         .replace("__CARDS__", "".join(cards))
@@ -2428,6 +2493,7 @@ def main() -> int:
     print(f"[INFO] Run mode: {mode}")
 
     threshold = alert_threshold(cfg)
+    minimum_gap_days = configured_alert_gap_days(cfg)
     friday_policy = resolve_friday_policy(cfg)
     dashboard_url = resolve_dashboard_url()
 
@@ -2484,6 +2550,9 @@ def main() -> int:
             "scores": loc_store["daily_scores"],
             "harvests": harvests,
             "backtest": loc_store["backtest"],
+            "flush_timing_days": estimate_days_until_threshold(
+                records, loc_store["daily_scores"], today, threshold
+            ),
         })
 
         available = best_day != "N/A"

@@ -80,6 +80,7 @@ python porcini.py                         # auto-detects mode from UTC time
 python porcini.py --mode weekend_outlook  # or final_confirmation / default
 python porcini.py --test-alert            # send a test notification
 python porcini.py --check-db              # archive integrity check (exit code 1 if problems)
+python porcini.py --backtest              # compare stored forecast snapshots to later observations
 python -m unittest test_porcini test_harvest -v  # offline self-checks
 ```
 
@@ -94,6 +95,7 @@ The first run downloads ~2 years of history per location. A corrupt `porcini_db.
 - **Friday final confirmation** follows `FRIDAY_POLICY`: by default only spots that received the Thursday outlook alert are confirmed; `all_above_threshold` confirms every spot meeting the threshold.
 - **Archive/forecast merge:** archive observations replace forecast values for the same date; forecast-only dates are kept; a forecast never overwrites archive data.
 - **Daily scores** are stored in `porcini_db.json` under `daily_scores` (archive days scored once; forecast days rescored each run; everything rescored when the model version or a spot's config changes). Harvest backtests compare only recorded visit days, exclude that day's observation from its score, and treat unvisited days as unknown. These small, potentially biased samples do not calibrate the index.
+- **Forecast snapshots** retain score forecasts for upcoming days for the latest 30 runs. `python porcini.py --backtest` matches those snapshots only to later harvest/no-find visits, prints threshold hit rate and false alarms, and shows AUC only when there are at least five matched finds and five no-finds; smaller samples are flagged as insufficient.
 - **Runoff penalty** uses hourly rain intensity over the three complete days before the scored date and applies only to days fetched after this feature was added.
 - The 26-day rain and 20-day air-temperature windows end the day before the scored date. The soil-temperature signal uses that day's `soil_temperature_0_to_7cm_mean` field and defaults to a 25% weight; a location can override its weight (0–1) and optimal range. Seasonally matched 90-day rainfall comparisons use prior-year archive data only and are omitted when fewer than 20 valid comparison windows are available. Aspect/canopy adjustments are not currently applied.
 - Size: roughly 365 records per location per year; there is no automatic pruning.

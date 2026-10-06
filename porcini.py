@@ -34,6 +34,8 @@ ALERT_MARKER_END = "<!-- ALERT_PREVIEW_END -->"
 
 ARCHIVE_API_URL = "https://archive-api.open-meteo.com/v1/archive"
 FORECAST_API_URL = "https://api.open-meteo.com/v1/forecast"
+MAX_FORECAST_SNAPSHOTS = 30
+BACKTEST_MIN_CLASS_SAMPLES = 5
 
 INITIAL_ARCHIVE_DAYS = 730
 
@@ -458,7 +460,7 @@ def load_or_init_db() -> Dict[str, Any]:
 
 
 LEGACY_KEY = "legacy_quarantine"
-KNOWN_TOP_LEVEL_KEYS = {"locations", "schema_version", "meta", LEGACY_KEY}
+KNOWN_TOP_LEVEL_KEYS = {"locations", "schema_version", "meta", "forecast_snapshots", LEGACY_KEY}
 
 
 def migrate_legacy_entries(db: Dict[str, Any]) -> int:
@@ -1184,6 +1186,94 @@ def backtest_accuracy(location: Dict[str, Any], records: List[Dict[str, Any]],
         "post_harvest_false_positives": len(post_harvest_false_positives),
         "find_weekday_counts": find_weekday_counts(location, harvests),
     }
+
+
+def store_forecast_snapshot(db: Dict[str, Any], run_date: date, forecast_scores: Dict[str, List[List[Any]]]) -> None:
+    snapshots = db.get("forecast_snapshots")
+    if not isinstance(snapshots, list):
+        snapshots = []
+    compact_scores = {}
+    for alias, rows in forecast_scores.items():
+        compact_scores[alias] = [
+            [day, int(score)] for day, score in rows
+            if valid_date_string(day) and isinstance(score, (int, float)) and 0 <= score <= 100
+        ]
+    snapshot = {"run_date": iso_date(run_date), "scores": compact_scores}
+    snapshots = [item for item in snapshots if not isinstance(item, dict) or item.get("run_date") != snapshot["run_date"]]
+    snapshots.append(snapshot)
+    db["forecast_snapshots"] = snapshots[-MAX_FORECAST_SNAPSHOTS:]
+
+
+def _binary_auc(samples: List[Tuple[int, bool]]) -> Optional[float]:
+    positives = [score for score, found in samples if found]
+    negatives = [score for score, found in samples if not found]
+    if len(positives) < BACKTEST_MIN_CLASS_SAMPLES or len(negatives) < BACKTEST_MIN_CLASS_SAMPLES:
+        return None
+    wins = sum(1 if positive > negative else 0.5 if positive == negative else 0
+               for positive in positives for negative in negatives)
+    return wins / (len(positives) * len(negatives))
+
+
+def forecast_snapshot_backtest(db: Dict[str, Any], cfg: Dict[str, Any],
+                               harvest_log: Dict[str, Any], threshold: int) -> Dict[str, Any]:
+    snapshots = db.get("forecast_snapshots") if isinstance(db.get("forecast_snapshots"), list) else []
+    matched: List[Tuple[int, bool]] = []
+    for index, location in enumerate(cfg.get("LOCATIONS", [])):
+        name = location.get("name")
+        alias = public_location_alias(index)
+        outcomes: Dict[str, bool] = {}
+        for observation in merge_harvests(location.get("past_harvests", []), harvest_log, name):
+            day = observation.get("date")
+            if not valid_date_string(day):
+                continue
+            if observation.get("observation_type") == "no_mushrooms":
+                outcomes.setdefault(day, False)
+            elif observation.get("observation_type") in (None, "harvest") and observation.get("yield_tier") in {"small", "medium", "large"}:
+                outcomes[day] = True
+        for day, found in outcomes.items():
+            eligible = []
+            for snapshot in snapshots:
+                run_date = snapshot.get("run_date") if isinstance(snapshot, dict) else None
+                score_map = snapshot.get("scores", {}) if isinstance(snapshot, dict) else {}
+                scores = score_map.get(alias, []) if isinstance(score_map, dict) else []
+                values = {row[0]: row[1] for row in scores if isinstance(row, list) and len(row) == 2}
+                if valid_date_string(run_date) and run_date < day and day in values:
+                    eligible.append((run_date, values[day]))
+            if eligible:
+                matched.append((int(max(eligible)[1]), found))
+    positives = sum(1 for _, found in matched if found)
+    negatives = len(matched) - positives
+    hits = sum(1 for score, found in matched if found and score >= threshold)
+    false_alarms = sum(1 for score, found in matched if not found and score >= threshold)
+    return {
+        "samples": len(matched),
+        "finds": positives,
+        "no_finds": negatives,
+        "hits": hits,
+        "hit_rate": hits / positives if positives else None,
+        "false_alarms": false_alarms,
+        "false_alarm_rate": false_alarms / negatives if negatives else None,
+        "auc": _binary_auc(matched),
+    }
+
+
+def format_forecast_backtest(metrics: Dict[str, Any]) -> str:
+    def rate(value: Optional[float]) -> str:
+        return "n/a" if value is None else f"{value:.1%}"
+
+    lines = [
+        f"Forecast snapshot backtest: {metrics['samples']} matched observations",
+        f"Hit rate: {metrics['hits']}/{metrics['finds']} ({rate(metrics['hit_rate'])})",
+        f"False alarms: {metrics['false_alarms']}/{metrics['no_finds']} ({rate(metrics['false_alarm_rate'])})",
+    ]
+    if metrics["auc"] is None:
+        lines.append(
+            f"WARNING: sample too small for AUC; need at least {BACKTEST_MIN_CLASS_SAMPLES} finds "
+            f"and {BACKTEST_MIN_CLASS_SAMPLES} no-finds."
+        )
+    else:
+        lines.append(f"AUC: {metrics['auc']:.3f}")
+    return "\n".join(lines)
 
 
 WEEKDAY_NAMES = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
@@ -2297,6 +2387,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Porcini tracker forecast engine")
     parser.add_argument("--test-alert", action="store_true", help="Send a test alert using current notification config")
     parser.add_argument("--check-db", action="store_true", help="Run the archive integrity check and exit (non-zero if problems found)")
+    parser.add_argument("--backtest", action="store_true", help="Compare stored forecast snapshots with later field observations")
     parser.add_argument("--mode", choices=["auto", MODE_DEFAULT, MODE_OUTLOOK, MODE_FINAL], default="auto", help="Run mode; 'auto' detects it from the current UTC day/time")
     args = parser.parse_args()
 
@@ -2306,6 +2397,19 @@ def main() -> int:
             print(f"[DB] {issue}")
         print("[DB] OK" if not issues else f"[DB] {len(issues)} problem(s) found")
         return 1 if issues else 0
+
+    if args.backtest:
+        cfg = load_config()
+        db = load_json_safe(DB_PATH, {})
+        try:
+            harvest_log = load_harvest_log()
+        except HarvestError as exc:
+            print(f"[WARN] Could not read observations for backtest: {exc}")
+            harvest_log = {"harvests": []}
+        print(format_forecast_backtest(
+            forecast_snapshot_backtest(db, cfg, harvest_log, alert_threshold(cfg))
+        ))
+        return 0
 
     cfg = ensure_notification_settings(load_config())
     db = load_or_init_db()
@@ -2335,6 +2439,7 @@ def main() -> int:
 
     analyses: List[Dict[str, Any]] = []
     alert_queue: List[Tuple[str, int, str, str]] = []
+    forecast_scores: Dict[str, List[List[Any]]] = {}
 
     for location_index, location in enumerate(cfg.get("LOCATIONS", [])):
         name = location.get("name")
@@ -2352,6 +2457,12 @@ def main() -> int:
             return 1
         loc_store = db["locations"][storage_name]
         update_daily_scores(dict(location, past_harvests=harvests), records, loc_store)
+        forecast_scores[storage_name] = [
+            [record["date"], loc_store["daily_scores"][record["date"]]["score"]]
+            for record in records
+            if record.get("source") == SOURCE_FORECAST and record["date"] >= iso_date(today)
+            and record["date"] in loc_store["daily_scores"]
+        ]
         loc_store["backtest"] = backtest_accuracy(location, records, harvests, threshold)
         for message in calibration_messages(name, loc_store["backtest"], location):
             print(message)
@@ -2412,6 +2523,7 @@ def main() -> int:
         notify_sync_failure(cfg, "; ".join(stale_issues))
         return 1
 
+    store_forecast_snapshot(db, today, forecast_scores)
     db["meta"] = {"last_run_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "last_run_mode": mode, "model_version": MODEL_VERSION}
     save_json(DB_PATH, db)
 

@@ -1,9 +1,11 @@
 """Lightweight self-checks. Run: python -m unittest test_porcini -v (no network needed)."""
 import json
+import io
 import re
 import unittest
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from contextlib import redirect_stdout
 from unittest.mock import Mock, patch
 
 import porcini as p
@@ -764,6 +766,64 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(p.update_daily_scores(LOC, records, store), 0)
         records[0]["source"] = p.SOURCE_ARCHIVE
         self.assertEqual(p.update_daily_scores(LOC, records, store), 1)
+
+
+class ForecastSnapshotTests(unittest.TestCase):
+    def test_snapshot_history_is_bounded_and_replaces_same_day(self):
+        db = {}
+        start = date(2025, 1, 1)
+        for offset in range(p.MAX_FORECAST_SNAPSHOTS + 5):
+            run = start + timedelta(days=offset)
+            p.store_forecast_snapshot(db, run, {"Location 1": [[p.iso_date(run + timedelta(days=1)), 42]]})
+        p.store_forecast_snapshot(db, start + timedelta(days=34), {"Location 1": [["2025-02-05", 88]]})
+        snapshots = db["forecast_snapshots"]
+        self.assertEqual(len(snapshots), p.MAX_FORECAST_SNAPSHOTS)
+        self.assertEqual(snapshots[-1]["scores"]["Location 1"], [["2025-02-05", 88]])
+
+    def test_snapshot_backtest_metrics_and_small_sample_warning(self):
+        observations = []
+        snapshots = []
+        start = date(2025, 9, 1)
+        for index in range(10):
+            day = start + timedelta(days=index)
+            found = index < 5
+            observations.append({
+                "location": "Actual Spot", "date": p.iso_date(day),
+                "observation_type": "harvest" if found else "no_mushrooms",
+                "yield_tier": "small" if found else "",
+            })
+            snapshots.append({
+                "run_date": p.iso_date(day - timedelta(days=1)),
+                "scores": {"Location 1": [[p.iso_date(day), 80 if found else 20]]},
+            })
+        cfg = {"LOCATIONS": [{"name": "Actual Spot"}]}
+        metrics = p.forecast_snapshot_backtest(
+            {"forecast_snapshots": snapshots}, cfg, {"harvests": observations}, 60
+        )
+        self.assertEqual(metrics["samples"], 10)
+        self.assertEqual(metrics["hit_rate"], 1.0)
+        self.assertEqual(metrics["false_alarms"], 0)
+        self.assertEqual(metrics["auc"], 1.0)
+        self.assertIn("AUC: 1.000", p.format_forecast_backtest(metrics))
+
+        small = p.forecast_snapshot_backtest(
+            {"forecast_snapshots": snapshots[:2]}, cfg, {"harvests": observations[:2]}, 60
+        )
+        self.assertIsNone(small["auc"])
+        self.assertIn("WARNING: sample too small", p.format_forecast_backtest(small))
+
+    def test_backtest_cli_reads_snapshots_without_running_weather_sync(self):
+        output = io.StringIO()
+        with (
+            patch("sys.argv", ["porcini.py", "--backtest"]),
+            patch.object(p, "load_config", return_value={"LOCATIONS": []}),
+            patch.object(p, "load_json_safe", return_value={"forecast_snapshots": []}),
+            patch.object(p, "load_harvest_log", return_value={"harvests": []}),
+            redirect_stdout(output),
+        ):
+            self.assertEqual(p.main(), 0)
+        self.assertIn("Forecast snapshot backtest", output.getvalue())
+        self.assertIn("WARNING: sample too small", output.getvalue())
 
 
 class RunoffBackfillTests(unittest.TestCase):

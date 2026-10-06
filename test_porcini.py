@@ -1,8 +1,11 @@
 """Lightweight self-checks. Run: python -m unittest test_porcini -v (no network needed)."""
 import json
+import io
 import re
 import unittest
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
+from contextlib import redirect_stdout
 from unittest.mock import Mock, patch
 
 import porcini as p
@@ -75,6 +78,67 @@ class IntegrityTests(unittest.TestCase):
         self.assertTrue(p.check_db_integrity(db, date(2025, 9, 5)))
 
 
+class PrivacyTests(unittest.TestCase):
+    @staticmethod
+    def contains_coordinate_field(value):
+        if isinstance(value, dict):
+            return any(
+                key in {"latitude", "longitude", "elevation_m"} or PrivacyTests.contains_coordinate_field(child)
+                for key, child in value.items()
+            )
+        if isinstance(value, list):
+            return any(PrivacyTests.contains_coordinate_field(child) for child in value)
+        return False
+
+    def test_committed_data_files_do_not_contain_coordinate_fields(self):
+        for filename in ("porcini_db.json", "harvest_log.json", "alert_state.json"):
+            path = Path(filename)
+            if path.exists():
+                with path.open(encoding="utf-8") as source:
+                    self.assertFalse(self.contains_coordinate_field(json.load(source)), filename)
+        report = p.REPORT_PATH.read_text(encoding="utf-8") if p.REPORT_PATH.exists() else ""
+        self.assertNotRegex(report, r'"(?:latitude|longitude|elevation_m)"\s*:')
+
+    def test_public_dashboard_uses_aliases_and_strict_csp(self):
+        cfg = {"LOCATIONS": [{"name": "Private woodland"}]}
+        analysis = [{
+            "name": "Private woodland", "best_day": "N/A", "best_score": 0,
+            "status": "Unavailable", "soil_moisture": 0.0, "quality": "",
+            "records": [], "scores": {}, "harvests": [{"location": "Private woodland", "date": "2025-09-01"}],
+            "backtest": {},
+        }]
+        report = p.generate_dashboard_html(
+            cfg, analysis, "1. Private woodland — 80/100", harvest_log={"harvests": []}
+        )
+        self.assertIn("Location 1", report)
+        self.assertNotIn("Private woodland", report)
+        self.assertIn("Content-Security-Policy", report)
+        self.assertIn("default-src 'none'", report)
+        nonce = re.search(r"script-src 'nonce-([^']+)'", report)
+        self.assertIsNotNone(nonce)
+        self.assertIn(f'<script nonce="{nonce.group(1)}">', report)
+
+    def test_location_coordinates_are_not_persisted(self):
+        db = {"locations": {"Location 1": {
+            "latitude": 12.3, "longitude": 45.6, "elevation_m": 7,
+            "daily_records": [], "pending_rescore": [],
+        }}}
+        records = [rec("2025-09-20")]
+        with patch.object(p, "fetch_archive_day_range", return_value=[]), \
+                patch.object(p, "fetch_forecast_day_range", return_value=records), \
+                patch.object(p, "backfill_runoff_data", return_value=[]):
+            p.ensure_location_history("Location 1", db, 12.3, 45.6, 7, date(2025, 9, 20))
+        self.assertFalse(self.contains_coordinate_field(db))
+
+    def test_database_load_strips_coordinates_from_unconfigured_locations(self):
+        legacy = {"locations": {"Location 99": {
+            "latitude": 1.2, "longitude": 3.4, "elevation_m": 5, "daily_records": [],
+        }}}
+        with patch.object(p, "load_json_safe", return_value=legacy):
+            loaded = p.load_or_init_db()
+        self.assertFalse(self.contains_coordinate_field(loaded))
+
+
 class HistoricalWeatherTests(unittest.TestCase):
     def test_2023_weather_covers_full_year_and_has_scores(self):
         db = p.load_json(p.DB_PATH, {})
@@ -128,6 +192,17 @@ class AntiSpamTests(unittest.TestCase):
         self.assertFalse(p.should_alert_for_location("A", 70, viable, 65, same, self.today))
         # 5 days alone must not alert
         self.assertFalse(p.should_alert_for_location("A", 10, watch, 65, self.state(last_score=10, last_status=watch, last_alert_date="2025-09-01"), self.today))
+
+    def test_alert_gap_is_configurable_and_defaults_to_five_days(self):
+        state = self.state(last_score=40, last_status="⚠️ Watch closely", last_alert_date="2025-10-06")
+        self.assertEqual(p.configured_alert_gap_days({}), 5)
+        self.assertEqual(p.configured_alert_gap_days({"MIN_ALERT_GAP_DAYS": 2}), 2)
+        self.assertEqual(p.configured_alert_gap_days({"MIN_ALERT_GAP_DAYS": "bad"}), 5)
+        self.assertFalse(p.should_alert_for_location("A", 70, "✅ Viable conditions", 65, state, self.today))
+        self.assertTrue(p.should_alert_for_location(
+            "A", 70, "✅ Viable conditions", 65, state, self.today,
+            p.configured_alert_gap_days({"MIN_ALERT_GAP_DAYS": 4}),
+        ))
 
 
 class VerdictTests(unittest.TestCase):
@@ -244,13 +319,57 @@ class NotificationTests(unittest.TestCase):
 
 
 class ScoringTests(unittest.TestCase):
+    def test_default_season_includes_full_late_decay_window(self):
+        self.assertTrue(p.month_day_window(date(2025, 12, 10)))
+        self.assertFalse(p.month_day_window(date(2025, 12, 11)))
+        self.assertEqual(p.late_season_decay_penalty(date(2025, 12, 10), LOC), p.LATE_SEASON_DECAY_MAX)
+
+    def test_soil_temperature_is_a_weighted_signal_with_location_overrides(self):
+        recs = series(date(2025, 9, 1), 50, soil_temperature_0_to_7cm_mean=10.0)
+        hist = p.History(recs)
+        day = date(2025, 10, 18)
+        daily = hist.get(day)
+        default_score = p.calculate_score_for_day(LOC, daily, hist, [])[0]
+        cold_score = p.calculate_score_for_day(
+            LOC, dict(daily, soil_temperature_0_to_7cm_mean=0.0), hist, []
+        )[0]
+        disabled_score = p.calculate_score_for_day(
+            dict(LOC, soil_temperature_score_weight=0),
+            dict(daily, soil_temperature_0_to_7cm_mean=0.0), hist, []
+        )[0]
+        self.assertGreater(default_score, cold_score)
+        self.assertEqual(disabled_score, default_score - p.soil_temperature_points(10.0, LOC, (8.0, 14.0)))
+        self.assertEqual(p.MODEL_VERSION, 16)
+        self.assertEqual(p.score_breakdown(LOC, daily, hist)["soil_temperature"], 5)
+
+    def test_rain_and_freeze_score_invariants(self):
+        start, day = date(2025, 8, 1), date(2025, 10, 1)
+        base_records = series(start, (day - start).days + 1, precipitation_sum=0.0)
+        hist = p.History(base_records)
+        rainfall_scores = []
+        for mm in range(0, 21, 2):
+            for record in hist.window(day - timedelta(days=1), p.FLUSH_RAIN_WINDOW_DAYS):
+                record["precipitation_sum"] = mm
+            rainfall_scores.append(p.calculate_score_for_day(LOC, hist.get(day), hist, [])[0])
+        self.assertTrue(all(a <= b for a, b in zip(rainfall_scores, rainfall_scores[1:])))
+
+        warm_records = series(start, (day - start).days + 1, temperature_2m_max=12.0, temperature_2m_min=2.0)
+        warm = p.History(warm_records)
+        baseline = p.calculate_score_for_day(LOC, warm.get(day), warm, [])[0]
+        for freeze_days in range(1, p.FROST_REPEAT_WINDOW_DAYS + 1):
+            frozen_records = [dict(record) for record in warm_records]
+            for record in frozen_records[-freeze_days - 1:-1]:
+                record["temperature_2m_min"] = -2.0
+            frozen = p.History(frozen_records)
+            self.assertLessEqual(p.calculate_score_for_day(LOC, frozen.get(day), frozen, [])[0], baseline)
+
     def test_no_mushrooms_observation_caps_score_on_observed_date_only(self):
         recs = series(date(2025, 8, 20), 60, precipitation_sum=5.0)
         hist = p.History(recs)
         observed = date(2025, 9, 25)
         no_find = [{"date": observed.isoformat(), "observation_type": "no_mushrooms"}]
         score = p.calculate_score_for_day(LOC, hist.get(observed), hist, no_find)
-        self.assertLessEqual(score[0], 20)
+        self.assertEqual(score[0], 20)
         self.assertIn("No mushrooms found", score[1])
         next_day = p.calculate_score_for_day(LOC, hist.get(observed + timedelta(days=1)), hist, no_find)
         self.assertGreater(next_day[0], score[0])
@@ -657,6 +776,124 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(p.update_daily_scores(LOC, records, store), 1)
 
 
+class ForecastSnapshotTests(unittest.TestCase):
+    def test_snapshot_history_is_bounded_and_replaces_same_day(self):
+        db = {}
+        start = date(2025, 1, 1)
+        for offset in range(p.MAX_FORECAST_SNAPSHOTS + 5):
+            run = start + timedelta(days=offset)
+            p.store_forecast_snapshot(db, run, {"Location 1": [[p.iso_date(run + timedelta(days=1)), 42]]})
+        p.store_forecast_snapshot(db, start + timedelta(days=34), {"Location 1": [["2025-02-05", 88]]})
+        snapshots = db["forecast_snapshots"]
+        self.assertEqual(len(snapshots), p.MAX_FORECAST_SNAPSHOTS)
+        self.assertEqual(snapshots[-1]["scores"]["Location 1"], [["2025-02-05", 88]])
+
+    def test_snapshot_backtest_metrics_and_small_sample_warning(self):
+        observations = []
+        snapshots = []
+        start = date(2025, 9, 1)
+        for index in range(10):
+            day = start + timedelta(days=index)
+            found = index < 5
+            observations.append({
+                "location": "Actual Spot", "date": p.iso_date(day),
+                "observation_type": "harvest" if found else "no_mushrooms",
+                "yield_tier": "small" if found else "",
+            })
+            snapshots.append({
+                "run_date": p.iso_date(day - timedelta(days=1)),
+                "scores": {"Location 1": [[p.iso_date(day), 80 if found else 20]]},
+            })
+        cfg = {"LOCATIONS": [{"name": "Actual Spot"}]}
+        metrics = p.forecast_snapshot_backtest(
+            {"forecast_snapshots": snapshots}, cfg, {"harvests": observations}, 60
+        )
+        self.assertEqual(metrics["samples"], 10)
+        self.assertEqual(metrics["hit_rate"], 1.0)
+        self.assertEqual(metrics["false_alarms"], 0)
+        self.assertEqual(metrics["auc"], 1.0)
+        self.assertIn("AUC: 1.000", p.format_forecast_backtest(metrics))
+
+        small = p.forecast_snapshot_backtest(
+            {"forecast_snapshots": snapshots[:2]}, cfg, {"harvests": observations[:2]}, 60
+        )
+        self.assertIsNone(small["auc"])
+        self.assertIn("WARNING: sample too small", p.format_forecast_backtest(small))
+
+    def test_backtest_cli_reads_snapshots_without_running_weather_sync(self):
+        output = io.StringIO()
+        with (
+            patch("sys.argv", ["porcini.py", "--backtest"]),
+            patch.object(p, "load_config", return_value={"LOCATIONS": []}),
+            patch.object(p, "load_json_safe", return_value={"forecast_snapshots": []}),
+            patch.object(p, "load_harvest_log", return_value={"harvests": []}),
+            redirect_stdout(output),
+        ):
+            self.assertEqual(p.main(), 0)
+        self.assertIn("Forecast snapshot backtest", output.getvalue())
+        self.assertIn("WARNING: sample too small", output.getvalue())
+
+
+class ForecastUncertaintyAndTimingTests(unittest.TestCase):
+    def test_rain_window_mix_counts_archive_and_forecast_days(self):
+        target = date(2025, 10, 1)
+        records = series(target - timedelta(days=26), 27)
+        for record in records[-7:]:
+            record["source"] = p.SOURCE_FORECAST
+        mix = p.forecast_rain_window_mix(records, {}, target)
+        self.assertEqual(mix, {
+            "forecast_days": 6, "archive_days": 20, "window_days": 26, "coverage_days": 26,
+        })
+        self.assertTrue(p.heavily_forecast_dependent(mix))
+        self.assertFalse(p.heavily_forecast_dependent({
+            "forecast_days": 2, "archive_days": 24, "window_days": 26, "coverage_days": 26,
+        }))
+
+    def test_rain_window_mix_uses_seasonal_window_and_available_rain_only(self):
+        target = date(2025, 9, 20)
+        records = series(target - timedelta(days=14), 15)
+        for record in records[-4:]:
+            record["source"] = p.SOURCE_FORECAST
+        records[-2]["precipitation_sum"] = None
+        mix = p.forecast_rain_window_mix(records, {}, target)
+        self.assertEqual(mix["window_days"], 14)
+        self.assertEqual(mix["forecast_days"], 2)
+        self.assertEqual(mix["archive_days"], 11)
+        self.assertEqual(mix["coverage_days"], 13)
+
+    def test_dashboard_payload_exposes_forecast_rain_provenance(self):
+        target = date(2025, 10, 1)
+        records = series(target - timedelta(days=26), 27)
+        for record in records[-7:]:
+            record["source"] = p.SOURCE_FORECAST
+        item = {
+            "name": "Actual Spot", "records": records, "scores": {}, "harvests": [],
+            "backtest": {},
+        }
+        payload = p.dashboard_payload({"LOCATIONS": [{"name": "Actual Spot"}]}, [item], p.MODE_DEFAULT)
+        self.assertEqual(payload["locations"][0]["name"], "Location 1")
+        self.assertIn([p.iso_date(target), 6, 20, 26, 26], payload["locations"][0]["rain_mix"])
+
+    def test_flush_timing_reports_first_forecast_crossing_only(self):
+        today = date(2025, 9, 1)
+        records = [
+            rec(p.iso_date(today), p.SOURCE_FORECAST),
+            rec(p.iso_date(today + timedelta(days=1)), p.SOURCE_FORECAST),
+            rec(p.iso_date(today + timedelta(days=2)), p.SOURCE_FORECAST),
+        ]
+        scores = {
+            p.iso_date(today): {"score": 40},
+            p.iso_date(today + timedelta(days=1)): {"score": 50},
+            p.iso_date(today + timedelta(days=2)): {"score": 65},
+        }
+        self.assertEqual(p.estimate_days_until_threshold(records, scores, today, 60), 2)
+        scores[p.iso_date(today)]["score"] = 60
+        self.assertEqual(p.estimate_days_until_threshold(records, scores, today, 60), 0)
+        scores[p.iso_date(today)]["score"] = 40
+        scores[p.iso_date(today + timedelta(days=2))]["score"] = 55
+        self.assertIsNone(p.estimate_days_until_threshold(records, scores, today, 60))
+
+
 class RunoffBackfillTests(unittest.TestCase):
     @staticmethod
     def hourly(day, peak):
@@ -691,6 +928,103 @@ class RunoffBackfillTests(unittest.TestCase):
 
 
 class WeatherFailureTests(unittest.TestCase):
+    def test_fetch_json_distinguishes_empty_payload_from_request_failure(self):
+        response = Mock()
+        response.json.return_value = None
+        with patch.object(p.WEATHER_SESSION, "get", return_value=response):
+            self.assertIsNone(p.fetch_json("https://weather.example", {}))
+        with patch.object(p.WEATHER_SESSION, "get", side_effect=p.requests.ConnectionError):
+            with self.assertRaises(p.WeatherRequestError):
+                p.fetch_json("https://weather.example", {})
+        retry = p.WEATHER_SESSION.get_adapter("https://").max_retries
+        self.assertEqual(retry.total, 3)
+        self.assertEqual(retry.backoff_factor, 0.5)
+
+    def test_main_notifies_and_fails_when_location_sync_raises(self):
+        cfg = {"LOCATIONS": [{"name": "Private spot", "latitude": 1, "longitude": 2}]}
+        with (
+            patch("sys.argv", ["porcini.py"]),
+            patch.object(p, "load_config", return_value=cfg),
+            patch.object(p, "load_or_init_db", return_value={"locations": {"Location 1": {}}}),
+            patch.object(p, "build_alert_state", return_value={"locations": {}}),
+            patch.object(p, "load_harvest_log", return_value={"harvests": []}),
+            patch.object(p, "ensure_location_history", side_effect=p.WeatherRequestError("request failed")),
+            patch.object(p, "dispatch_notification", return_value=True) as send,
+        ):
+            self.assertEqual(p.main(), 1)
+        self.assertIn("Location 1", send.call_args.args[1])
+        self.assertIn("weather sync failed", send.call_args.args[1])
+
+    def test_main_notifies_and_fails_when_configured_data_is_stale(self):
+        cfg = {"LOCATIONS": [{"name": "Private spot", "latitude": 1, "longitude": 2}]}
+        today = datetime.now(timezone.utc).date()
+        records = [rec(p.iso_date(today), p.SOURCE_FORECAST)]
+
+        def update_scores(location, daily_records, store):
+            store["daily_scores"] = {}
+            return 0
+
+        with (
+            patch("sys.argv", ["porcini.py"]),
+            patch.object(p, "load_config", return_value=cfg),
+            patch.object(p, "load_or_init_db", return_value={"locations": {"Location 1": {}}}),
+            patch.object(p, "build_alert_state", return_value={"locations": {}}),
+            patch.object(p, "load_harvest_log", return_value={"harvests": []}),
+            patch.object(p, "ensure_location_history", return_value=records),
+            patch.object(p, "update_daily_scores", side_effect=update_scores),
+            patch.object(p, "backtest_accuracy", return_value={}),
+            patch.object(p, "calibration_messages", return_value=[]),
+            patch.object(p, "find_weekend_best", return_value=(0, "N/A", "", "")),
+            patch.object(p, "check_db_integrity", return_value=[
+                "Location 1: last sync is more than 3 days old"
+            ]),
+            patch.object(p, "dispatch_notification", return_value=True) as send,
+        ):
+            self.assertEqual(p.main(), 1)
+        self.assertIn("more than 3 days old", send.call_args.args[1])
+
+    def test_main_applies_configured_alert_gap(self):
+        cfg = {
+            "MIN_ALERT_GAP_DAYS": 2,
+            "LOCATIONS": [{"name": "Synthetic spot", "latitude": 1, "longitude": 2}],
+        }
+        today = datetime.now(timezone.utc).date()
+        records = [rec(p.iso_date(today), p.SOURCE_FORECAST)]
+        db = {"locations": {"Location 1": {}}}
+
+        def update_scores(location, daily_records, store):
+            store["daily_scores"] = {
+                p.iso_date(today): {"score": 70, "status": "✅ Viable conditions", "source": p.SOURCE_FORECAST}
+            }
+            return 1
+
+        with (
+            patch("sys.argv", ["porcini.py"]),
+            patch.object(p, "load_config", return_value=cfg),
+            patch.object(p, "load_or_init_db", return_value=db),
+            patch.object(p, "build_alert_state", return_value={"locations": {"Location 1": {}}}),
+            patch.object(p, "load_harvest_log", return_value={"harvests": []}),
+            patch.object(p, "ensure_location_history", return_value=records),
+            patch.object(p, "update_daily_scores", side_effect=update_scores),
+            patch.object(p, "backtest_accuracy", return_value={}),
+            patch.object(p, "calibration_messages", return_value=[]),
+            patch.object(p, "find_weekend_best", return_value=(
+                70, p.format_display_date(today), "✅ Viable conditions", ""
+            )),
+            patch.object(p, "should_alert_for_location", return_value=False) as should_alert,
+            patch.object(p, "check_db_integrity", return_value=[]),
+            patch.object(p, "save_json"),
+            patch.object(p, "generate_dashboard_html", return_value=""),
+            patch.object(p, "inject_alert_into_index"),
+            patch("pathlib.Path.write_text"),
+        ):
+            self.assertEqual(p.main(), 0)
+        self.assertEqual(should_alert.call_args.args[-1], 2)
+        self.assertEqual(
+            db["forecast_snapshots"][-1]["scores"]["Location 1"],
+            [[p.iso_date(today), 70]],
+        )
+
     def test_empty_fetch_does_not_replace_history_with_empty_data(self):
         db = {"locations": {}}
         with patch.object(p, "fetch_archive_day_range", return_value=[]), patch.object(p, "fetch_forecast_day_range", return_value=[]):

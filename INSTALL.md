@@ -9,7 +9,7 @@ and writes `porcini_report.html`. A separate GitHub issue workflow validates har
 - Keeps a multi-year weather archive per location in `porcini_db.json` (schema version 3) and a per-day score series.
 - Sends Telegram / Pushover / Twilio alerts (see below).
 - Generates `porcini_report.html`: a self-contained dashboard (no CDN) with a score chart, harvest pins, tooltips and an observation browser.
-- The dashboard includes keyboard-accessible “ⓘ” explanations, found/no-find markers, and a scrollable day-by-day timeline with date picking and previous/next controls. Its 0–100 value is a heuristic favourability index, not a calibrated chance or probability. Weather inputs include rain over the 26 complete days before each scored date, mean air temperature over the 20 complete days before it, and a local-history 90-day drought comparison when enough prior-year data is available. Rain input saturates at 100 mm; no additional high-rain penalty is assumed without local observations. The windows are informed by a [regional porcini preprint](https://doi.org/10.64898/2025.12.12.693895); score weights and cutoffs are not locally calibrated. Weekday and lunar phase do not affect scores. The weather feed provides 7 forecast days including today.
+- The dashboard includes keyboard-accessible “ⓘ” explanations, found/no-find markers, and a scrollable day-by-day timeline with date picking and previous/next controls. Its 0–100 value is a heuristic favourability index, not a calibrated chance or probability. Weather inputs include rain over the 26 complete days before each scored date, mean air temperature over the 20 complete days before it, a conservative soil-temperature signal (default weight 0.25; per-location `soil_temperature_score_weight` and `soil_temperature_optimal_range` overrides), and a local-history 90-day drought comparison when enough prior-year data is available. Rain input saturates at 100 mm; no additional high-rain penalty is assumed without local observations. The windows are informed by a [regional porcini preprint](https://doi.org/10.64898/2025.12.12.693895); score weights and cutoffs are not locally calibrated. Weekday and lunar phase do not affect scores. The weather feed provides 7 forecast days including today.
 - Harvest and no-mushrooms-found observations can be submitted as GitHub issues. A no-find observation caps that
   date's score at 20; it does not affect other dates. The intake workflow validates submissions from the
   repository owner or collaborators and stores them in `harvest_log.json`; browser drafts stay local until submitted.
@@ -31,6 +31,9 @@ and writes `porcini_report.html`. A separate GitHub issue workflow validates har
 1. Fork/clone the repository. Python 3.10+ and `pip install requests` are required for local runs.
 2. Configure `LOCATIONS` (name, `latitude`, `longitude`, `elevation_m`, `tree_species`, `tree_density`, `aspect`,
    `soil_pH`, `past_harvests`, `last_seen_fly_agaric`) and `ALERT_THRESHOLD` (default 55) in the JSON configuration.
+   `aspect` and `canopy` are accepted configuration fields but currently unused by the scoring model.
+   The default scoring season is Aug 15–Dec 10, aligned with the late-season decay ramp; `season_end` can override it.
+   Optional `MIN_ALERT_GAP_DAYS` controls the minimum interval between alerts (default 5; zero disables the gap).
    Optional `FRIDAY_POLICY`: `thursday_alerted_only` (default; Friday confirmation only for spots alerted on Thursday) or
    `all_above_threshold` (Friday confirmation for every spot at or above `ALERT_THRESHOLD`).
    Harvest entries: `date`, `yield_tier` (small/medium/large), `cap_stage` (`buttons_young`, `prime`, `old_overripe`), optional `weight_g`, `notes`.
@@ -77,6 +80,7 @@ python porcini.py                         # auto-detects mode from UTC time
 python porcini.py --mode weekend_outlook  # or final_confirmation / default
 python porcini.py --test-alert            # send a test notification
 python porcini.py --check-db              # archive integrity check (exit code 1 if problems)
+python porcini.py --backtest              # compare stored forecast snapshots to later observations
 python -m unittest test_porcini test_harvest -v  # offline self-checks
 ```
 
@@ -91,8 +95,10 @@ The first run downloads ~2 years of history per location. A corrupt `porcini_db.
 - **Friday final confirmation** follows `FRIDAY_POLICY`: by default only spots that received the Thursday outlook alert are confirmed; `all_above_threshold` confirms every spot meeting the threshold.
 - **Archive/forecast merge:** archive observations replace forecast values for the same date; forecast-only dates are kept; a forecast never overwrites archive data.
 - **Daily scores** are stored in `porcini_db.json` under `daily_scores` (archive days scored once; forecast days rescored each run; everything rescored when the model version or a spot's config changes). Harvest backtests compare only recorded visit days, exclude that day's observation from its score, and treat unvisited days as unknown. These small, potentially biased samples do not calibrate the index.
+- **Forecast snapshots** retain score forecasts for upcoming days for the latest 30 runs. `python porcini.py --backtest` matches those snapshots only to later harvest/no-find visits, prints threshold hit rate and false alarms, and shows AUC only when there are at least five matched finds and five no-finds; smaller samples are flagged as insufficient.
+- **Forecast uncertainty** is shown on timeline days when at least 20% of the preceding seasonal rain window comes from forecast data; focus or hover for the forecast/archive day counts. Spot cards show estimated days until the alert threshold is crossed only when a crossing appears in the forecast, explicitly as a heuristic.
 - **Runoff penalty** uses hourly rain intensity over the three complete days before the scored date and applies only to days fetched after this feature was added.
-- The 26-day rain and 20-day temperature windows end the day before the scored date. Seasonally matched 90-day rainfall comparisons use prior-year archive data only and are omitted when fewer than 20 valid comparison windows are available. Aspect/canopy adjustments are not currently applied.
+- The 26-day rain and 20-day air-temperature windows end the day before the scored date. The soil-temperature signal uses that day's `soil_temperature_0_to_7cm_mean` field and defaults to a 25% weight; a location can override its weight (0–1) and optimal range. Seasonally matched 90-day rainfall comparisons use prior-year archive data only and are omitted when fewer than 20 valid comparison windows are available. Aspect/canopy adjustments are not currently applied.
 - Size: roughly 365 records per location per year; there is no automatic pruning.
 
 ## Submitting observations from the report (GitHub only)

@@ -19,10 +19,22 @@ class DispatchTests(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertEqual(h[0]["reporter"], "me")
 
+    def test_public_location_alias_resolves_to_configured_location(self):
+        rc, h = self.run_main({"INPUT_LOCATION": "Location 1", "INPUT_OBSERVATION_TYPE": "no_mushrooms"})
+        self.assertEqual(rc, 0)
+        self.assertEqual(h[0]["location"], "Spot A")
+
     def test_invalid_location_fails(self):
         rc, h = self.run_main({"INPUT_LOCATION": "Nowhere", "INPUT_OBSERVATION_TYPE": "no_mushrooms"})
         self.assertEqual(rc, 1)
         self.assertEqual(h, [])
+
+    def test_harvest_workflow_passes_issue_number_through_environment(self):
+        workflow = Path(".github/workflows/harvest_intake.yml").read_text(encoding="utf-8")
+        self.assertIn("ISSUE: ${{ github.event.issue.number }}", workflow)
+        commit_step = workflow.split("git commit -m \"🍄 Record harvest", 1)[1].splitlines()[0]
+        self.assertNotIn("${{", commit_step)
+        self.assertIn("$ISSUE", commit_step)
 
 
 if __name__ == "__main__":

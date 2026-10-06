@@ -11,12 +11,15 @@ import json
 import math
 import os
 import re
+import secrets
 import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from dates import format_display_date, parse_user_date
 from harvest import HarvestError, build_observation_log, entry_id, load_harvest_log, merge_harvests, summarize_observations
@@ -31,6 +34,9 @@ ALERT_MARKER_END = "<!-- ALERT_PREVIEW_END -->"
 
 ARCHIVE_API_URL = "https://archive-api.open-meteo.com/v1/archive"
 FORECAST_API_URL = "https://api.open-meteo.com/v1/forecast"
+MAX_FORECAST_SNAPSHOTS = 30
+BACKTEST_MIN_CLASS_SAMPLES = 5
+HEAVY_FORECAST_RAIN_SHARE = 0.2
 
 INITIAL_ARCHIVE_DAYS = 730
 
@@ -38,6 +44,30 @@ HOST_TREES = {"birch", "beech", "chestnut", "fir", "oak", "pine", "spruce"}
 
 
 DEFAULT_ALERT_THRESHOLD = 55
+
+
+class WeatherRequestError(RuntimeError):
+    """A weather API request did not complete successfully."""
+
+
+class WeatherNoDataError(RuntimeError):
+    """A successful weather request contained no usable records."""
+
+
+def build_weather_session() -> requests.Session:
+    retry = Retry(
+        total=3, connect=3, read=3, status=3, backoff_factor=0.5,
+        status_forcelist=(429, 500, 502, 503, 504), allowed_methods=frozenset({"GET"}),
+        raise_on_status=False,
+    )
+    session = requests.Session()
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
+
+
+WEATHER_SESSION = build_weather_session()
 
 
 def load_json(path: Path, default: Any = None) -> Any:
@@ -88,16 +118,32 @@ def ensure_notification_settings(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
 def fetch_json(url: str, params: Dict[str, Any], timeout: int = 30) -> Optional[Dict[str, Any]]:
     try:
-        response = requests.get(url, params=params, timeout=timeout)
+        response = WEATHER_SESSION.get(url, params=params, timeout=timeout)
         response.raise_for_status()
-        return response.json()
-    except Exception as exc:
-        print(f"[WARN] URL fetch failed: {url} :: {exc}")
-        return None
+        payload = response.json()
+    except requests.RequestException as exc:
+        raise WeatherRequestError(f"weather API request failed ({type(exc).__name__})") from exc
+    except ValueError as exc:
+        raise WeatherRequestError("weather API returned invalid JSON") from exc
+    return payload if isinstance(payload, dict) else None
 
 
 def iso_date(value: date) -> str:
     return value.strftime("%Y-%m-%d")
+
+
+def public_location_alias(index: int) -> str:
+    return f"Location {index + 1}"
+
+
+def alias_public_text(value: str, locations: List[Dict[str, Any]]) -> str:
+    for index, location in sorted(
+        enumerate(locations), key=lambda pair: len(str(pair[1].get("name", ""))), reverse=True
+    ):
+        name = str(location.get("name", ""))
+        if name:
+            value = value.replace(name, public_location_alias(index))
+    return value
 
 
 def parse_date(value: str) -> date:
@@ -114,10 +160,10 @@ def _month_day(value: Any, default: Tuple[int, int]) -> Tuple[int, int]:
 
 
 def month_day_window(dt: date, location: Optional[Dict[str, Any]] = None) -> bool:
-    """Season window: Aug 15 – Dec 1 unless the location sets `season_start`/`season_end` as "MM-DD"."""
+    """Season window: Aug 15 – Dec 10 unless the location sets `season_start`/`season_end` as "MM-DD"."""
     location = location or {}
     start = _month_day(location.get("season_start"), (8, 15))
-    end = _month_day(location.get("season_end"), (12, 1))
+    end = _month_day(location.get("season_end"), (12, 10))
     return start <= (dt.month, dt.day) <= end
 
 
@@ -130,7 +176,7 @@ FLUSH_DEPLETION_TIERS = ((1, 40), (3, 30), (7, 20), (14, 10))
 DEFAULT_DEPLETION_RECOVERY_DAYS = 14
 SMALL_HARVEST_DEPLETION_RECOVERY_DAYS = 10
 DEFAULT_EARLY_HARVEST_PENALTY_FACTOR = 0.5
-MODEL_VERSION = 15  # 15: hard freeze at -1.5C, stronger repeat-freeze penalty, late-season decay; 14: progressive/repeated frost penalty; 13: rain saturation 60 mm, soil ramp, frost/heat, graded post-flush, host-tree matching; 12: flush depletion, lighter no-find penalty; 11: temp ranges, split rain, humidity, post-flush, seasonal params; 10: formatted status labels
+MODEL_VERSION = 16  # 16: Dec 10 season end and weighted soil-temperature signal; 15: hard freeze at -1.5C, stronger repeat-freeze penalty, late-season decay; 14: progressive/repeated frost penalty; 13: rain saturation 60 mm, soil ramp, frost/heat, graded post-flush, host-tree matching; 12: flush depletion, lighter no-find penalty; 11: temp ranges, split rain, humidity, post-flush, seasonal params; 10: formatted status labels
 ARCHIVE_LAG_DAYS = 5
 SOURCE_ARCHIVE = "archive"
 SOURCE_FORECAST = "forecast"
@@ -200,6 +246,7 @@ FROST_REPEAT_PENALTY_MAX = 20
 LATE_SEASON_DECAY_START = (11, 15)
 LATE_SEASON_DECAY_END = (12, 10)
 LATE_SEASON_DECAY_MAX = 15
+SOIL_TEMPERATURE_SCORE_WEIGHT = 0.25
 FROST_LIGHT_PENALTY = 4
 HEAT_TMAX_C = 25.0
 FROST_PENALTY = 10
@@ -302,7 +349,7 @@ def fetch_archive_day_range(latitude: float, longitude: float, elevation: int, s
 
 
 def fetch_archive_hourly_precip(latitude: float, longitude: float, elevation: int, start: date, end: date) -> Optional[Dict[str, Any]]:
-    """Hourly precipitation only (used for the runoff backfill). Returns None on any API failure."""
+    """Hourly precipitation only (used for runoff backfill); request failures raise WeatherRequestError."""
     return fetch_json(
         ARCHIVE_API_URL,
         {
@@ -387,7 +434,7 @@ def load_json_safe(path: Path, default: Any) -> Any:
         with path.open("r", encoding="utf-8") as fh:
             return json.load(fh)
     except (ValueError, OSError) as exc:
-        backup = path.with_name(f"{path.name}.corrupt-{datetime.utcnow().strftime('%Y%m%dT%H%M%S')}")
+        backup = path.with_name(f"{path.name}.corrupt-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}")
         print(f"[WARN] {path} is unreadable ({exc}); moving it to {backup} and starting fresh")
         try:
             path.replace(backup)
@@ -409,12 +456,16 @@ def load_or_init_db() -> Dict[str, Any]:
     moved = migrate_legacy_entries(db)
     if moved:
         print(f"[INFO] Quarantined {moved} legacy top-level entries under '{LEGACY_KEY}'")
+    for location in db["locations"].values():
+        if isinstance(location, dict):
+            for key in ("latitude", "longitude", "elevation_m"):
+                location.pop(key, None)
     db["schema_version"] = SCHEMA_VERSION
     return db
 
 
 LEGACY_KEY = "legacy_quarantine"
-KNOWN_TOP_LEVEL_KEYS = {"locations", "schema_version", "meta", LEGACY_KEY}
+KNOWN_TOP_LEVEL_KEYS = {"locations", "schema_version", "meta", "forecast_snapshots", LEGACY_KEY}
 
 
 def migrate_legacy_entries(db: Dict[str, Any]) -> int:
@@ -559,9 +610,15 @@ def ensure_location_history(location_name: str, db: Dict[str, Any], latitude: fl
     start, end = min(starts), today - timedelta(days=ARCHIVE_LAG_DAYS)
     if start <= end:
         records = merge_records(records, fetch_archive_day_range(latitude, longitude, elevation, start, end))
-    records = merge_records(records, fetch_forecast_day_range(latitude, longitude, elevation))
+    forecast_records = fetch_forecast_day_range(latitude, longitude, elevation)
+    if not any(parse_date(record["date"]) >= today for record in forecast_records):
+        raise WeatherNoDataError(
+            f"{location_name}: forecast API returned no usable current or future daily data; "
+            "refusing to save an empty forecast"
+        )
+    records = merge_records(records, forecast_records)
     if not records:
-        raise RuntimeError(f"{location_name}: weather API returned no usable records; refusing to save an empty forecast")
+        raise WeatherNoDataError(f"{location_name}: weather API returned no usable records; refusing to save an empty forecast")
     backfilled = backfill_runoff_data(records, latitude, longitude, elevation)
     # Runoff looks at the last 3 days, so each backfilled day can change the next two days' scores too.
     pending = set(loc_data.get("pending_rescore") or [])
@@ -570,14 +627,13 @@ def ensure_location_history(location_name: str, db: Dict[str, Any], latitude: fl
     loc_data["pending_rescore"] = sorted(pending)
 
     loc_data.update({
-        "latitude": latitude,
-        "longitude": longitude,
-        "elevation_m": elevation,
         "daily_records": records,
         "last_sync_date": iso_date(today),
         "record_count": len(records),
         "merge_policy": "archive replaces forecast for the same date; forecast-only dates are kept; newer forecast replaces older forecast",
     })
+    for key in ("latitude", "longitude", "elevation_m"):
+        loc_data.pop(key, None)
     db["locations"][location_name] = loc_data
     return records
 
@@ -614,6 +670,24 @@ def observed_rainfall_total(hist: History, day: date, days: int) -> Optional[flo
     if len(values) < math.ceil(days * 0.8):
         return None
     return sum(float(value) for value in values)
+
+
+def forecast_rain_window_mix(records: List[Dict[str, Any]], location: Dict[str, Any], day: date) -> Dict[str, int]:
+    window_days = get_seasonal_params(day, location)["rain_window"]
+    window = History(records).window(day - timedelta(days=1), window_days)
+    usable = [record for record in window if record.get("precipitation_sum") is not None]
+    forecast_days = sum(record.get("source") == SOURCE_FORECAST for record in usable)
+    archive_days = sum(record.get("source") == SOURCE_ARCHIVE for record in usable)
+    return {
+        "forecast_days": forecast_days,
+        "archive_days": archive_days,
+        "window_days": window_days,
+        "coverage_days": len(usable),
+    }
+
+
+def heavily_forecast_dependent(mix: Dict[str, int]) -> bool:
+    return mix["window_days"] > 0 and mix["forecast_days"] / mix["window_days"] >= HEAVY_FORECAST_RAIN_SHARE
 
 
 def mean_air_temperature(hist: History, day: date, days: int) -> Optional[float]:
@@ -773,6 +847,16 @@ def temperature_score(average_temperature: float, optimal_range: Tuple[float, fl
     return max(0, round(FLUSH_TEMPERATURE_SCORE_MAX - distance * TEMPERATURE_SLOPE_PER_DEGREE))
 
 
+def soil_temperature_points(value: float, location: Dict[str, Any], default_range: Tuple[float, float]) -> int:
+    optimal = _temp_range(location.get("soil_temperature_optimal_range")) or default_range
+    try:
+        weight = float(location.get("soil_temperature_score_weight", SOIL_TEMPERATURE_SCORE_WEIGHT))
+    except (TypeError, ValueError):
+        weight = SOIL_TEMPERATURE_SCORE_WEIGHT
+    weight = max(0.0, min(1.0, weight))
+    return round(temperature_score(value, optimal) * weight)
+
+
 def rainfall_distribution_score(hist: History, day: date, window_days: int = FLUSH_RAIN_WINDOW_DAYS) -> int:
     """Up to 5 bonus points for steady rain: the share of days in the window with more than 2 mm."""
     records = hist.window(day - timedelta(days=1), window_days)
@@ -896,6 +980,9 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
     average_temperature = mean_air_temperature(hist, d, FLUSH_TEMPERATURE_WINDOW_DAYS)
     if average_temperature is not None:
         score += temperature_score(average_temperature, seasonal["optimal_temp_range"])
+    soil_temperature = daily.get("soil_temperature_0_to_7cm_mean")
+    if soil_temperature is not None:
+        score += soil_temperature_points(float(soil_temperature), location, seasonal["optimal_temp_range"])
 
     if has_runoff(hist, d):
         score -= 5
@@ -1004,6 +1091,9 @@ def score_breakdown(location: Dict[str, Any], daily: Dict[str, Any], hist: Histo
                       + BACKGROUND_RAIN_WEIGHT * rainfall_score(rain or 0)),
         "rain_distribution": rainfall_distribution_score(hist, d, seasonal["rain_window"]) if rain is not None else 0,
         "temperature": temperature_score(temp, seasonal["optimal_temp_range"]) if temp is not None else 0,
+        "soil_temperature": soil_temperature_points(float(daily["soil_temperature_0_to_7cm_mean"]), location,
+                                                    seasonal["optimal_temp_range"])
+                            if daily.get("soil_temperature_0_to_7cm_mean") is not None else 0,
         "soil_moisture": soil_moisture_points(float(soil)) if soil is not None else 0,
         "frost": -frost_penalty(hist, d),
         "late_season_decay": -late_season_decay_penalty(d, location),
@@ -1013,7 +1103,8 @@ def score_breakdown(location: Dict[str, Any], daily: Dict[str, Any], hist: Histo
 
 def location_signature(location: Dict[str, Any]) -> str:
     """Fingerprint of the config fields that influence scores; a change recomputes the stored series."""
-    keys = ("tree_species", "soil_pH", "past_harvests", "optimal_temp_range", "seasonal_params", "season_start", "season_end")
+    keys = ("tree_species", "soil_pH", "past_harvests", "optimal_temp_range", "seasonal_params", "season_start",
+            "season_end", "soil_temperature_optimal_range", "soil_temperature_score_weight")
     blob = json.dumps({k: location.get(k) for k in keys}, sort_keys=True, default=str)
     return f"{MODEL_VERSION}:{hashlib.sha1(blob.encode('utf-8')).hexdigest()[:12]}"
 
@@ -1120,6 +1211,94 @@ def backtest_accuracy(location: Dict[str, Any], records: List[Dict[str, Any]],
     }
 
 
+def store_forecast_snapshot(db: Dict[str, Any], run_date: date, forecast_scores: Dict[str, List[List[Any]]]) -> None:
+    snapshots = db.get("forecast_snapshots")
+    if not isinstance(snapshots, list):
+        snapshots = []
+    compact_scores = {}
+    for alias, rows in forecast_scores.items():
+        compact_scores[alias] = [
+            [day, int(score)] for day, score in rows
+            if valid_date_string(day) and isinstance(score, (int, float)) and 0 <= score <= 100
+        ]
+    snapshot = {"run_date": iso_date(run_date), "scores": compact_scores}
+    snapshots = [item for item in snapshots if not isinstance(item, dict) or item.get("run_date") != snapshot["run_date"]]
+    snapshots.append(snapshot)
+    db["forecast_snapshots"] = snapshots[-MAX_FORECAST_SNAPSHOTS:]
+
+
+def _binary_auc(samples: List[Tuple[int, bool]]) -> Optional[float]:
+    positives = [score for score, found in samples if found]
+    negatives = [score for score, found in samples if not found]
+    if len(positives) < BACKTEST_MIN_CLASS_SAMPLES or len(negatives) < BACKTEST_MIN_CLASS_SAMPLES:
+        return None
+    wins = sum(1 if positive > negative else 0.5 if positive == negative else 0
+               for positive in positives for negative in negatives)
+    return wins / (len(positives) * len(negatives))
+
+
+def forecast_snapshot_backtest(db: Dict[str, Any], cfg: Dict[str, Any],
+                               harvest_log: Dict[str, Any], threshold: int) -> Dict[str, Any]:
+    snapshots = db.get("forecast_snapshots") if isinstance(db.get("forecast_snapshots"), list) else []
+    matched: List[Tuple[int, bool]] = []
+    for index, location in enumerate(cfg.get("LOCATIONS", [])):
+        name = location.get("name")
+        alias = public_location_alias(index)
+        outcomes: Dict[str, bool] = {}
+        for observation in merge_harvests(location.get("past_harvests", []), harvest_log, name):
+            day = observation.get("date")
+            if not valid_date_string(day):
+                continue
+            if observation.get("observation_type") == "no_mushrooms":
+                outcomes.setdefault(day, False)
+            elif observation.get("observation_type") in (None, "harvest") and observation.get("yield_tier") in {"small", "medium", "large"}:
+                outcomes[day] = True
+        for day, found in outcomes.items():
+            eligible = []
+            for snapshot in snapshots:
+                run_date = snapshot.get("run_date") if isinstance(snapshot, dict) else None
+                score_map = snapshot.get("scores", {}) if isinstance(snapshot, dict) else {}
+                scores = score_map.get(alias, []) if isinstance(score_map, dict) else []
+                values = {row[0]: row[1] for row in scores if isinstance(row, list) and len(row) == 2}
+                if valid_date_string(run_date) and run_date < day and day in values:
+                    eligible.append((run_date, values[day]))
+            if eligible:
+                matched.append((int(max(eligible)[1]), found))
+    positives = sum(1 for _, found in matched if found)
+    negatives = len(matched) - positives
+    hits = sum(1 for score, found in matched if found and score >= threshold)
+    false_alarms = sum(1 for score, found in matched if not found and score >= threshold)
+    return {
+        "samples": len(matched),
+        "finds": positives,
+        "no_finds": negatives,
+        "hits": hits,
+        "hit_rate": hits / positives if positives else None,
+        "false_alarms": false_alarms,
+        "false_alarm_rate": false_alarms / negatives if negatives else None,
+        "auc": _binary_auc(matched),
+    }
+
+
+def format_forecast_backtest(metrics: Dict[str, Any]) -> str:
+    def rate(value: Optional[float]) -> str:
+        return "n/a" if value is None else f"{value:.1%}"
+
+    lines = [
+        f"Forecast snapshot backtest: {metrics['samples']} matched observations",
+        f"Hit rate: {metrics['hits']}/{metrics['finds']} ({rate(metrics['hit_rate'])})",
+        f"False alarms: {metrics['false_alarms']}/{metrics['no_finds']} ({rate(metrics['false_alarm_rate'])})",
+    ]
+    if metrics["auc"] is None:
+        lines.append(
+            f"WARNING: sample too small for AUC; need at least {BACKTEST_MIN_CLASS_SAMPLES} finds "
+            f"and {BACKTEST_MIN_CLASS_SAMPLES} no-finds."
+        )
+    else:
+        lines.append(f"AUC: {metrics['auc']:.3f}")
+    return "\n".join(lines)
+
+
 WEEKDAY_NAMES = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
 
@@ -1191,6 +1370,28 @@ def find_weekend_best(location: Dict[str, Any], records: List[Dict[str, Any]], h
         return 0, "N/A", "", ""
     best_date, score, status, flag = max(valid_days, key=lambda item: item[1])
     return score, format_display_date(best_date), status, flag
+
+
+def estimate_days_until_threshold(records: List[Dict[str, Any]], scores: Dict[str, Any],
+                                  today: date, threshold: int) -> Optional[int]:
+    previous = None
+    for day, value in sorted(scores.items()):
+        if valid_date_string(day) and parse_date(day) <= today:
+            previous = int(value.get("score", 0))
+    if previous is not None and previous >= threshold:
+        return 0
+    for record in sorted(records, key=lambda item: item.get("date", "")):
+        day = record.get("date")
+        if record.get("source") != SOURCE_FORECAST or not valid_date_string(day) or parse_date(day) <= today:
+            continue
+        current = scores.get(day)
+        if not isinstance(current, dict):
+            continue
+        current_score = int(current.get("score", 0))
+        if previous is not None and previous < threshold <= current_score:
+            return (parse_date(day) - today).days
+        previous = current_score
+    return None
 
 
 def explain_score(location: Dict[str, Any], records: List[Dict[str, Any]], best_day: str, status: str) -> str:
@@ -1296,7 +1497,7 @@ def score_color(score: int) -> str:
     return f"hsl({hue} 80% 58%)"
 
 
-def should_alert_for_location(location_name: str, current_score: int, status: str, threshold: int, state: Dict[str, Any], today: Optional[date] = None) -> bool:
+def should_alert_for_location(location_name: str, current_score: int, status: str, threshold: int, state: Dict[str, Any], today: Optional[date] = None, minimum_gap_days: int = MIN_ALERT_GAP_DAYS) -> bool:
     """All three conditions must hold: threshold crossed upward, significant status change, >=5 days since last alert.
 
     last_score / last_status are the previous run's values (updated every run, see main()).
@@ -1309,7 +1510,22 @@ def should_alert_for_location(location_name: str, current_score: int, status: st
     days_since = (today - parse_date(last_date)).days if last_date and valid_date_string(last_date) else 999
     crossed = last_score < threshold <= current_score
     status_changed = status_category(loc_state.get("last_status")) != status_category(status)
-    return crossed and status_changed and days_since >= MIN_ALERT_GAP_DAYS
+    return crossed and status_changed and days_since >= minimum_gap_days
+
+
+def configured_alert_gap_days(cfg: Dict[str, Any]) -> int:
+    try:
+        return max(0, int(cfg.get("MIN_ALERT_GAP_DAYS", MIN_ALERT_GAP_DAYS)))
+    except (TypeError, ValueError):
+        return MIN_ALERT_GAP_DAYS
+
+
+def notify_sync_failure(cfg: Dict[str, Any], reason: str) -> bool:
+    message = f"❌ Porcini weather sync failed: {reason}"
+    print(f"[ERROR] {message}")
+    delivered = dispatch_notification(cfg, message)
+    print("[INFO] Failure notification delivered" if delivered else "[WARN] Failure notification was not delivered")
+    return delivered
 
 
 def resolve_friday_policy(cfg: Dict[str, Any]) -> str:
@@ -1428,6 +1644,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-__CSP_NONCE__'; style-src 'unsafe-inline'; connect-src https://api.github.com; img-src data:; form-action 'none'; base-uri 'none'; object-src 'none'" />
   <title>Porcini Tracker Dashboard</title>
   <style>
     :root {
@@ -1469,6 +1686,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     .timeline-day { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; width: 42px; min-height: 80px; padding: 14px 3px 5px; margin: 0; border-radius: 7px; }
     .timeline-day.weekend { background: #273449; }
     .timeline-day.forecast { border-style: dashed; }
+    .timeline-day.low-confidence { background-image: repeating-linear-gradient(135deg, transparent, transparent 6px, rgb(251 191 36 / 18%) 6px, rgb(251 191 36 / 18%) 9px); }
     .timeline-day.selected { outline: 2px solid var(--accent); outline-offset: 1px; }
     .timeline-day.today::after { content: "Today"; position: absolute; top: 0; color: var(--focus); font-size: .65rem; }
     .timeline-day .month { position: absolute; top: 0; font-size: .65rem; color: var(--accent); }
@@ -1530,7 +1748,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     </div>
     <h2>📈 Daily Score History &amp; Field Observations <button class="info-button" type="button" data-info="score" aria-label="How the forecast score is calculated" aria-haspopup="dialog" aria-controls="info-dialog">ⓘ</button></h2>
     <div class="card">
-      <div class="toolbar"><label for="range">Date range<select id="range"></select></label><button type="button" id="seasonOnly" class="season-toggle" aria-pressed="false" title="Show only Aug 15 – Dec 1">Season Only</button></div>
+      <div class="toolbar"><label for="range">Date range<select id="range"></select></label><button type="button" id="seasonOnly" class="season-toggle" aria-pressed="false" title="Show only Aug 15 – Dec 10">Season Only</button></div>
       <div id="chartbox"><svg id="chart" viewBox="0 0 900 320" role="img" aria-label="Daily favourability index with optional rain and temperature trends"></svg><div id="tip"></div></div>
       <div class="meta">Favourability index (0–100; not a probability). Hover or tap for daily details. Dashed line marks the alert threshold.</div>
       <div class="legend" aria-label="Chart and timeline legend">
@@ -1539,6 +1757,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
         <label class="legend-chip"><input id="temp-toggle" type="checkbox" checked> <span class="line-key line-temp"></span>Temperature</label>
         <span class="legend-chip">🍄 Found</span><span class="legend-chip">❌ No find</span>
         <span class="legend-chip">Solid: recorded · Dashed: forecast</span>
+        <span class="legend-chip">Striped: forecast-heavy rain window (lower confidence)</span>
       </div>
       <div class="meta">Choose a date or use previous/next; arrow keys also move through days.</div>
       <div class="toolbar">
@@ -1595,7 +1814,7 @@ __OBSERVATION_LOG__
     <button id="delete-cancel" type="button">Cancel</button>
   </dialog>
   <script id="porcini-data" type="application/json">__DATA__</script>
-  <script>
+  <script nonce="__CSP_NONCE__">
   (function () {
     var D = JSON.parse(document.getElementById('porcini-data').textContent);
     var LOG_KEY = 'porcini_logs_v1', SYNCED_KEY = 'porcini_synced_v1', KEY_KEY = 'porcini_api_key', PAGE = 15;
@@ -1622,7 +1841,7 @@ __OBSERVATION_LOG__
         'Daily high and low are averaged to form a 20-day mean air temperature signal. A value near 13°C contributes most to the heuristic score; this is based on one regional porcini study, not a universal optimum.',
         'The main rain signal blends recent rain (7 complete days, weight 0.6) with background rain over the seasonal window (26 days by default; 14 early season Aug–Sep, 30 in December; weight 0.4). It adds points up to a 100 mm plateau; steady rain (many days over 2 mm) earns a small bonus over one heavy event; there is no extra uncalibrated penalty for sustained high totals.',
         'A 90-day rainfall comparison can apply a modest drought penalty when rain is unusually low against seasonally comparable prior-year periods. It is omitted until enough local archive data is available.',
-        'Measured 0–7 cm soil moisture is a smaller supporting signal. Soil texture and local calibration affect what a given volumetric moisture value means; soil temperature does not directly add score points.',
+        'Measured 0–7 cm soil moisture is a smaller supporting signal. Soil texture and local calibration affect what a given volumetric moisture value means. Soil temperature adds up to 5 points at its seasonal optimum by default; its weight and optimal range can be overridden per location.',
         'Concentrated heavy rain can apply a small runoff penalty. No new high-rain cutoff is assumed without local observations. Aspect/canopy rain-retention adjustments are not used.',
         'Weather source “archive” means recorded past weather; “forecast” means weather-model data; “sample” means generated example weather, not observations. Weather inputs guide the score; they do not confirm mushrooms are present.'
       ]],
@@ -1664,11 +1883,11 @@ __OBSERVATION_LOG__
     D.locations.forEach(function (l, i) { var o = document.createElement('option'); o.value = i; o.textContent = l.name; $('loc').appendChild(o); });
     function years() { var s = {}; loc.scores.forEach(function (r) { s[r[0].slice(0, 4)] = 1; }); return Object.keys(s).sort(); }
     function fillRange() {
-      var cur = $('range').value; $('range').innerHTML = '';
+      var cur = $('range').value; $('range').textContent = '';
       ['all', '365'].concat(years()).forEach(function (v) { var o = document.createElement('option'); o.value = v; o.textContent = v === 'all' ? 'All years' : v === '365' ? 'Last 365 days' : v; $('range').appendChild(o); });
       if (cur) $('range').value = cur;
     }
-    function inSeason(d) { var md = d.slice(5, 10); return md >= '08-15' && md <= '12-01'; }
+    function inSeason(d) { var md = d.slice(5, 10); return md >= '08-15' && md <= '12-10'; }
     function inRange(d) { if ($('seasonOnly').getAttribute('aria-pressed') === 'true' && !inSeason(d)) return false; var r = $('range').value || 'all'; if (r === 'all') return true; if (r === '365') return Date.parse(d) >= Date.now() - 365 * 864e5; return d.slice(0, 4) === r; }
     function harvestsFor() {
       var h = (loc.harvests || []).map(function (x) { return Object.assign({}, x, { origin: x.origin === 'log' ? 'harvest_log.json' : 'config' }); });
@@ -1677,6 +1896,7 @@ __OBSERVATION_LOG__
       return h;
     }
     function recMap() { var m = {}; loc.records.forEach(function (r) { m[r[0]] = r; }); return m; }
+    function rainMixMap() { var m = {}; (loc.rain_mix || []).forEach(function (r) { m[r[0]] = r; }); return m; }
     function scoreMap() { var m = {}; loc.scores.forEach(function (r) { m[r[0]] = r; }); return m; }
     function weatherOverview() {
       var body = $('weather-rows'), today = new Date().toISOString().slice(0, 10);
@@ -1740,7 +1960,7 @@ __OBSERVATION_LOG__
       var start = Math.max(0, center - 17), end = Math.min(days.length, start + 35);
       start = Math.max(0, end - 35);
       activeTimelineDates = days.slice(start, end).map(function (r) { return r[0]; });
-      var timeline = $('timeline'), records = recMap(), scores = scoreMap(), visits = harvestsFor();
+      var timeline = $('timeline'), records = recMap(), scores = scoreMap(), rainMix = rainMixMap(), visits = harvestsFor();
       timeline.textContent = '';
       activeTimelineDates.forEach(function (d, i) {
         var row = scores[d], weather = records[d], observations = visits.filter(function (h) { return h.date === d; });
@@ -1749,6 +1969,11 @@ __OBSERVATION_LOG__
         var weekday = new Date(d + 'T00:00:00Z').getUTCDay();
         if (weekday === 0 || weekday === 6) day.classList.add('weekend');
         if (weather && weather[8] === 'forecast') day.classList.add('forecast');
+        var mix = rainMix[d], confidenceTip = '';
+        if (mix && mix[3] > 0 && mix[1] / mix[3] >= __HEAVY_FORECAST_RAIN_SHARE__) {
+          day.classList.add('low-confidence');
+          confidenceTip = 'Lower confidence: preceding rain window uses forecast rain for ' + mix[1] + ' of ' + mix[3] + ' days; archive data covers ' + mix[2] + ' days.';
+        }
         if (d === selectedDate) day.classList.add('selected');
         if (d === new Date().toISOString().slice(0, 10)) day.classList.add('today');
         day.setAttribute('aria-pressed', d === selectedDate ? 'true' : 'false');
@@ -1763,7 +1988,7 @@ __OBSERVATION_LOG__
         var bar = document.createElement('span'), score = row ? row[1] : 0;
         bar.style.width = Math.max(0, Math.min(100, score)) + '%'; bar.style.background = row ? row[5] : '';
         heat.appendChild(bar); day.appendChild(heat);
-        day.title = fmtDate(d) + (row ? ', favourability index ' + score + ' of 100' : '') + (observations.length ? ', ' + observations.map(function (h) { return h.observation_type === 'no_mushrooms' ? 'no mushrooms found' : 'mushrooms found'; }).join(', ') : '');
+        day.title = fmtDate(d) + (row ? ', favourability index ' + score + ' of 100' : '') + (observations.length ? ', ' + observations.map(function (h) { return h.observation_type === 'no_mushrooms' ? 'no mushrooms found' : 'mushrooms found'; }).join(', ') : '') + (confidenceTip ? '. ' + confidenceTip : '');
         day.setAttribute('aria-label', day.title);
         day.addEventListener('click', function () { selectedDate = d; renderTimeline(); var button = Array.prototype.find.call($('timeline').children, function (item) { return item.getAttribute('aria-label').indexOf(fmtDate(d)) === 0; }); if (button) button.focus(); });
         timeline.appendChild(day);
@@ -2040,17 +2265,26 @@ def dashboard_payload(cfg: Dict[str, Any], analysis: List[Dict[str, Any]], mode:
 
     threshold = alert_threshold(cfg)
     locations = []
-    for item in analysis:
+    for index, item in enumerate(analysis):
         records = item.get("records", [])
         scores = item.get("scores", {})
+        alias = public_location_alias(index)
+        configured = cfg.get("LOCATIONS", [])
+        location = configured[index] if index < len(configured) and isinstance(configured[index], dict) else {}
+        harvests = [dict(h, location=alias) for h in item.get("harvests", [])]
         locations.append({
-            "name": item["name"],
+            "name": alias,
             "scores": [[d, v["score"], v["status"], v.get("quality", ""),
                         score_verdict_tag(v["score"], v["status"], threshold), score_color(v["score"])]
                        for d, v in sorted(scores.items())],
             # [date, tmax, tmin, rain, wind, soil_temp, rh, soil_moisture, source]
             "records": [[r["date"]] + [rnd(r.get(k)) for k in ("temperature_2m_max", "temperature_2m_min", "precipitation_sum", "wind_speed_10m_max", "soil_temperature_0_to_7cm_mean", "relative_humidity_2m_mean", "soil_moisture_0_to_7cm_mean")] + [r.get("source", "")] for r in records],
-            "harvests": item.get("harvests", []),
+            "rain_mix": [
+                [r["date"], mix["forecast_days"], mix["archive_days"], mix["window_days"], mix["coverage_days"]]
+                for r in records if r.get("source") == SOURCE_FORECAST
+                for mix in [forecast_rain_window_mix(records, location, parse_date(r["date"]))]
+            ],
+            "harvests": harvests,
             "backtest": item.get("backtest", {}),
         })
     repo = os.environ.get("GITHUB_REPOSITORY") or cfg.get("GITHUB_REPOSITORY") or "jmb2885m75-cmd/porcini-tracker"
@@ -2123,7 +2357,7 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]],
     """Self-contained dashboard (inline CSS/JS/data, no CDN). Static hosting; observations are POSTed to api.py and stored in harvest_log.json."""
     threshold = alert_threshold(cfg)
     cards = []
-    for item in analysis:
+    for index, item in enumerate(analysis):
         available = item["best_day"] != "N/A"
         verdict = ""
         score = item["best_score"]
@@ -2138,26 +2372,40 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]],
             verdict = f"<div><span class='badge {'go' if go else 'nogo'}'>{'GO' if go else 'NO-GO'}</span></div>"
         quality = f"<div class='meta'>{html.escape(item['quality'])}</div>" if item.get("quality") else ""
         explanation = f"<div class='meta score-explanation'>{html.escape(item['explanation'])}</div>" if item.get("explanation") else ""
+        timing_days = item.get("flush_timing_days")
+        timing = (
+            f"<div class='meta flush-timing'>Estimated days until score crosses ALERT_THRESHOLD: {timing_days} (heuristic)</div>"
+            if isinstance(timing_days, int) else ""
+        )
         cards.append(
-            f"<div class='card'><div class='score-line'>{score_display}</div><div class='name'>{html.escape(str(item['name']))}</div>{verdict}"
-            f"<div class='meta best-day'>Best day<strong>{html.escape(str(item['best_day']))}</strong></div><div class='meta'>Status: {html.escape(str(item['status']))}</div>{explanation}{quality}"
+            f"<div class='card'><div class='score-line'>{score_display}</div><div class='name'>{html.escape(public_location_alias(index))}</div>{verdict}"
+            f"<div class='meta best-day'>Best day<strong>{html.escape(str(item['best_day']))}</strong></div><div class='meta'>Status: {html.escape(str(item['status']))}</div>{explanation}{quality}{timing}"
             f"<div class='meta'>Moisture: {item['soil_moisture']:.2f} m³/m³</div></div>"
         )
     alert_status = "This message will be sent with this run." if alert_will_send else "Preview only: no alert is triggered by this run."
     alert_section = ""
     if alert_message:
+        public_alert = alias_public_text(alert_message, cfg.get("LOCATIONS", []))
         alert_section = f"""
     <h2>📨 Alert Preview</h2>
     <div class="card">
       <div class="meta">{html.escape(alert_status)}</div>
-      <pre class="alert">{html.escape(alert_message)}</pre>
+      <pre class="alert">{html.escape(public_alert)}</pre>
       <div class="meta">Fields sent per ranked spot (top 3): rank, location name, best weekend favourability index (0–100), best day, status. The final line is the dashboard link.</div>
     </div>"""
     payload = dashboard_payload(cfg, analysis, mode)
-    observation_log = render_observation_log(build_observation_log(cfg.get("LOCATIONS", []), harvest_log), payload["repo"])
+    public_names = {str(item.get("name")): public_location_alias(i) for i, item in enumerate(cfg.get("LOCATIONS", []))}
+    public_entries = [
+        dict(entry, location=public_names.get(str(entry.get("location")), "Unlisted location"))
+        for entry in build_observation_log(cfg.get("LOCATIONS", []), harvest_log)
+    ]
+    observation_log = render_observation_log(public_entries, payload["repo"])
     data = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
+    nonce = secrets.token_urlsafe(18)
     return (
         DASHBOARD_TEMPLATE
+        .replace("__CSP_NONCE__", nonce)
+        .replace("__HEAVY_FORECAST_RAIN_SHARE__", str(HEAVY_FORECAST_RAIN_SHARE))
         .replace("__MODE_LABEL__", html.escape(MODE_LABELS.get(mode, MODE_LABELS[MODE_DEFAULT])))
         .replace("__GENERATED__", (lambda n: f"{format_display_date(n)} {n:%H:%M}")(datetime.now(timezone.utc)))
         .replace("__CARDS__", "".join(cards))
@@ -2204,6 +2452,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Porcini tracker forecast engine")
     parser.add_argument("--test-alert", action="store_true", help="Send a test alert using current notification config")
     parser.add_argument("--check-db", action="store_true", help="Run the archive integrity check and exit (non-zero if problems found)")
+    parser.add_argument("--backtest", action="store_true", help="Compare stored forecast snapshots with later field observations")
     parser.add_argument("--mode", choices=["auto", MODE_DEFAULT, MODE_OUTLOOK, MODE_FINAL], default="auto", help="Run mode; 'auto' detects it from the current UTC day/time")
     args = parser.parse_args()
 
@@ -2213,6 +2462,19 @@ def main() -> int:
             print(f"[DB] {issue}")
         print("[DB] OK" if not issues else f"[DB] {len(issues)} problem(s) found")
         return 1 if issues else 0
+
+    if args.backtest:
+        cfg = load_config()
+        db = load_json_safe(DB_PATH, {})
+        try:
+            harvest_log = load_harvest_log()
+        except HarvestError as exc:
+            print(f"[WARN] Could not read observations for backtest: {exc}")
+            harvest_log = {"harvests": []}
+        print(format_forecast_backtest(
+            forecast_snapshot_backtest(db, cfg, harvest_log, alert_threshold(cfg))
+        ))
+        return 0
 
     cfg = ensure_notification_settings(load_config())
     db = load_or_init_db()
@@ -2231,6 +2493,7 @@ def main() -> int:
     print(f"[INFO] Run mode: {mode}")
 
     threshold = alert_threshold(cfg)
+    minimum_gap_days = configured_alert_gap_days(cfg)
     friday_policy = resolve_friday_policy(cfg)
     dashboard_url = resolve_dashboard_url()
 
@@ -2242,16 +2505,30 @@ def main() -> int:
 
     analyses: List[Dict[str, Any]] = []
     alert_queue: List[Tuple[str, int, str, str]] = []
+    forecast_scores: Dict[str, List[List[Any]]] = {}
 
-    for location in cfg.get("LOCATIONS", []):
+    for location_index, location in enumerate(cfg.get("LOCATIONS", [])):
         name = location.get("name")
+        storage_name = public_location_alias(location_index)
         latitude = float(location.get("latitude"))
         longitude = float(location.get("longitude"))
         elevation = int(location.get("elevation_m", 0))
         harvests = merge_harvests(location.get("past_harvests", []), harvest_log, name)
-        records = ensure_location_history(name, db, latitude, longitude, elevation, today)
-        loc_store = db["locations"][name]
+        if storage_name not in db["locations"] and name in db["locations"]:
+            db["locations"][storage_name] = db["locations"].pop(name)
+        try:
+            records = ensure_location_history(storage_name, db, latitude, longitude, elevation, today)
+        except Exception as exc:
+            notify_sync_failure(cfg, f"{storage_name}: {exc}")
+            return 1
+        loc_store = db["locations"][storage_name]
         update_daily_scores(dict(location, past_harvests=harvests), records, loc_store)
+        forecast_scores[storage_name] = [
+            [record["date"], loc_store["daily_scores"][record["date"]]["score"]]
+            for record in records
+            if record.get("source") == SOURCE_FORECAST and record["date"] >= iso_date(today)
+            and record["date"] in loc_store["daily_scores"]
+        ]
         loc_store["backtest"] = backtest_accuracy(location, records, harvests, threshold)
         for message in calibration_messages(name, loc_store["backtest"], location):
             print(message)
@@ -2273,18 +2550,25 @@ def main() -> int:
             "scores": loc_store["daily_scores"],
             "harvests": harvests,
             "backtest": loc_store["backtest"],
+            "flush_timing_days": estimate_days_until_threshold(
+                records, loc_store["daily_scores"], today, threshold
+            ),
         })
 
         available = best_day != "N/A"
         current_status = (status or "🟡 Monitoring") if available else "📡 Weather data unavailable"
         send = False
-        loc_state = alert_state["locations"].get(name, {})
+        if storage_name not in alert_state["locations"] and name in alert_state["locations"]:
+            alert_state["locations"][storage_name] = alert_state["locations"].pop(name)
+        loc_state = alert_state["locations"].get(storage_name, {})
         if mode == MODE_FINAL and available:
-            send = should_confirm_for_location(name, alert_state, today, friday_policy, best_score, threshold)
+            send = should_confirm_for_location(storage_name, alert_state, today, friday_policy, best_score, threshold)
             if send:
                 loc_state["last_confirmation_date"] = iso_date(today)
         elif mode != MODE_FINAL and available:
-            send = should_alert_for_location(name, best_score, current_status, threshold, alert_state, today)
+            send = should_alert_for_location(
+                storage_name, best_score, current_status, threshold, alert_state, today, minimum_gap_days
+            )
             if send:
                 loc_state["last_alert_date"] = iso_date(today)
                 loc_state["last_alert_mode"] = mode
@@ -2295,8 +2579,20 @@ def main() -> int:
             # Keep alert-crossing state unchanged when there is no score to compare.
             loc_state["last_score"] = best_score
             loc_state["last_status"] = current_status
-        alert_state["locations"][name] = loc_state
+        alert_state["locations"][storage_name] = loc_state
 
+    stale_issues = [
+        issue for issue in check_db_integrity(db, today)
+        if "more than 3 days old" in issue
+        and any(issue.startswith(f"{alias}:") for alias in (
+            public_location_alias(i) for i, _ in enumerate(cfg.get("LOCATIONS", []))
+        ))
+    ]
+    if stale_issues:
+        notify_sync_failure(cfg, "; ".join(stale_issues))
+        return 1
+
+    store_forecast_snapshot(db, today, forecast_scores)
     db["meta"] = {"last_run_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "last_run_mode": mode, "model_version": MODEL_VERSION}
     save_json(DB_PATH, db)
 
@@ -2305,7 +2601,7 @@ def main() -> int:
     message = build_alert_message(alert_results, dashboard_url, mode, threshold) if alert_results else ""
     report_html = generate_dashboard_html(cfg, analyses, message, bool(alert_queue), mode, harvest_log)
     REPORT_PATH.write_text(report_html, encoding="utf-8")
-    inject_alert_into_index(message, bool(alert_queue))
+    inject_alert_into_index(alias_public_text(message, cfg.get("LOCATIONS", [])), bool(alert_queue))
 
     print("\n### Porcini Summary")
     for item in analyses:

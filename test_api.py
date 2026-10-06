@@ -52,6 +52,16 @@ class SubmitObservationTests(unittest.TestCase):
         finally:
             del os.environ["OBSERVATION_API_KEY"]
 
+    def test_public_location_alias_resolves_to_configured_location(self):
+        cfg = Path(self.tmp.name) / "config.json"
+        cfg.write_text(json.dumps({"LOCATIONS": [{"name": "Forest A"}]}))
+        payload = json.dumps({
+            "location": "Location 1", "date": "2024-09-01", "observation_type": "no_mushrooms"
+        }).encode()
+        status, body = api.handle_request(payload, {}, cfg, self.log)
+        self.assertEqual(status, 200)
+        self.assertEqual(body["entry"]["location"], "Forest A")
+
 
 class DeleteObservationTests(unittest.TestCase):
     def setUp(self):

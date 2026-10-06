@@ -5,10 +5,6 @@ on:
     types: [opened, edited, labeled]
   workflow_dispatch:
 
-permissions:
-  contents: write
-  issues: write
-
 concurrency:
   group: porcini-state
   cancel-in-progress: false
@@ -20,6 +16,9 @@ jobs:
       (contains(github.event.issue.labels.*.name, 'harvest') ||
        startsWith(github.event.issue.title, 'Observation:'))
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
     steps:
       - uses: actions/checkout@v4
 
@@ -67,13 +66,15 @@ jobs:
       - name: Commit updated data
         id: commit
         if: steps.ingest.outcome == 'success'
+        env:
+          ISSUE: ${{ github.event.issue.number }}
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           touch alert_state.json
           git add harvest_log.json porcini_db.json index.html porcini_report.html alert_state.json .github/ISSUE_TEMPLATE/harvest.yml
           if ! git diff --cached --quiet; then
-            git commit -m "🍄 Record harvest from issue #${{ github.event.issue.number }} [skip ci]"
+            git commit -m "🍄 Record harvest from issue #$ISSUE [skip ci]"
             git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
             git push
           fi
@@ -116,6 +117,8 @@ jobs:
   sync_form:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

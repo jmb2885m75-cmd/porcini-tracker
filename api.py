@@ -3,6 +3,7 @@ import argparse
 import hmac
 import json
 import os
+import re
 import sys
 import threading
 from datetime import datetime, timezone
@@ -161,6 +162,13 @@ def handle_request(body: bytes, headers, config_path: Path, log_path: Path = HAR
         return _fail(500, str(exc))
     if known is None:
         return _fail(500, "Configuration is unavailable on the server.")
+    raw_location = str(payload.get("location", "")) if isinstance(payload, dict) else ""
+    alias = re.fullmatch(r"Location ([1-9][0-9]*)", raw_location)
+    if alias:
+        index = int(alias.group(1)) - 1
+        if index >= len(known):
+            return _fail(422, "Unknown location.")
+        payload = dict(payload, location=known[index])
     if not reporter and isinstance(payload, dict) and payload.get("reporter"):
         reporter = str(payload["reporter"])[:60]
     return submit_observation(payload, known, log_path, reporter)

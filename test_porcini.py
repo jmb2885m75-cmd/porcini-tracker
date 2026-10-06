@@ -112,6 +112,9 @@ class PrivacyTests(unittest.TestCase):
         self.assertNotIn("Private woodland", report)
         self.assertIn("Content-Security-Policy", report)
         self.assertIn("default-src 'none'", report)
+        nonce = re.search(r"script-src 'nonce-([^']+)'", report)
+        self.assertIsNotNone(nonce)
+        self.assertIn(f'<script nonce="{nonce.group(1)}">', report)
 
     def test_location_coordinates_are_not_persisted(self):
         db = {"locations": {"Location 1": {
@@ -295,13 +298,57 @@ class NotificationTests(unittest.TestCase):
 
 
 class ScoringTests(unittest.TestCase):
+    def test_default_season_includes_full_late_decay_window(self):
+        self.assertTrue(p.month_day_window(date(2025, 12, 10)))
+        self.assertFalse(p.month_day_window(date(2025, 12, 11)))
+        self.assertEqual(p.late_season_decay_penalty(date(2025, 12, 10), LOC), p.LATE_SEASON_DECAY_MAX)
+
+    def test_soil_temperature_is_a_weighted_signal_with_location_overrides(self):
+        recs = series(date(2025, 9, 1), 50, soil_temperature_0_to_7cm_mean=10.0)
+        hist = p.History(recs)
+        day = date(2025, 10, 18)
+        daily = hist.get(day)
+        default_score = p.calculate_score_for_day(LOC, daily, hist, [])[0]
+        cold_score = p.calculate_score_for_day(
+            LOC, dict(daily, soil_temperature_0_to_7cm_mean=0.0), hist, []
+        )[0]
+        disabled_score = p.calculate_score_for_day(
+            dict(LOC, soil_temperature_score_weight=0),
+            dict(daily, soil_temperature_0_to_7cm_mean=0.0), hist, []
+        )[0]
+        self.assertGreater(default_score, cold_score)
+        self.assertEqual(disabled_score, default_score - p.soil_temperature_points(10.0, LOC, (8.0, 14.0)))
+        self.assertEqual(p.MODEL_VERSION, 16)
+        self.assertEqual(p.score_breakdown(LOC, daily, hist)["soil_temperature"], 5)
+
+    def test_rain_and_freeze_score_invariants(self):
+        start, day = date(2025, 8, 1), date(2025, 10, 1)
+        base_records = series(start, (day - start).days + 1, precipitation_sum=0.0)
+        hist = p.History(base_records)
+        rainfall_scores = []
+        for mm in range(0, 21, 2):
+            for record in hist.window(day - timedelta(days=1), p.FLUSH_RAIN_WINDOW_DAYS):
+                record["precipitation_sum"] = mm
+            rainfall_scores.append(p.calculate_score_for_day(LOC, hist.get(day), hist, [])[0])
+        self.assertTrue(all(a <= b for a, b in zip(rainfall_scores, rainfall_scores[1:])))
+
+        warm_records = series(start, (day - start).days + 1, temperature_2m_max=12.0, temperature_2m_min=2.0)
+        warm = p.History(warm_records)
+        baseline = p.calculate_score_for_day(LOC, warm.get(day), warm, [])[0]
+        for freeze_days in range(1, p.FROST_REPEAT_WINDOW_DAYS + 1):
+            frozen_records = [dict(record) for record in warm_records]
+            for record in frozen_records[-freeze_days - 1:-1]:
+                record["temperature_2m_min"] = -2.0
+            frozen = p.History(frozen_records)
+            self.assertLessEqual(p.calculate_score_for_day(LOC, frozen.get(day), frozen, [])[0], baseline)
+
     def test_no_mushrooms_observation_caps_score_on_observed_date_only(self):
         recs = series(date(2025, 8, 20), 60, precipitation_sum=5.0)
         hist = p.History(recs)
         observed = date(2025, 9, 25)
         no_find = [{"date": observed.isoformat(), "observation_type": "no_mushrooms"}]
         score = p.calculate_score_for_day(LOC, hist.get(observed), hist, no_find)
-        self.assertLessEqual(score[0], 20)
+        self.assertEqual(score[0], 20)
         self.assertIn("No mushrooms found", score[1])
         next_day = p.calculate_score_for_day(LOC, hist.get(observed + timedelta(days=1)), hist, no_find)
         self.assertGreater(next_day[0], score[0])

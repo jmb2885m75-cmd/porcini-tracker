@@ -11,6 +11,7 @@ import json
 import math
 import os
 import re
+import secrets
 import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -128,10 +129,10 @@ def _month_day(value: Any, default: Tuple[int, int]) -> Tuple[int, int]:
 
 
 def month_day_window(dt: date, location: Optional[Dict[str, Any]] = None) -> bool:
-    """Season window: Aug 15 – Dec 1 unless the location sets `season_start`/`season_end` as "MM-DD"."""
+    """Season window: Aug 15 – Dec 10 unless the location sets `season_start`/`season_end` as "MM-DD"."""
     location = location or {}
     start = _month_day(location.get("season_start"), (8, 15))
-    end = _month_day(location.get("season_end"), (12, 1))
+    end = _month_day(location.get("season_end"), (12, 10))
     return start <= (dt.month, dt.day) <= end
 
 
@@ -144,7 +145,7 @@ FLUSH_DEPLETION_TIERS = ((1, 40), (3, 30), (7, 20), (14, 10))
 DEFAULT_DEPLETION_RECOVERY_DAYS = 14
 SMALL_HARVEST_DEPLETION_RECOVERY_DAYS = 10
 DEFAULT_EARLY_HARVEST_PENALTY_FACTOR = 0.5
-MODEL_VERSION = 15  # 15: hard freeze at -1.5C, stronger repeat-freeze penalty, late-season decay; 14: progressive/repeated frost penalty; 13: rain saturation 60 mm, soil ramp, frost/heat, graded post-flush, host-tree matching; 12: flush depletion, lighter no-find penalty; 11: temp ranges, split rain, humidity, post-flush, seasonal params; 10: formatted status labels
+MODEL_VERSION = 16  # 16: Dec 10 season end and weighted soil-temperature signal; 15: hard freeze at -1.5C, stronger repeat-freeze penalty, late-season decay; 14: progressive/repeated frost penalty; 13: rain saturation 60 mm, soil ramp, frost/heat, graded post-flush, host-tree matching; 12: flush depletion, lighter no-find penalty; 11: temp ranges, split rain, humidity, post-flush, seasonal params; 10: formatted status labels
 ARCHIVE_LAG_DAYS = 5
 SOURCE_ARCHIVE = "archive"
 SOURCE_FORECAST = "forecast"
@@ -214,6 +215,7 @@ FROST_REPEAT_PENALTY_MAX = 20
 LATE_SEASON_DECAY_START = (11, 15)
 LATE_SEASON_DECAY_END = (12, 10)
 LATE_SEASON_DECAY_MAX = 15
+SOIL_TEMPERATURE_SCORE_WEIGHT = 0.25
 FROST_LIGHT_PENALTY = 4
 HEAT_TMAX_C = 25.0
 FROST_PENALTY = 10
@@ -786,6 +788,16 @@ def temperature_score(average_temperature: float, optimal_range: Tuple[float, fl
     return max(0, round(FLUSH_TEMPERATURE_SCORE_MAX - distance * TEMPERATURE_SLOPE_PER_DEGREE))
 
 
+def soil_temperature_points(value: float, location: Dict[str, Any], default_range: Tuple[float, float]) -> int:
+    optimal = _temp_range(location.get("soil_temperature_optimal_range")) or default_range
+    try:
+        weight = float(location.get("soil_temperature_score_weight", SOIL_TEMPERATURE_SCORE_WEIGHT))
+    except (TypeError, ValueError):
+        weight = SOIL_TEMPERATURE_SCORE_WEIGHT
+    weight = max(0.0, min(1.0, weight))
+    return round(temperature_score(value, optimal) * weight)
+
+
 def rainfall_distribution_score(hist: History, day: date, window_days: int = FLUSH_RAIN_WINDOW_DAYS) -> int:
     """Up to 5 bonus points for steady rain: the share of days in the window with more than 2 mm."""
     records = hist.window(day - timedelta(days=1), window_days)
@@ -909,6 +921,9 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
     average_temperature = mean_air_temperature(hist, d, FLUSH_TEMPERATURE_WINDOW_DAYS)
     if average_temperature is not None:
         score += temperature_score(average_temperature, seasonal["optimal_temp_range"])
+    soil_temperature = daily.get("soil_temperature_0_to_7cm_mean")
+    if soil_temperature is not None:
+        score += soil_temperature_points(float(soil_temperature), location, seasonal["optimal_temp_range"])
 
     if has_runoff(hist, d):
         score -= 5
@@ -1017,6 +1032,9 @@ def score_breakdown(location: Dict[str, Any], daily: Dict[str, Any], hist: Histo
                       + BACKGROUND_RAIN_WEIGHT * rainfall_score(rain or 0)),
         "rain_distribution": rainfall_distribution_score(hist, d, seasonal["rain_window"]) if rain is not None else 0,
         "temperature": temperature_score(temp, seasonal["optimal_temp_range"]) if temp is not None else 0,
+        "soil_temperature": soil_temperature_points(float(daily["soil_temperature_0_to_7cm_mean"]), location,
+                                                    seasonal["optimal_temp_range"])
+                            if daily.get("soil_temperature_0_to_7cm_mean") is not None else 0,
         "soil_moisture": soil_moisture_points(float(soil)) if soil is not None else 0,
         "frost": -frost_penalty(hist, d),
         "late_season_decay": -late_season_decay_penalty(d, location),
@@ -1026,7 +1044,8 @@ def score_breakdown(location: Dict[str, Any], daily: Dict[str, Any], hist: Histo
 
 def location_signature(location: Dict[str, Any]) -> str:
     """Fingerprint of the config fields that influence scores; a change recomputes the stored series."""
-    keys = ("tree_species", "soil_pH", "past_harvests", "optimal_temp_range", "seasonal_params", "season_start", "season_end")
+    keys = ("tree_species", "soil_pH", "past_harvests", "optimal_temp_range", "seasonal_params", "season_start",
+            "season_end", "soil_temperature_optimal_range", "soil_temperature_score_weight")
     blob = json.dumps({k: location.get(k) for k in keys}, sort_keys=True, default=str)
     return f"{MODEL_VERSION}:{hashlib.sha1(blob.encode('utf-8')).hexdigest()[:12]}"
 
@@ -1441,7 +1460,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://api.github.com; img-src data:; form-action 'none'; base-uri 'none'; object-src 'none'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-__CSP_NONCE__'; style-src 'unsafe-inline'; connect-src https://api.github.com; img-src data:; form-action 'none'; base-uri 'none'; object-src 'none'" />
   <title>Porcini Tracker Dashboard</title>
   <style>
     :root {
@@ -1544,7 +1563,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     </div>
     <h2>📈 Daily Score History &amp; Field Observations <button class="info-button" type="button" data-info="score" aria-label="How the forecast score is calculated" aria-haspopup="dialog" aria-controls="info-dialog">ⓘ</button></h2>
     <div class="card">
-      <div class="toolbar"><label for="range">Date range<select id="range"></select></label><button type="button" id="seasonOnly" class="season-toggle" aria-pressed="false" title="Show only Aug 15 – Dec 1">Season Only</button></div>
+      <div class="toolbar"><label for="range">Date range<select id="range"></select></label><button type="button" id="seasonOnly" class="season-toggle" aria-pressed="false" title="Show only Aug 15 – Dec 10">Season Only</button></div>
       <div id="chartbox"><svg id="chart" viewBox="0 0 900 320" role="img" aria-label="Daily favourability index with optional rain and temperature trends"></svg><div id="tip"></div></div>
       <div class="meta">Favourability index (0–100; not a probability). Hover or tap for daily details. Dashed line marks the alert threshold.</div>
       <div class="legend" aria-label="Chart and timeline legend">
@@ -1609,7 +1628,7 @@ __OBSERVATION_LOG__
     <button id="delete-cancel" type="button">Cancel</button>
   </dialog>
   <script id="porcini-data" type="application/json">__DATA__</script>
-  <script>
+  <script nonce="__CSP_NONCE__">
   (function () {
     var D = JSON.parse(document.getElementById('porcini-data').textContent);
     var LOG_KEY = 'porcini_logs_v1', SYNCED_KEY = 'porcini_synced_v1', KEY_KEY = 'porcini_api_key', PAGE = 15;
@@ -1636,7 +1655,7 @@ __OBSERVATION_LOG__
         'Daily high and low are averaged to form a 20-day mean air temperature signal. A value near 13°C contributes most to the heuristic score; this is based on one regional porcini study, not a universal optimum.',
         'The main rain signal blends recent rain (7 complete days, weight 0.6) with background rain over the seasonal window (26 days by default; 14 early season Aug–Sep, 30 in December; weight 0.4). It adds points up to a 100 mm plateau; steady rain (many days over 2 mm) earns a small bonus over one heavy event; there is no extra uncalibrated penalty for sustained high totals.',
         'A 90-day rainfall comparison can apply a modest drought penalty when rain is unusually low against seasonally comparable prior-year periods. It is omitted until enough local archive data is available.',
-        'Measured 0–7 cm soil moisture is a smaller supporting signal. Soil texture and local calibration affect what a given volumetric moisture value means; soil temperature does not directly add score points.',
+        'Measured 0–7 cm soil moisture is a smaller supporting signal. Soil texture and local calibration affect what a given volumetric moisture value means. Soil temperature adds up to 5 points at its seasonal optimum by default; its weight and optimal range can be overridden per location.',
         'Concentrated heavy rain can apply a small runoff penalty. No new high-rain cutoff is assumed without local observations. Aspect/canopy rain-retention adjustments are not used.',
         'Weather source “archive” means recorded past weather; “forecast” means weather-model data; “sample” means generated example weather, not observations. Weather inputs guide the score; they do not confirm mushrooms are present.'
       ]],
@@ -1682,7 +1701,7 @@ __OBSERVATION_LOG__
       ['all', '365'].concat(years()).forEach(function (v) { var o = document.createElement('option'); o.value = v; o.textContent = v === 'all' ? 'All years' : v === '365' ? 'Last 365 days' : v; $('range').appendChild(o); });
       if (cur) $('range').value = cur;
     }
-    function inSeason(d) { var md = d.slice(5, 10); return md >= '08-15' && md <= '12-01'; }
+    function inSeason(d) { var md = d.slice(5, 10); return md >= '08-15' && md <= '12-10'; }
     function inRange(d) { if ($('seasonOnly').getAttribute('aria-pressed') === 'true' && !inSeason(d)) return false; var r = $('range').value || 'all'; if (r === 'all') return true; if (r === '365') return Date.parse(d) >= Date.now() - 365 * 864e5; return d.slice(0, 4) === r; }
     function harvestsFor() {
       var h = (loc.harvests || []).map(function (x) { return Object.assign({}, x, { origin: x.origin === 'log' ? 'harvest_log.json' : 'config' }); });
@@ -2178,8 +2197,10 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]],
     ]
     observation_log = render_observation_log(public_entries, payload["repo"])
     data = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
+    nonce = secrets.token_urlsafe(18)
     return (
         DASHBOARD_TEMPLATE
+        .replace("__CSP_NONCE__", nonce)
         .replace("__MODE_LABEL__", html.escape(MODE_LABELS.get(mode, MODE_LABELS[MODE_DEFAULT])))
         .replace("__GENERATED__", (lambda n: f"{format_display_date(n)} {n:%H:%M}")(datetime.now(timezone.utc)))
         .replace("__CARDS__", "".join(cards))

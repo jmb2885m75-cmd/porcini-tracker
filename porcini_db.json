@@ -1,9 +1,6 @@
 {
   "locations": {
-    "Oak & Beech Spot": {
-      "latitude": 52.41,
-      "longitude": 13.83,
-      "elevation_m": 50,
+    "Location 1": {
       "daily_records": [
         {
           "date": "2023-01-01",
@@ -25565,10 +25562,7 @@
         "mean_score_in_season": 41.7
       }
     },
-    "East Berlin Pine & Oak Ridge": {
-      "latitude": 52.52,
-      "longitude": 13.405,
-      "elevation_m": 50,
+    "Location 2": {
       "daily_records": [
         {
           "date": "2023-01-01",
@@ -32158,11 +32152,8 @@
         "mean_score_in_season": null
       }
     },
-    "Fangschleuse": {
+    "Location 3": {
       "pending_rescore": [],
-      "latitude": 52.41,
-      "longitude": 13.83,
-      "elevation_m": 50,
       "daily_records": [
         {
           "date": "2023-01-01",
@@ -57166,11 +57157,8 @@
         }
       }
     },
-    "Zosse": {
+    "Location 4": {
       "pending_rescore": [],
-      "latitude": 52.19,
-      "longitude": 13.48,
-      "elevation_m": 90,
       "daily_records": [
         {
           "date": "2023-01-01",

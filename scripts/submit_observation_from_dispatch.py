@@ -1,5 +1,6 @@
 """Ingest one observation from workflow_dispatch inputs (INPUT_* env vars) into harvest_log.json."""
 import os
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,6 +24,12 @@ def main(env=os.environ, config_path: Path = Path("config.json"), log_path: Path
     raw = read_inputs(env)
     try:
         known = _read_locations(config_path)
+        alias = re.fullmatch(r"Location ([1-9][0-9]*)", raw["location"])
+        if alias:
+            index = int(alias.group(1)) - 1
+            if known is None or index >= len(known):
+                raise HarvestError("Unknown location.")
+            raw["location"] = known[index]
         record = validate_harvest(raw, known)
     except HarvestError as exc:
         print("Observation rejected: " + " ".join(exc.problems), file=sys.stderr)

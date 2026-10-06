@@ -187,7 +187,7 @@ class ObservationLogTests(unittest.TestCase):
         self.assertIn("Browser-local drafts are not shared", out)
         self.assertIn("&lt;b&gt;x&lt;/b&gt;", out)
         self.assertNotIn("<b>x</b>", out)
-        self.assertIn("Retired", out)
+        self.assertIn("Unlisted location", out)
         section = out[out.index('id="observation-log"'):]
         self.assertLess(section.index("Fri. 02 Oct. 2026"), section.index("Tue. 15 Sep. 2026"))
 

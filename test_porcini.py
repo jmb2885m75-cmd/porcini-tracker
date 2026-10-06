@@ -3,6 +3,7 @@ import json
 import re
 import unittest
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 import porcini as p
@@ -73,6 +74,56 @@ class IntegrityTests(unittest.TestCase):
         self.assertEqual(p.check_db_integrity(db, date(2025, 9, 5)), [])
         db["locations"]["A"]["daily_records"] = [recs[0], recs[0], recs[3]]
         self.assertTrue(p.check_db_integrity(db, date(2025, 9, 5)))
+
+
+class PrivacyTests(unittest.TestCase):
+    @staticmethod
+    def contains_coordinate_field(value):
+        if isinstance(value, dict):
+            return any(
+                key in {"latitude", "longitude", "elevation_m"} or PrivacyTests.contains_coordinate_field(child)
+                for key, child in value.items()
+            )
+        if isinstance(value, list):
+            return any(PrivacyTests.contains_coordinate_field(child) for child in value)
+        return False
+
+    def test_committed_data_files_do_not_contain_coordinate_fields(self):
+        for filename in ("porcini_db.json", "harvest_log.json", "alert_state.json"):
+            path = Path(filename)
+            if path.exists():
+                with path.open(encoding="utf-8") as source:
+                    self.assertFalse(self.contains_coordinate_field(json.load(source)), filename)
+        report = p.REPORT_PATH.read_text(encoding="utf-8") if p.REPORT_PATH.exists() else ""
+        self.assertNotRegex(report, r'"(?:latitude|longitude|elevation_m)"\s*:')
+
+    def test_public_dashboard_uses_aliases_and_strict_csp(self):
+        cfg = {"LOCATIONS": [{"name": "Private woodland"}]}
+        analysis = [{
+            "name": "Private woodland", "best_day": "N/A", "best_score": 0,
+            "status": "Unavailable", "soil_moisture": 0.0, "quality": "",
+            "records": [], "scores": {}, "harvests": [{"location": "Private woodland", "date": "2025-09-01"}],
+            "backtest": {},
+        }]
+        report = p.generate_dashboard_html(
+            cfg, analysis, "1. Private woodland — 80/100", harvest_log={"harvests": []}
+        )
+        self.assertIn("Location 1", report)
+        self.assertNotIn("Private woodland", report)
+        self.assertIn("Content-Security-Policy", report)
+        self.assertIn("default-src 'none'", report)
+
+    def test_location_coordinates_are_not_persisted(self):
+        db = {"locations": {"Location 1": {
+            "latitude": 12.3, "longitude": 45.6, "elevation_m": 7,
+            "daily_records": [], "pending_rescore": [],
+        }}}
+        records = [rec("2025-09-20")]
+        with patch.object(p, "fetch_archive_day_range", return_value=[]), \
+                patch.object(p, "fetch_forecast_day_range", return_value=records), \
+                patch.object(p, "backfill_runoff_data", return_value=[]):
+            p.ensure_location_history("Location 1", db, 12.3, 45.6, 7, date(2025, 9, 20))
+        self.assertFalse(self.contains_coordinate_field(db))
 
 
 class HistoricalWeatherTests(unittest.TestCase):

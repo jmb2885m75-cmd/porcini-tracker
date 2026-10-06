@@ -100,6 +100,20 @@ def iso_date(value: date) -> str:
     return value.strftime("%Y-%m-%d")
 
 
+def public_location_alias(index: int) -> str:
+    return f"Location {index + 1}"
+
+
+def alias_public_text(value: str, locations: List[Dict[str, Any]]) -> str:
+    for index, location in sorted(
+        enumerate(locations), key=lambda pair: len(str(pair[1].get("name", ""))), reverse=True
+    ):
+        name = str(location.get("name", ""))
+        if name:
+            value = value.replace(name, public_location_alias(index))
+    return value
+
+
 def parse_date(value: str) -> date:
     return parse_user_date(value)
 
@@ -387,7 +401,7 @@ def load_json_safe(path: Path, default: Any) -> Any:
         with path.open("r", encoding="utf-8") as fh:
             return json.load(fh)
     except (ValueError, OSError) as exc:
-        backup = path.with_name(f"{path.name}.corrupt-{datetime.utcnow().strftime('%Y%m%dT%H%M%S')}")
+        backup = path.with_name(f"{path.name}.corrupt-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}")
         print(f"[WARN] {path} is unreadable ({exc}); moving it to {backup} and starting fresh")
         try:
             path.replace(backup)
@@ -570,14 +584,13 @@ def ensure_location_history(location_name: str, db: Dict[str, Any], latitude: fl
     loc_data["pending_rescore"] = sorted(pending)
 
     loc_data.update({
-        "latitude": latitude,
-        "longitude": longitude,
-        "elevation_m": elevation,
         "daily_records": records,
         "last_sync_date": iso_date(today),
         "record_count": len(records),
         "merge_policy": "archive replaces forecast for the same date; forecast-only dates are kept; newer forecast replaces older forecast",
     })
+    for key in ("latitude", "longitude", "elevation_m"):
+        loc_data.pop(key, None)
     db["locations"][location_name] = loc_data
     return records
 
@@ -1428,6 +1441,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://api.github.com; img-src data:; form-action 'none'; base-uri 'none'; object-src 'none'" />
   <title>Porcini Tracker Dashboard</title>
   <style>
     :root {
@@ -1664,7 +1678,7 @@ __OBSERVATION_LOG__
     D.locations.forEach(function (l, i) { var o = document.createElement('option'); o.value = i; o.textContent = l.name; $('loc').appendChild(o); });
     function years() { var s = {}; loc.scores.forEach(function (r) { s[r[0].slice(0, 4)] = 1; }); return Object.keys(s).sort(); }
     function fillRange() {
-      var cur = $('range').value; $('range').innerHTML = '';
+      var cur = $('range').value; $('range').textContent = '';
       ['all', '365'].concat(years()).forEach(function (v) { var o = document.createElement('option'); o.value = v; o.textContent = v === 'all' ? 'All years' : v === '365' ? 'Last 365 days' : v; $('range').appendChild(o); });
       if (cur) $('range').value = cur;
     }
@@ -2040,17 +2054,19 @@ def dashboard_payload(cfg: Dict[str, Any], analysis: List[Dict[str, Any]], mode:
 
     threshold = alert_threshold(cfg)
     locations = []
-    for item in analysis:
+    for index, item in enumerate(analysis):
         records = item.get("records", [])
         scores = item.get("scores", {})
+        alias = public_location_alias(index)
+        harvests = [dict(h, location=alias) for h in item.get("harvests", [])]
         locations.append({
-            "name": item["name"],
+            "name": alias,
             "scores": [[d, v["score"], v["status"], v.get("quality", ""),
                         score_verdict_tag(v["score"], v["status"], threshold), score_color(v["score"])]
                        for d, v in sorted(scores.items())],
             # [date, tmax, tmin, rain, wind, soil_temp, rh, soil_moisture, source]
             "records": [[r["date"]] + [rnd(r.get(k)) for k in ("temperature_2m_max", "temperature_2m_min", "precipitation_sum", "wind_speed_10m_max", "soil_temperature_0_to_7cm_mean", "relative_humidity_2m_mean", "soil_moisture_0_to_7cm_mean")] + [r.get("source", "")] for r in records],
-            "harvests": item.get("harvests", []),
+            "harvests": harvests,
             "backtest": item.get("backtest", {}),
         })
     repo = os.environ.get("GITHUB_REPOSITORY") or cfg.get("GITHUB_REPOSITORY") or "jmb2885m75-cmd/porcini-tracker"
@@ -2123,7 +2139,7 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]],
     """Self-contained dashboard (inline CSS/JS/data, no CDN). Static hosting; observations are POSTed to api.py and stored in harvest_log.json."""
     threshold = alert_threshold(cfg)
     cards = []
-    for item in analysis:
+    for index, item in enumerate(analysis):
         available = item["best_day"] != "N/A"
         verdict = ""
         score = item["best_score"]
@@ -2139,22 +2155,28 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]],
         quality = f"<div class='meta'>{html.escape(item['quality'])}</div>" if item.get("quality") else ""
         explanation = f"<div class='meta score-explanation'>{html.escape(item['explanation'])}</div>" if item.get("explanation") else ""
         cards.append(
-            f"<div class='card'><div class='score-line'>{score_display}</div><div class='name'>{html.escape(str(item['name']))}</div>{verdict}"
+            f"<div class='card'><div class='score-line'>{score_display}</div><div class='name'>{html.escape(public_location_alias(index))}</div>{verdict}"
             f"<div class='meta best-day'>Best day<strong>{html.escape(str(item['best_day']))}</strong></div><div class='meta'>Status: {html.escape(str(item['status']))}</div>{explanation}{quality}"
             f"<div class='meta'>Moisture: {item['soil_moisture']:.2f} m³/m³</div></div>"
         )
     alert_status = "This message will be sent with this run." if alert_will_send else "Preview only: no alert is triggered by this run."
     alert_section = ""
     if alert_message:
+        public_alert = alias_public_text(alert_message, cfg.get("LOCATIONS", []))
         alert_section = f"""
     <h2>📨 Alert Preview</h2>
     <div class="card">
       <div class="meta">{html.escape(alert_status)}</div>
-      <pre class="alert">{html.escape(alert_message)}</pre>
+      <pre class="alert">{html.escape(public_alert)}</pre>
       <div class="meta">Fields sent per ranked spot (top 3): rank, location name, best weekend favourability index (0–100), best day, status. The final line is the dashboard link.</div>
     </div>"""
     payload = dashboard_payload(cfg, analysis, mode)
-    observation_log = render_observation_log(build_observation_log(cfg.get("LOCATIONS", []), harvest_log), payload["repo"])
+    public_names = {str(item.get("name")): public_location_alias(i) for i, item in enumerate(cfg.get("LOCATIONS", []))}
+    public_entries = [
+        dict(entry, location=public_names.get(str(entry.get("location")), "Unlisted location"))
+        for entry in build_observation_log(cfg.get("LOCATIONS", []), harvest_log)
+    ]
+    observation_log = render_observation_log(public_entries, payload["repo"])
     data = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
     return (
         DASHBOARD_TEMPLATE
@@ -2243,14 +2265,17 @@ def main() -> int:
     analyses: List[Dict[str, Any]] = []
     alert_queue: List[Tuple[str, int, str, str]] = []
 
-    for location in cfg.get("LOCATIONS", []):
+    for location_index, location in enumerate(cfg.get("LOCATIONS", [])):
         name = location.get("name")
+        storage_name = public_location_alias(location_index)
         latitude = float(location.get("latitude"))
         longitude = float(location.get("longitude"))
         elevation = int(location.get("elevation_m", 0))
         harvests = merge_harvests(location.get("past_harvests", []), harvest_log, name)
-        records = ensure_location_history(name, db, latitude, longitude, elevation, today)
-        loc_store = db["locations"][name]
+        if storage_name not in db["locations"] and name in db["locations"]:
+            db["locations"][storage_name] = db["locations"].pop(name)
+        records = ensure_location_history(storage_name, db, latitude, longitude, elevation, today)
+        loc_store = db["locations"][storage_name]
         update_daily_scores(dict(location, past_harvests=harvests), records, loc_store)
         loc_store["backtest"] = backtest_accuracy(location, records, harvests, threshold)
         for message in calibration_messages(name, loc_store["backtest"], location):
@@ -2278,7 +2303,9 @@ def main() -> int:
         available = best_day != "N/A"
         current_status = (status or "🟡 Monitoring") if available else "📡 Weather data unavailable"
         send = False
-        loc_state = alert_state["locations"].get(name, {})
+        if storage_name not in alert_state["locations"] and name in alert_state["locations"]:
+            alert_state["locations"][storage_name] = alert_state["locations"].pop(name)
+        loc_state = alert_state["locations"].get(storage_name, {})
         if mode == MODE_FINAL and available:
             send = should_confirm_for_location(name, alert_state, today, friday_policy, best_score, threshold)
             if send:
@@ -2295,7 +2322,7 @@ def main() -> int:
             # Keep alert-crossing state unchanged when there is no score to compare.
             loc_state["last_score"] = best_score
             loc_state["last_status"] = current_status
-        alert_state["locations"][name] = loc_state
+        alert_state["locations"][storage_name] = loc_state
 
     db["meta"] = {"last_run_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "last_run_mode": mode, "model_version": MODEL_VERSION}
     save_json(DB_PATH, db)
@@ -2305,7 +2332,7 @@ def main() -> int:
     message = build_alert_message(alert_results, dashboard_url, mode, threshold) if alert_results else ""
     report_html = generate_dashboard_html(cfg, analyses, message, bool(alert_queue), mode, harvest_log)
     REPORT_PATH.write_text(report_html, encoding="utf-8")
-    inject_alert_into_index(message, bool(alert_queue))
+    inject_alert_into_index(alias_public_text(message, cfg.get("LOCATIONS", [])), bool(alert_queue))
 
     print("\n### Porcini Summary")
     for item in analyses:

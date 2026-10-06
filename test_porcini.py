@@ -183,6 +183,17 @@ class AntiSpamTests(unittest.TestCase):
         # 5 days alone must not alert
         self.assertFalse(p.should_alert_for_location("A", 10, watch, 65, self.state(last_score=10, last_status=watch, last_alert_date="2025-09-01"), self.today))
 
+    def test_alert_gap_is_configurable_and_defaults_to_five_days(self):
+        state = self.state(last_score=40, last_status="⚠️ Watch closely", last_alert_date="2025-10-06")
+        self.assertEqual(p.configured_alert_gap_days({}), 5)
+        self.assertEqual(p.configured_alert_gap_days({"MIN_ALERT_GAP_DAYS": 2}), 2)
+        self.assertEqual(p.configured_alert_gap_days({"MIN_ALERT_GAP_DAYS": "bad"}), 5)
+        self.assertFalse(p.should_alert_for_location("A", 70, "✅ Viable conditions", 65, state, self.today))
+        self.assertTrue(p.should_alert_for_location(
+            "A", 70, "✅ Viable conditions", 65, state, self.today,
+            p.configured_alert_gap_days({"MIN_ALERT_GAP_DAYS": 4}),
+        ))
+
 
 class VerdictTests(unittest.TestCase):
     def test_score_tiers_and_configured_go_threshold(self):
@@ -789,6 +800,61 @@ class RunoffBackfillTests(unittest.TestCase):
 
 
 class WeatherFailureTests(unittest.TestCase):
+    def test_fetch_json_distinguishes_empty_payload_from_request_failure(self):
+        response = Mock()
+        response.json.return_value = None
+        with patch.object(p.WEATHER_SESSION, "get", return_value=response):
+            self.assertIsNone(p.fetch_json("https://weather.example", {}))
+        with patch.object(p.WEATHER_SESSION, "get", side_effect=p.requests.ConnectionError):
+            with self.assertRaises(p.WeatherRequestError):
+                p.fetch_json("https://weather.example", {})
+        retry = p.WEATHER_SESSION.get_adapter("https://").max_retries
+        self.assertEqual(retry.total, 3)
+        self.assertEqual(retry.backoff_factor, 0.5)
+
+    def test_main_notifies_and_fails_when_location_sync_raises(self):
+        cfg = {"LOCATIONS": [{"name": "Private spot", "latitude": 1, "longitude": 2}]}
+        with (
+            patch("sys.argv", ["porcini.py"]),
+            patch.object(p, "load_config", return_value=cfg),
+            patch.object(p, "load_or_init_db", return_value={"locations": {"Location 1": {}}}),
+            patch.object(p, "build_alert_state", return_value={"locations": {}}),
+            patch.object(p, "load_harvest_log", return_value={"harvests": []}),
+            patch.object(p, "ensure_location_history", side_effect=p.WeatherRequestError("request failed")),
+            patch.object(p, "dispatch_notification", return_value=True) as send,
+        ):
+            self.assertEqual(p.main(), 1)
+        self.assertIn("Location 1", send.call_args.args[1])
+        self.assertIn("weather sync failed", send.call_args.args[1])
+
+    def test_main_notifies_and_fails_when_configured_data_is_stale(self):
+        cfg = {"LOCATIONS": [{"name": "Private spot", "latitude": 1, "longitude": 2}]}
+        today = datetime.now(timezone.utc).date()
+        records = [rec(p.iso_date(today), p.SOURCE_FORECAST)]
+
+        def update_scores(location, daily_records, store):
+            store["daily_scores"] = {}
+            return 0
+
+        with (
+            patch("sys.argv", ["porcini.py"]),
+            patch.object(p, "load_config", return_value=cfg),
+            patch.object(p, "load_or_init_db", return_value={"locations": {"Location 1": {}}}),
+            patch.object(p, "build_alert_state", return_value={"locations": {}}),
+            patch.object(p, "load_harvest_log", return_value={"harvests": []}),
+            patch.object(p, "ensure_location_history", return_value=records),
+            patch.object(p, "update_daily_scores", side_effect=update_scores),
+            patch.object(p, "backtest_accuracy", return_value={}),
+            patch.object(p, "calibration_messages", return_value=[]),
+            patch.object(p, "find_weekend_best", return_value=(0, "N/A", "", "")),
+            patch.object(p, "check_db_integrity", return_value=[
+                "Location 1: last sync is more than 3 days old"
+            ]),
+            patch.object(p, "dispatch_notification", return_value=True) as send,
+        ):
+            self.assertEqual(p.main(), 1)
+        self.assertIn("more than 3 days old", send.call_args.args[1])
+
     def test_empty_fetch_does_not_replace_history_with_empty_data(self):
         db = {"locations": {}}
         with patch.object(p, "fetch_archive_day_range", return_value=[]), patch.object(p, "fetch_forecast_day_range", return_value=[]):

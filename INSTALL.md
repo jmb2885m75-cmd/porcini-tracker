@@ -33,6 +33,7 @@ and writes `porcini_report.html`. A separate GitHub issue workflow validates har
    `soil_pH`, `past_harvests`, `last_seen_fly_agaric`) and `ALERT_THRESHOLD` (default 55) in the JSON configuration.
    `aspect` and `canopy` are accepted configuration fields but currently unused by the scoring model.
    The default scoring season is Aug 15–Dec 10, aligned with the late-season decay ramp; `season_end` can override it.
+   Optional `MIN_ALERT_GAP_DAYS` controls the minimum interval between alerts (default 5; zero disables the gap).
    Optional `FRIDAY_POLICY`: `thursday_alerted_only` (default; Friday confirmation only for spots alerted on Thursday) or
    `all_above_threshold` (Friday confirmation for every spot at or above `ALERT_THRESHOLD`).
    Harvest entries: `date`, `yield_tier` (small/medium/large), `cap_stage` (`buttons_young`, `prime`, `old_overripe`), optional `weight_g`, `notes`.

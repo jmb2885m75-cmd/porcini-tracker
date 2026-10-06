@@ -18,6 +18,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from dates import format_display_date, parse_user_date
 from harvest import HarvestError, build_observation_log, entry_id, load_harvest_log, merge_harvests, summarize_observations
@@ -39,6 +41,30 @@ HOST_TREES = {"birch", "beech", "chestnut", "fir", "oak", "pine", "spruce"}
 
 
 DEFAULT_ALERT_THRESHOLD = 55
+
+
+class WeatherRequestError(RuntimeError):
+    """A weather API request did not complete successfully."""
+
+
+class WeatherNoDataError(RuntimeError):
+    """A successful weather request contained no usable records."""
+
+
+def build_weather_session() -> requests.Session:
+    retry = Retry(
+        total=3, connect=3, read=3, status=3, backoff_factor=0.5,
+        status_forcelist=(429, 500, 502, 503, 504), allowed_methods=frozenset({"GET"}),
+        raise_on_status=False,
+    )
+    session = requests.Session()
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
+
+
+WEATHER_SESSION = build_weather_session()
 
 
 def load_json(path: Path, default: Any = None) -> Any:
@@ -89,12 +115,14 @@ def ensure_notification_settings(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
 def fetch_json(url: str, params: Dict[str, Any], timeout: int = 30) -> Optional[Dict[str, Any]]:
     try:
-        response = requests.get(url, params=params, timeout=timeout)
+        response = WEATHER_SESSION.get(url, params=params, timeout=timeout)
         response.raise_for_status()
-        return response.json()
-    except Exception as exc:
-        print(f"[WARN] URL fetch failed: {url} :: {exc}")
-        return None
+        payload = response.json()
+    except requests.RequestException as exc:
+        raise WeatherRequestError(f"weather API request failed ({type(exc).__name__})") from exc
+    except ValueError as exc:
+        raise WeatherRequestError("weather API returned invalid JSON") from exc
+    return payload if isinstance(payload, dict) else None
 
 
 def iso_date(value: date) -> str:
@@ -318,7 +346,7 @@ def fetch_archive_day_range(latitude: float, longitude: float, elevation: int, s
 
 
 def fetch_archive_hourly_precip(latitude: float, longitude: float, elevation: int, start: date, end: date) -> Optional[Dict[str, Any]]:
-    """Hourly precipitation only (used for the runoff backfill). Returns None on any API failure."""
+    """Hourly precipitation only (used for runoff backfill); request failures raise WeatherRequestError."""
     return fetch_json(
         ARCHIVE_API_URL,
         {
@@ -575,9 +603,15 @@ def ensure_location_history(location_name: str, db: Dict[str, Any], latitude: fl
     start, end = min(starts), today - timedelta(days=ARCHIVE_LAG_DAYS)
     if start <= end:
         records = merge_records(records, fetch_archive_day_range(latitude, longitude, elevation, start, end))
-    records = merge_records(records, fetch_forecast_day_range(latitude, longitude, elevation))
+    forecast_records = fetch_forecast_day_range(latitude, longitude, elevation)
+    if not any(parse_date(record["date"]) >= today for record in forecast_records):
+        raise WeatherNoDataError(
+            f"{location_name}: forecast API returned no usable current or future daily data; "
+            "refusing to save an empty forecast"
+        )
+    records = merge_records(records, forecast_records)
     if not records:
-        raise RuntimeError(f"{location_name}: weather API returned no usable records; refusing to save an empty forecast")
+        raise WeatherNoDataError(f"{location_name}: weather API returned no usable records; refusing to save an empty forecast")
     backfilled = backfill_runoff_data(records, latitude, longitude, elevation)
     # Runoff looks at the last 3 days, so each backfilled day can change the next two days' scores too.
     pending = set(loc_data.get("pending_rescore") or [])
@@ -1328,7 +1362,7 @@ def score_color(score: int) -> str:
     return f"hsl({hue} 80% 58%)"
 
 
-def should_alert_for_location(location_name: str, current_score: int, status: str, threshold: int, state: Dict[str, Any], today: Optional[date] = None) -> bool:
+def should_alert_for_location(location_name: str, current_score: int, status: str, threshold: int, state: Dict[str, Any], today: Optional[date] = None, minimum_gap_days: int = MIN_ALERT_GAP_DAYS) -> bool:
     """All three conditions must hold: threshold crossed upward, significant status change, >=5 days since last alert.
 
     last_score / last_status are the previous run's values (updated every run, see main()).
@@ -1341,7 +1375,22 @@ def should_alert_for_location(location_name: str, current_score: int, status: st
     days_since = (today - parse_date(last_date)).days if last_date and valid_date_string(last_date) else 999
     crossed = last_score < threshold <= current_score
     status_changed = status_category(loc_state.get("last_status")) != status_category(status)
-    return crossed and status_changed and days_since >= MIN_ALERT_GAP_DAYS
+    return crossed and status_changed and days_since >= minimum_gap_days
+
+
+def configured_alert_gap_days(cfg: Dict[str, Any]) -> int:
+    try:
+        return max(0, int(cfg.get("MIN_ALERT_GAP_DAYS", MIN_ALERT_GAP_DAYS)))
+    except (TypeError, ValueError):
+        return MIN_ALERT_GAP_DAYS
+
+
+def notify_sync_failure(cfg: Dict[str, Any], reason: str) -> bool:
+    message = f"❌ Porcini weather sync failed: {reason}"
+    print(f"[ERROR] {message}")
+    delivered = dispatch_notification(cfg, message)
+    print("[INFO] Failure notification delivered" if delivered else "[WARN] Failure notification was not delivered")
+    return delivered
 
 
 def resolve_friday_policy(cfg: Dict[str, Any]) -> str:
@@ -2072,6 +2121,7 @@ def dashboard_payload(cfg: Dict[str, Any], analysis: List[Dict[str, Any]], mode:
         return round(value, 2) if isinstance(value, float) else value
 
     threshold = alert_threshold(cfg)
+    minimum_gap_days = configured_alert_gap_days(cfg)
     locations = []
     for index, item in enumerate(analysis):
         records = item.get("records", [])
@@ -2295,7 +2345,11 @@ def main() -> int:
         harvests = merge_harvests(location.get("past_harvests", []), harvest_log, name)
         if storage_name not in db["locations"] and name in db["locations"]:
             db["locations"][storage_name] = db["locations"].pop(name)
-        records = ensure_location_history(storage_name, db, latitude, longitude, elevation, today)
+        try:
+            records = ensure_location_history(storage_name, db, latitude, longitude, elevation, today)
+        except Exception as exc:
+            notify_sync_failure(cfg, f"{storage_name}: {exc}")
+            return 1
         loc_store = db["locations"][storage_name]
         update_daily_scores(dict(location, past_harvests=harvests), records, loc_store)
         loc_store["backtest"] = backtest_accuracy(location, records, harvests, threshold)
@@ -2328,11 +2382,13 @@ def main() -> int:
             alert_state["locations"][storage_name] = alert_state["locations"].pop(name)
         loc_state = alert_state["locations"].get(storage_name, {})
         if mode == MODE_FINAL and available:
-            send = should_confirm_for_location(name, alert_state, today, friday_policy, best_score, threshold)
+            send = should_confirm_for_location(storage_name, alert_state, today, friday_policy, best_score, threshold)
             if send:
                 loc_state["last_confirmation_date"] = iso_date(today)
         elif mode != MODE_FINAL and available:
-            send = should_alert_for_location(name, best_score, current_status, threshold, alert_state, today)
+            send = should_alert_for_location(
+                storage_name, best_score, current_status, threshold, alert_state, today, minimum_gap_days
+            )
             if send:
                 loc_state["last_alert_date"] = iso_date(today)
                 loc_state["last_alert_mode"] = mode
@@ -2344,6 +2400,17 @@ def main() -> int:
             loc_state["last_score"] = best_score
             loc_state["last_status"] = current_status
         alert_state["locations"][storage_name] = loc_state
+
+    stale_issues = [
+        issue for issue in check_db_integrity(db, today)
+        if "more than 3 days old" in issue
+        and any(issue.startswith(f"{alias}:") for alias in (
+            public_location_alias(i) for i, _ in enumerate(cfg.get("LOCATIONS", []))
+        ))
+    ]
+    if stale_issues:
+        notify_sync_failure(cfg, "; ".join(stale_issues))
+        return 1
 
     db["meta"] = {"last_run_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "last_run_mode": mode, "model_version": MODEL_VERSION}
     save_json(DB_PATH, db)

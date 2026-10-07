@@ -3,11 +3,11 @@
   "locations": {
     "Location 1": {
       "last_alert_date": "2026-10-02",
-      "last_score": 45,
+      "last_score": 41,
       "last_status": "⚠️ Watch closely"
     },
     "Location 2": {
-      "last_score": 40,
+      "last_score": 43,
       "last_status": "⚠️ Watch closely"
     },
     "Location 3": {

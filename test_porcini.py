@@ -147,7 +147,7 @@ class HistoricalWeatherTests(unittest.TestCase):
         expected_dates = [(date(2023, 1, 1) + timedelta(days=i)).isoformat() for i in range(365)]
         required_fields = {
             "date", "temperature_2m_max", "temperature_2m_min", "precipitation_sum",
-            "wind_speed_10m_max", "soil_temperature_0_to_7cm_mean",
+            "soil_temperature_0_to_7cm_mean",
             "relative_humidity_2m_mean", "soil_moisture_0_to_7cm_mean", "source",
         }
         for name, location in db["locations"].items():
@@ -210,19 +210,19 @@ class AntiSpamTests(unittest.TestCase):
 class VerdictTests(unittest.TestCase):
     def test_score_tiers_and_configured_go_threshold(self):
         cases = [
-            (24, "🚫 Not worth it"),
-            (25, "😐 Unlikely"),
-            (45, "🤔 Long shot"),
-            (60, "👀 Worth a look"),
-            (64, "👀 Worth a look"),
-            (65, "👍 Favourable conditions"),
-            (74, "👍 Favourable conditions"),
-            (75, "🔥 Very favourable conditions"),
+            (14, "🚫 Not worth it"),
+            (15, "😐 Unlikely"),
+            (35, "🤔 Long shot"),
+            (50, "👀 Worth a look"),
+            (54, "👀 Worth a look"),
+            (55, "👍 Favourable conditions"),
+            (64, "👍 Favourable conditions"),
+            (65, "🔥 Very favourable conditions"),
         ]
         for score, expected in cases:
             with self.subTest(score=score):
                 self.assertEqual(p.score_verdict_tag(score, "⚠️ Watch closely"), expected)
-        self.assertEqual(p.score_verdict_tag(70, "⚠️ Watch closely", 70), "👍 Favourable conditions")
+        self.assertEqual(p.score_verdict_tag(70, "⚠️ Watch closely", 70), "🔥 Very favourable conditions")
         self.assertEqual(p.score_verdict_tag(69, "⚠️ Watch closely", 70), "👀 Worth a look")
 
     def test_special_statuses_override_score_tier(self):
@@ -238,9 +238,9 @@ class VerdictTests(unittest.TestCase):
                 self.assertEqual(p.score_verdict_tag(0, status), expected)
 
     def test_score_color_clamps_red_and_green(self):
-        self.assertEqual(p.score_color(37), "hsl(0 80% 58%)")
-        self.assertEqual(p.score_color(40), "hsl(0 80% 58%)")
-        self.assertEqual(p.score_color(70), "hsl(120 80% 58%)")
+        self.assertEqual(p.score_color(27), "hsl(0 80% 58%)")
+        self.assertEqual(p.score_color(30), "hsl(0 80% 58%)")
+        self.assertEqual(p.score_color(60), "hsl(120 80% 58%)")
         self.assertEqual(p.score_color(100), "hsl(120 80% 58%)")
 
 
@@ -256,7 +256,7 @@ class ModeTests(unittest.TestCase):
         r = [("A", 70, "Fri 2025-10-03", "ok")]
         self.assertIn("Outlook", p.build_alert_message(r, "u", p.MODE_OUTLOOK))
         self.assertIn("GO - 70/100 index", p.build_alert_message(r, "u", p.MODE_FINAL, 65))
-        self.assertIn("70/100 index – 👍 Favourable conditions (Fri 2025-10-03)", p.build_alert_message(r, "u"))
+        self.assertIn("70/100 index – 🔥 Very favourable conditions (Fri 2025-10-03)", p.build_alert_message(r, "u"))
         self.assertIn("Forecast", p.build_alert_message(r, "u"))
 
     def test_ranked_entries_and_dashboard_have_one_blank_line_between_them(self):
@@ -324,25 +324,99 @@ class ScoringTests(unittest.TestCase):
     def test_default_season_includes_full_late_decay_window(self):
         self.assertTrue(p.month_day_window(date(2025, 12, 10)))
         self.assertFalse(p.month_day_window(date(2025, 12, 11)))
-        self.assertEqual(p.late_season_decay_penalty(date(2025, 12, 10), LOC), p.LATE_SEASON_DECAY_MAX)
+        self.assertEqual(p.LATE_SEASON_DECAY_END, (12, 1))
+        self.assertEqual(p.late_season_decay_penalty(date(2025, 12, 1), LOC), p.LATE_SEASON_DECAY_MAX)
 
-    def test_soil_temperature_is_a_weighted_signal_with_location_overrides(self):
-        recs = series(date(2025, 9, 1), 50, soil_temperature_0_to_7cm_mean=10.0)
-        hist = p.History(recs)
-        day = date(2025, 10, 18)
-        daily = hist.get(day)
-        default_score = p.calculate_score_for_day(LOC, daily, hist, [])[0]
-        cold_score = p.calculate_score_for_day(
-            LOC, dict(daily, soil_temperature_0_to_7cm_mean=0.0), hist, []
-        )[0]
-        disabled_score = p.calculate_score_for_day(
-            dict(LOC, soil_temperature_score_weight=0),
-            dict(daily, soil_temperature_0_to_7cm_mean=0.0), hist, []
-        )[0]
-        self.assertGreater(default_score, cold_score)
-        self.assertEqual(disabled_score, default_score - p.soil_temperature_points(10.0, LOC, (8.0, 14.0)))
+    def test_soil_temperature_uses_seven_prior_days_and_requires_five_values(self):
+        target = date(2025, 10, 18)
+        records = series(target - timedelta(days=7), 7, soil_temperature_0_to_7cm_mean=10.0)
+        hist = p.History(records)
+        self.assertEqual(p.soil_temperature_points(hist, target), 3)
+        self.assertEqual(p.score_breakdown(LOC, rec(target.isoformat()), hist)["soil_temperature"], 3)
+
+        for record in records:
+            record["soil_temperature_0_to_7cm_mean"] = 6.0
+        self.assertEqual(p.soil_temperature_points(hist, target), -2)
+        for record in records:
+            record["soil_temperature_0_to_7cm_mean"] = 20.0
+        self.assertEqual(p.soil_temperature_points(hist, target), -5)
+        self.assertEqual(p.soil_temperature_points(p.History(records[:4]), target), 0)
+
+    def test_model_thresholds_host_tree_removal_and_weather_fields(self):
+        self.assertFalse(hasattr(p, "HOST_TREES"))
+        self.assertFalse(hasattr(p, "is_host_tree"))
+        self.assertEqual(p.DEFAULT_ALERT_THRESHOLD, 45)
+        self.assertEqual(p.VERY_FAVOURABLE_THRESHOLD, 65)
+        self.assertEqual(tuple(tier[0] for tier in p.VERDICT_LOW_TIERS), (15, 35, 50))
+        self.assertEqual((p.SCORE_COLOR_MIN, p.SCORE_COLOR_MAX), (30, 60))
+        self.assertEqual(p.POST_FLUSH_FULL_BASE_SCORE, 30)
+        self.assertEqual(p.INITIAL_ARCHIVE_DAYS, 3650)
+        self.assertNotIn("wind_speed_10m_max", p.DAILY_FIELDS)
+
+        records = series(date(2025, 8, 20), 60, precipitation_sum=3.0)
+        hist = p.History(records)
+        day = records[-1]
+        baseline = p.calculate_score_for_day({}, day, hist, [])[0]
+        self.assertEqual(
+            p.calculate_score_for_day({"tree_species": ["Birch", "Spruce"]}, day, hist, [])[0],
+            baseline,
+        )
         self.assertEqual(p.MODEL_VERSION, 16)
-        self.assertEqual(p.score_breakdown(LOC, daily, hist)["soil_temperature"], 5)
+
+    def test_depletion_tiers_and_recovery_periods(self):
+        self.assertEqual(p.FLUSH_DEPLETION_TIERS, ((1, 35), (3, 25), (6, 12)))
+        self.assertEqual(p.DEFAULT_DEPLETION_RECOVERY_DAYS, 6)
+        self.assertEqual(p.SMALL_HARVEST_DEPLETION_RECOVERY_DAYS, 5)
+
+    def test_recent_rain_is_capped_by_background_score_plus_eight(self):
+        target = date(2025, 10, 18)
+        records = series(target - timedelta(days=30), 31, precipitation_sum=0.0)
+        for record in records[-8:-1]:
+            record["precipitation_sum"] = 1.0
+        hist = p.History(records)
+        self.assertEqual(p.score_breakdown(LOC, hist.get(target), hist)["rain"], 9)
+
+        for record in records[-8:-1]:
+            record["precipitation_sum"] = 0.0
+        for record in records[-27:-8]:
+            record["precipitation_sum"] = 1.0
+        hist = p.History(records)
+        self.assertEqual(p.score_breakdown(LOC, hist.get(target), hist)["rain"], 4)
+
+    def test_utcnow_removed_and_thresholds_match_model(self):
+        source = Path(p.__file__).read_text(encoding="utf-8")
+        self.assertNotIn("datetime.utcnow()", source)
+        self.assertIn("datetime.now(timezone.utc)", source)
+        self.assertEqual(p.score_verdict_tag(55, "⚠️ Watch closely"), "👍 Favourable conditions")
+
+    def test_drought_percentile_handles_february_29_samples(self):
+        target = date(2024, 2, 29)
+        start = date(2010, 1, 1)
+        records = series(start, (target - start).days, precipitation_sum=1.0)
+        percentile = p.historical_rainfall_percentile(p.History(records), target)
+        self.assertIsNotNone(percentile)
+        self.assertEqual(percentile, 0.5)
+
+    def test_runoff_backfill_is_limited_to_four_hundred_days(self):
+        today = datetime.now(timezone.utc).date()
+        current = rec((today - timedelta(days=400)).isoformat())
+        old = rec((today - timedelta(days=401)).isoformat())
+        self.assertTrue(p.needs_runoff_backfill(current))
+        self.assertFalse(p.needs_runoff_backfill(old))
+        self.assertFalse(p.needs_runoff_backfill({"source": p.SOURCE_ARCHIVE}))
+
+    def test_severe_freeze_threshold_and_season_termination(self):
+        target = date(2025, 11, 28)
+        records = series(target - timedelta(days=3), 4)
+        hist = p.History(records)
+        records[-2]["temperature_2m_min"] = -4.0
+        self.assertTrue(p.severe_freeze_recent(hist, target))
+        records[-2]["temperature_2m_min"] = -3.0
+        self.assertFalse(p.severe_freeze_recent(hist, target))
+
+        records[-2]["temperature_2m_min"] = -4.0
+        result = p.calculate_score_for_day(LOC, hist.get(target), hist, [])
+        self.assertIn("Season terminated by frost", result[1])
 
     def test_rain_and_freeze_score_invariants(self):
         start, day = date(2025, 8, 1), date(2025, 10, 1)
@@ -484,10 +558,12 @@ class ScoringTests(unittest.TestCase):
         find = [{"date": (date.fromisoformat(day["date"]) - timedelta(days=10)).isoformat(), "yield_tier": "small"}]
         base = p.calculate_score_for_day(LOC, day, h, [])
         boosted = p.calculate_score_for_day(LOC, day, h, find)
-        # small yield 10 days ago: halved depletion penalty (-10 * 0.5) offsets part of the bonus
-        self.assertEqual(boosted[0], base[0] + p.POST_FLUSH_BONUS - 5)
+        self.assertEqual(boosted[0], base[0] + p.POST_FLUSH_BONUS)
         msgs = p.calibration_messages("A", {"find_hit_rate": 0.4, "find_days": 6, "threshold": 55, "suggested_threshold": 45})
         self.assertIn("ALERT_THRESHOLD=45", msgs[0])
+
+        recent_find = [dict(find[0], date=(date.fromisoformat(day["date"]) - timedelta(days=3)).isoformat())]
+        self.assertEqual(p.calculate_score_for_day(LOC, day, h, recent_find)[0], base[0] - 12)
 
     def test_low_soil_moisture_penalizes_without_same_day_rain(self):
         recs = series(date(2025, 8, 20), 60, precipitation_sum=3.0)
@@ -531,8 +607,6 @@ class ScoringTests(unittest.TestCase):
 
     def test_soil_moisture_ramp_host_trees_and_season_override(self):
         self.assertEqual([p.soil_moisture_points(v) for v in (0.1, 0.2, 0.28, 0.35, 0.5)], [-10, -10, 0, 5, 5])
-        self.assertTrue(p.is_host_tree("Silver Birch"))
-        self.assertFalse(p.is_host_tree("firethorn"))
         self.assertFalse(p.month_day_window(date(2025, 8, 20), {"season_start": "09-01"}))
         self.assertTrue(p.month_day_window(date(2025, 12, 10), {"season_end": "12-15"}))
         self.assertTrue(p.month_day_window(date(2025, 8, 20), {"season_start": "bad"}))
@@ -607,7 +681,7 @@ class ScoringTests(unittest.TestCase):
         mild_score = p.calculate_score_for_day(LOC, daily, no_frost, [])[0]
         self.assertLess(score, p.VERY_FAVOURABLE_THRESHOLD)
         self.assertLess(score, p.DEFAULT_ALERT_THRESHOLD)
-        self.assertLessEqual(score, mild_score - p.late_season_decay_penalty(day, LOC))
+        self.assertLess(score, mild_score)
         breakdown = p.score_breakdown(LOC, daily, hist)
         self.assertEqual(breakdown["late_season_decay"], -p.late_season_decay_penalty(day, LOC))
         self.assertLess(breakdown["frost"], 0)
@@ -660,22 +734,29 @@ class ScoringTests(unittest.TestCase):
         day["temperature_2m_min"] = -20.0
         self.assertEqual(p.calculate_score_for_day(LOC, day, hist, [])[0], baseline)
 
-    def test_long_term_drought_penalty_uses_local_seasonal_history(self):
-        start, end = date(2024, 1, 1), date(2025, 10, 18)
-        recs = series(start, (end - start).days + 1, precipitation_sum=2.0)
-        for record in recs:
-            if date(2025, 7, 20) <= p.parse_date(record["date"]) < end:
+    def test_long_term_drought_penalty_uses_five_same_calendar_day_samples(self):
+        end = date(2025, 10, 18)
+        short_start = date(2021, 1, 1)
+        short_records = series(short_start, (end - short_start).days, precipitation_sum=2.0)
+        for record in short_records:
+            if end - timedelta(days=90) <= p.parse_date(record["date"]) < end:
                 record["precipitation_sum"] = 0.0
-        hist = p.History(recs)
-        self.assertEqual(p.historical_rainfall_percentile(hist, end), 0.0)
-        drought_score = p.calculate_score_for_day(LOC, hist.get(end), hist, [])[0]
+        self.assertIsNone(p.historical_rainfall_percentile(p.History(short_records), end))
 
-        for record in recs:
-            if p.parse_date(record["date"]).year == 2024:
+        start = date(2015, 1, 1)
+        records = series(start, (end - start).days, precipitation_sum=2.0)
+        for record in records:
+            if end - timedelta(days=90) <= p.parse_date(record["date"]) < end:
                 record["precipitation_sum"] = 0.0
-        self.assertEqual(p.historical_rainfall_percentile(hist, end), 0.5)
-        normal_score = p.calculate_score_for_day(LOC, hist.get(end), hist, [])[0]
-        self.assertEqual(normal_score - drought_score, p.DROUGHT_SCORE_PENALTY_MAX)
+        for year in range(2020, 2025):
+            for offset in range(1, 91):
+                sample = date(year, 10, 18) - timedelta(days=offset)
+                records[(sample - start).days]["precipitation_sum"] = 1.0
+        records.append(rec(end.isoformat()))
+        self.assertEqual(p.historical_rainfall_percentile(p.History(records), end), 0.0)
+        hist = p.History(records)
+        first = p.calculate_score_for_day(LOC, hist.get(end), hist, [])
+        self.assertEqual(first, p.calculate_score_for_day(LOC, hist.get(end), hist, []))
 
     def test_backtest_uses_visits_only_and_excludes_same_day_observation(self):
         recs = series(date(2025, 8, 1), 60, precipitation_sum=5.0)
@@ -691,7 +772,7 @@ class ScoringTests(unittest.TestCase):
 
     def test_flush_depletion_penalty_tiers(self):
         h = [date(2025, 9, 18)]
-        expected = {0: 0, 1: -40, 2: -30, 3: -30, 4: -20, 7: -20, 8: -10, 14: -10, 15: 0}
+        expected = {0: 0, 1: -35, 2: -25, 3: -25, 4: -12, 6: -12, 7: 0}
         for days, penalty in expected.items():
             self.assertEqual(p.flush_depletion_penalty(h, h[0] + timedelta(days=days)), penalty, days)
         self.assertEqual(p.flush_depletion_penalty([], date(2025, 9, 20)), 0)
@@ -729,8 +810,10 @@ class ScoringTests(unittest.TestCase):
     def test_quality_flags(self):
         hot = series(date(2025, 8, 20), 30, precipitation_sum=5.0, temperature_2m_max=22.0)
         cool = series(date(2025, 8, 20), 30, precipitation_sum=5.0, temperature_2m_max=11.0)
-        self.assertIn("MAGGOT", p.calculate_score_for_day(LOC, hot[-1], p.History(hot), [])[2])
-        self.assertIn("PRIME", p.calculate_score_for_day(LOC, cool[-1], p.History(cool), [])[2])
+        self.assertEqual(p.calculate_score_for_day(LOC, hot[-1], p.History(hot), [])[2],
+                         "Warmer week: higher maggot risk, pick early")
+        self.assertEqual(p.calculate_score_for_day(LOC, cool[-1], p.History(cool), [])[2],
+                         "Cool week: firm caps likely")
 
     def test_quality_warning_does_not_change_flush_score(self):
         target = date(2025, 10, 18)
@@ -746,8 +829,8 @@ class ScoringTests(unittest.TestCase):
         hot_score = p.calculate_score_for_day(LOC, hot[-1], p.History(hot), [])
         cool_score = p.calculate_score_for_day(LOC, cool[-1], p.History(cool), [])
         self.assertEqual(hot_score[0], cool_score[0])
-        self.assertIn("MAGGOT", hot_score[2])
-        self.assertNotIn("MAGGOT", cool_score[2])
+        self.assertEqual(hot_score[2], "Warmer week: higher maggot risk, pick early")
+        self.assertEqual(cool_score[2], "Cool week: firm caps likely")
 
     def test_duplicate_host_labels_do_not_stack_and_additional_hosts_are_supported(self):
         recs = series(date(2025, 8, 20), 60, precipitation_sum=3.0)
@@ -904,16 +987,18 @@ class RunoffBackfillTests(unittest.TestCase):
         return {"hourly": {"time": [f"{day}T{h:02d}:00" for h in range(24)], "precipitation": vals}}
 
     def test_backfill_fills_and_marks_basis(self):
-        records = [rec("2025-09-01", precip_peak_2h_mm=None, precipitation_sum=20.0), rec("2025-09-02", source=p.SOURCE_FORECAST)]
-        changed = p.backfill_runoff_data(records, 0, 0, 0, fetch_hourly=lambda *a: self.hourly("2025-09-01", 14.0))
-        self.assertEqual(changed, ["2025-09-01"])
+        today = datetime.now(timezone.utc).date()
+        first_day, second_day = p.iso_date(today), p.iso_date(today + timedelta(days=1))
+        records = [rec(first_day, precip_peak_2h_mm=None, precipitation_sum=20.0), rec(second_day, source=p.SOURCE_FORECAST)]
+        changed = p.backfill_runoff_data(records, 0, 0, 0, fetch_hourly=lambda *a: self.hourly(first_day, 14.0))
+        self.assertEqual(changed, [first_day])
         self.assertEqual(records[0]["precip_peak_2h_mm"], 14.0)
         self.assertEqual(records[0]["precip_peak_basis"], p.PEAK_BASIS_BACKFILL)
         self.assertNotIn("precip_peak_basis", records[1])
-        self.assertTrue(p.has_runoff(p.History(records), date(2025, 9, 2)))
+        self.assertTrue(p.has_runoff(p.History(records), today + timedelta(days=1)))
 
     def test_failure_is_soft_and_retried(self):
-        records = [rec("2025-09-01")]
+        records = [rec(p.iso_date(datetime.now(timezone.utc).date()))]
         self.assertEqual(p.backfill_runoff_data(records, 0, 0, 0, fetch_hourly=lambda *a: None), [])
         def boom(*a):
             raise RuntimeError("down")
@@ -922,10 +1007,11 @@ class RunoffBackfillTests(unittest.TestCase):
 
     def test_backfill_forces_rescore(self):
         loc = {"name": "A", "aspect": "N"}
-        records = [rec(f"2025-09-0{i}", precipitation_sum=20.0) for i in range(1, 4)]
+        today = datetime.now(timezone.utc).date()
+        records = [rec(p.iso_date(today + timedelta(days=i)), precipitation_sum=20.0) for i in range(3)]
         store = {}
         p.update_daily_scores(loc, records, store)
-        store["pending_rescore"] = ["2025-09-02"]
+        store["pending_rescore"] = [p.iso_date(today + timedelta(days=1))]
         self.assertEqual(p.update_daily_scores(loc, records, store), 1)
 
 
@@ -1054,9 +1140,9 @@ class WeatherFailureTests(unittest.TestCase):
               "scores": {"2026-10-04": {"score": 37, "status": status, "quality": ""}},
               "harvests": [], "backtest": {}}],
         )
-        self.assertIn("style='color:hsl(0 80% 58%)'>37/100</span>", report)
-        self.assertIn("<span class='verdict-tag'>😐 Unlikely</span>", report)
-        self.assertIn('["2026-10-04", 37, "⚠️ Watch closely", "", "😐 Unlikely", "hsl(0 80% 58%)"]', report)
+        self.assertIn("style='color:hsl(28 80% 58%)'>37/100</span>", report)
+        self.assertIn("<span class='verdict-tag'>🤔 Long shot</span>", report)
+        self.assertIn('["2026-10-04", 37, "⚠️ Watch closely", "", "🤔 Long shot", "hsl(28 80% 58%)"]', report)
         self.assertIn("Favourability index: ' + sm[1] + '/100 — ' + sm[4]", report)
         self.assertIn("bar.style.background = row ? row[5]", report)
         self.assertIn("seasonOnly", report)

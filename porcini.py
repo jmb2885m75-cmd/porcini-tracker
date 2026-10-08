@@ -5,12 +5,12 @@ Porcini tracker with multi-year weather archive, scoring, alerts, and dashboard 
 
 import argparse
 import bisect
+import calendar
 import hashlib
 import html
 import json
 import math
 import os
-import re
 import secrets
 import sys
 from datetime import date, datetime, timedelta, timezone
@@ -38,12 +38,10 @@ MAX_FORECAST_SNAPSHOTS = 30
 BACKTEST_MIN_CLASS_SAMPLES = 5
 HEAVY_FORECAST_RAIN_SHARE = 0.2
 
-INITIAL_ARCHIVE_DAYS = 730
-
-HOST_TREES = {"birch", "beech", "chestnut", "fir", "oak", "pine", "spruce"}
+INITIAL_ARCHIVE_DAYS = 3650
 
 
-DEFAULT_ALERT_THRESHOLD = 55
+DEFAULT_ALERT_THRESHOLD = 45
 
 
 class WeatherRequestError(RuntimeError):
@@ -172,11 +170,11 @@ SCHEMA_VERSION = 3
 # Score penalty applied 1..N days after a visit that found nothing (flush not started yet)
 NO_FIND_PENALTY = (10, 5)
 # Flush depletion after a harvest: (max days since harvest, penalty)
-FLUSH_DEPLETION_TIERS = ((1, 40), (3, 30), (7, 20), (14, 10))
-DEFAULT_DEPLETION_RECOVERY_DAYS = 14
-SMALL_HARVEST_DEPLETION_RECOVERY_DAYS = 10
+FLUSH_DEPLETION_TIERS = ((1, 35), (3, 25), (6, 12))
+DEFAULT_DEPLETION_RECOVERY_DAYS = 6
+SMALL_HARVEST_DEPLETION_RECOVERY_DAYS = 5
 DEFAULT_EARLY_HARVEST_PENALTY_FACTOR = 0.5
-MODEL_VERSION = 16  # 16: Dec 10 season end and weighted soil-temperature signal; 15: hard freeze at -1.5C, stronger repeat-freeze penalty, late-season decay; 14: progressive/repeated frost penalty; 13: rain saturation 60 mm, soil ramp, frost/heat, graded post-flush, host-tree matching; 12: flush depletion, lighter no-find penalty; 11: temp ranges, split rain, humidity, post-flush, seasonal params; 10: formatted status labels
+MODEL_VERSION = 16  # 16: C1–C7 scoring updates (host-tree removal, depletion tiers, drought percentile, rain cap, frost/season, soil temp, utcnow fix)
 ARCHIVE_LAG_DAYS = 5
 SOURCE_ARCHIVE = "archive"
 SOURCE_FORECAST = "forecast"
@@ -217,7 +215,7 @@ HUMIDITY_LOW = 60
 POST_FLUSH_MIN_DAYS = 7
 POST_FLUSH_MAX_DAYS = 14
 POST_FLUSH_BONUS = 10
-POST_FLUSH_FULL_BASE_SCORE = 40  # full bonus from this weather-based score upward
+POST_FLUSH_FULL_BASE_SCORE = 30  # full bonus from this weather-based score upward
 POST_FLUSH_RAMP = 15  # bonus scales linearly from 0 at (full - ramp)
 CALIBRATION_HIT_RATE_MIN = 0.70
 CALIBRATION_MIN_FIND_DAYS = 3
@@ -225,11 +223,10 @@ RUNOFF_MIN_DAY_MM = 15.0
 FLUSH_RAIN_WINDOW_DAYS = 26
 FLUSH_TEMPERATURE_WINDOW_DAYS = 20
 LONG_TERM_RAIN_WINDOW_DAYS = 90
-LONG_TERM_RAIN_SEASON_RADIUS_DAYS = 15
-LONG_TERM_RAIN_MIN_SAMPLES = 20
+LONG_TERM_RAIN_MIN_YEARS = 5
 FLUSH_RAIN_SCORE_MAX = 30
 RAIN_SATURATION_MM = 60.0  # rain total at which the rain score saturates
-VERY_FAVOURABLE_THRESHOLD = 75
+VERY_FAVOURABLE_THRESHOLD = 65
 # Frost handling (porcini mycelium stops fruiting after hard/repeated freezes; caps freeze and rot):
 # a hard-freeze night (Tmin < FROST_TMIN_C) within the last FROST_RECENT_DAYS complete days costs FROST_PENALTY,
 # a lighter sub-zero night (Tmin < FROST_LIGHT_TMIN_C) costs FROST_LIGHT_PENALTY, and each further sub-zero
@@ -244,7 +241,7 @@ FROST_REPEAT_WINDOW_DAYS = 14
 FROST_REPEAT_PENALTY_PER_NIGHT = 4
 FROST_REPEAT_PENALTY_MAX = 20
 LATE_SEASON_DECAY_START = (11, 15)
-LATE_SEASON_DECAY_END = (12, 10)
+LATE_SEASON_DECAY_END = (12, 1)
 LATE_SEASON_DECAY_MAX = 15
 SOIL_TEMPERATURE_SCORE_WEIGHT = 0.25
 FROST_LIGHT_PENALTY = 4
@@ -255,9 +252,9 @@ SOIL_DRY, SOIL_MID, SOIL_WET = 0.20, 0.28, 0.35
 FLUSH_TEMPERATURE_SCORE_MAX = 20
 DROUGHT_SCORE_PENALTY_MAX = 10
 VERDICT_LOW_TIERS = (
-    (25, "🚫 Not worth it"),
-    (45, "😐 Unlikely"),
-    (60, "🤔 Long shot"),
+    (15, "🚫 Not worth it"),
+    (35, "😐 Unlikely"),
+    (50, "🤔 Long shot"),
 )
 VERDICT_WORTH_LOOK = "👀 Worth a look"
 VERDICT_GO = "👍 Favourable conditions"
@@ -268,14 +265,13 @@ VERDICT_SPECIAL_TAGS = {
     "delayed": "🔥 Too warm – wait",
     "dry": "💧 Too dry – wait",
 }
-SCORE_COLOR_MIN = 40
-SCORE_COLOR_MAX = 70
+SCORE_COLOR_MIN = 30
+SCORE_COLOR_MAX = 60
 
 DAILY_FIELDS = [
     "precipitation_sum",
     "temperature_2m_max",
     "temperature_2m_min",
-    "wind_speed_10m_max",
     "soil_temperature_0_to_7cm_mean",
     "relative_humidity_2m_mean",
     "soil_moisture_0_to_7cm_mean",
@@ -366,7 +362,16 @@ def fetch_archive_hourly_precip(latitude: float, longitude: float, elevation: in
 
 
 def needs_runoff_backfill(rec: Dict[str, Any]) -> bool:
-    return rec.get("source") == SOURCE_ARCHIVE and rec.get("precip_peak_2h_mm") is None and rec.get("precip_peak_basis") is None
+    if rec.get("source") != SOURCE_ARCHIVE:
+        return False
+    if rec.get("precip_peak_2h_mm") is not None or rec.get("precip_peak_basis") is not None:
+        return False
+    try:
+        rec_date = parse_date(rec["date"])
+        cutoff = datetime.now(timezone.utc).date() - timedelta(days=400)
+        return rec_date >= cutoff
+    except (KeyError, TypeError, ValueError):
+        return False
 
 
 def backfill_runoff_data(records: List[Dict[str, Any]], latitude: float, longitude: float, elevation: int,
@@ -704,28 +709,29 @@ def mean_air_temperature(hist: History, day: date, days: int) -> Optional[float]
 
 
 def historical_rainfall_percentile(hist: History, day: date) -> Optional[float]:
-    """Compare preceding 90-day rain with prior-year, seasonally comparable windows.
+    """Compare preceding 90-day rain with one sample per prior year on the same calendar day.
 
-    Requires at least 20 valid daily comparison windows from earlier calendar years.
-    This data-derived signal is omitted when the local archive is too short or incomplete.
+    February 29 uses February 28 in non-leap years. The signal is omitted when fewer than
+    LONG_TERM_RAIN_MIN_YEARS valid years are available.
     """
-    target_day_of_year = day.timetuple().tm_yday
     comparable_totals = []
-    for record in hist.records:
+    for years_back in range(1, 16):
+        candidate_year = day.year - years_back
         try:
-            candidate_day = parse_date(record["date"])
-        except (KeyError, TypeError, ValueError):
-            continue
-        if candidate_day.year >= day.year:
-            continue
-        day_distance = abs(candidate_day.timetuple().tm_yday - target_day_of_year)
-        day_distance = min(day_distance, 366 - day_distance)
-        if day_distance > LONG_TERM_RAIN_SEASON_RADIUS_DAYS:
+            candidate_day = date(candidate_year, day.month, day.day)
+        except ValueError:
+            candidate_day = date(candidate_year, 2, 28)
+        if day.month == 2 and day.day == 28:
+            leap_candidate = date(candidate_year, 2, 29) if calendar.isleap(candidate_year) else None
+            candidate_record = hist.get(candidate_day)
+            leap_record = hist.get(leap_candidate) if leap_candidate else None
+            candidate_day = leap_candidate if candidate_record is None and leap_record is not None else candidate_day
+        if hist.get(candidate_day) is None:
             continue
         total = observed_rainfall_total(hist, candidate_day, LONG_TERM_RAIN_WINDOW_DAYS)
         if total is not None:
             comparable_totals.append(total)
-    if len(comparable_totals) < LONG_TERM_RAIN_MIN_SAMPLES:
+    if len(comparable_totals) < LONG_TERM_RAIN_MIN_YEARS:
         return None
 
     current_total = observed_rainfall_total(hist, day, LONG_TERM_RAIN_WINDOW_DAYS)
@@ -772,6 +778,12 @@ def late_season_decay_penalty(day: date, location: Optional[Dict[str, Any]] = No
 def hard_freeze_recent(hist: History, day: date) -> bool:
     """True if any of the last FROST_RECENT_DAYS complete days before `day` had Tmin below FROST_TMIN_C."""
     return any(r.get("temperature_2m_min") is not None and float(r["temperature_2m_min"]) < FROST_TMIN_C
+               for r in hist.window(day - timedelta(days=1), FROST_RECENT_DAYS))
+
+
+def severe_freeze_recent(hist: History, day: date, tmin: float = -4.0) -> bool:
+    """True if any of the last FROST_RECENT_DAYS complete days before `day` had Tmin at or below tmin."""
+    return any(r.get("temperature_2m_min") is not None and float(r["temperature_2m_min"]) <= tmin
                for r in hist.window(day - timedelta(days=1), FROST_RECENT_DAYS))
 
 
@@ -847,14 +859,21 @@ def temperature_score(average_temperature: float, optimal_range: Tuple[float, fl
     return max(0, round(FLUSH_TEMPERATURE_SCORE_MAX - distance * TEMPERATURE_SLOPE_PER_DEGREE))
 
 
-def soil_temperature_points(value: float, location: Dict[str, Any], default_range: Tuple[float, float]) -> int:
-    optimal = _temp_range(location.get("soil_temperature_optimal_range")) or default_range
-    try:
-        weight = float(location.get("soil_temperature_score_weight", SOIL_TEMPERATURE_SCORE_WEIGHT))
-    except (TypeError, ValueError):
-        weight = SOIL_TEMPERATURE_SCORE_WEIGHT
-    weight = max(0.0, min(1.0, weight))
-    return round(temperature_score(value, optimal) * weight)
+def soil_temperature_points(hist: History, day: date) -> int:
+    """Score the mean soil temperature over the 7 complete days before `day`."""
+    records = hist.window(day - timedelta(days=1), 7)
+    values = [
+        float(r["soil_temperature_0_to_7cm_mean"])
+        for r in records
+        if r.get("soil_temperature_0_to_7cm_mean") is not None
+    ]
+    if len(values) < 5:
+        return 0
+    mean = sum(values) / len(values)
+    if 8.0 <= mean <= 15.0:
+        return 3
+    distance = min(abs(mean - 8.0), abs(mean - 15.0))
+    return -min(5, round(distance))
 
 
 def rainfall_distribution_score(hist: History, day: date, window_days: int = FLUSH_RAIN_WINDOW_DAYS) -> int:
@@ -937,11 +956,6 @@ def soil_moisture_points(moisture: float) -> int:
     return round(5 * (moisture - SOIL_MID) / (SOIL_WET - SOIL_MID))
 
 
-def is_host_tree(name: str) -> bool:
-    """Whole-word match so e.g. "firethorn" or "soak" do not count as fir/oak."""
-    return any(word in HOST_TREES for word in re.findall(r"[a-zà-ÿ]+", name.lower()))
-
-
 def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], historical: Any, past_harvests: List[Dict[str, Any]]) -> Tuple[int, str, str]:
     """Return a 0–100 favourability index, not a calibrated probability."""
     hist = historical if isinstance(historical, History) else History(historical)
@@ -965,6 +979,7 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
     # Recent rain is scaled to the background window's units so both parts share one 0-30 scale.
     recent_score = rainfall_score(recent_rainfall * rain_window / RECENT_RAIN_WINDOW_DAYS) if recent_rainfall is not None else None
     if background_score is not None and recent_score is not None:
+        recent_score = min(recent_score, background_score + 8)
         score += round(RECENT_RAIN_WEIGHT * recent_score + BACKGROUND_RAIN_WEIGHT * background_score)
     elif background_score is not None or recent_score is not None:
         score += background_score if background_score is not None else recent_score
@@ -980,9 +995,7 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
     average_temperature = mean_air_temperature(hist, d, FLUSH_TEMPERATURE_WINDOW_DAYS)
     if average_temperature is not None:
         score += temperature_score(average_temperature, seasonal["optimal_temp_range"])
-    soil_temperature = daily.get("soil_temperature_0_to_7cm_mean")
-    if soil_temperature is not None:
-        score += soil_temperature_points(float(soil_temperature), location, seasonal["optimal_temp_range"])
+    score += soil_temperature_points(hist, d)
 
     if has_runoff(hist, d):
         score -= 5
@@ -1006,13 +1019,9 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
         score += soil_moisture_points(float(soil_moisture))
         if soil_moisture <= SOIL_DRY:
             status = "💧 Too dry – low soil moisture"
-    if decay > 0 and hard_freeze_recent(hist, d):
+    if decay > 0 and (hard_freeze_recent(hist, d) or severe_freeze_recent(hist, d)):
         status = "❄️ Season terminated by frost"
 
-    tree_species = location.get("tree_species", [])
-    normalized_species = {str(tree).strip().lower() for tree in tree_species} if isinstance(tree_species, list) else set()
-    if any(is_host_tree(tree) for tree in normalized_species):
-        score += 10
     if str(location.get("soil_pH") or "").strip().lower() in ("alkaline", "basic", "calcareous"):
         score -= 5
 
@@ -1056,7 +1065,7 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
     # Post-flush persistence: a find 7-14 days ago plus still-favourable conditions suggests a continuing flush.
     since_flush = days_since_last_flush(past_harvests, d)
     if (since_flush is not None and POST_FLUSH_MIN_DAYS <= since_flush <= POST_FLUSH_MAX_DAYS
-            and score > POST_FLUSH_FULL_BASE_SCORE - POST_FLUSH_RAMP and not no_find_today):
+            and depletion == 0 and score > POST_FLUSH_FULL_BASE_SCORE - POST_FLUSH_RAMP and not no_find_today):
         score += round(POST_FLUSH_BONUS * min(1.0, (score - (POST_FLUSH_FULL_BASE_SCORE - POST_FLUSH_RAMP)) / POST_FLUSH_RAMP))
         if status == "🟡 Monitoring":
             status = "🔄 Post-flush conditions persist"
@@ -1066,9 +1075,9 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
     if temps:
         avg_max = sum(temps) / len(temps)
         if avg_max > 18:
-            quality = "⚠️ HIGH MAGGOT RISK - Harvest early while small."
+            quality = "Warmer week: higher maggot risk, pick early"
         elif 8 <= avg_max <= 15:
-            quality = "💎 PRIME QUALITY - Firm, bug-free caps expected."
+            quality = "Cool week: firm caps likely"
 
     if no_find_today:
         score = min(score, 20)
@@ -1086,14 +1095,23 @@ def score_breakdown(location: Dict[str, Any], daily: Dict[str, Any], hist: Histo
     recent = observed_rainfall_total(hist, d, RECENT_RAIN_WINDOW_DAYS)
     temp = mean_air_temperature(hist, d, FLUSH_TEMPERATURE_WINDOW_DAYS)
     soil = daily.get("soil_moisture_0_to_7cm_mean")
+    background_score = rainfall_score(rain) if rain is not None else None
+    recent_score = (
+        rainfall_score(recent * seasonal["rain_window"] / RECENT_RAIN_WINDOW_DAYS)
+        if recent is not None else None
+    )
+    if background_score is not None and recent_score is not None:
+        recent_score = min(recent_score, background_score + 8)
+        rain_points = round(RECENT_RAIN_WEIGHT * recent_score + BACKGROUND_RAIN_WEIGHT * background_score)
+    elif background_score is not None or recent_score is not None:
+        rain_points = background_score if background_score is not None else recent_score
+    else:
+        rain_points = 0
     out = {
-        "rain": round(RECENT_RAIN_WEIGHT * rainfall_score((recent or 0) * seasonal["rain_window"] / RECENT_RAIN_WINDOW_DAYS)
-                      + BACKGROUND_RAIN_WEIGHT * rainfall_score(rain or 0)),
+        "rain": rain_points,
         "rain_distribution": rainfall_distribution_score(hist, d, seasonal["rain_window"]) if rain is not None else 0,
         "temperature": temperature_score(temp, seasonal["optimal_temp_range"]) if temp is not None else 0,
-        "soil_temperature": soil_temperature_points(float(daily["soil_temperature_0_to_7cm_mean"]), location,
-                                                    seasonal["optimal_temp_range"])
-                            if daily.get("soil_temperature_0_to_7cm_mean") is not None else 0,
+        "soil_temperature": soil_temperature_points(hist, d),
         "soil_moisture": soil_moisture_points(float(soil)) if soil is not None else 0,
         "frost": -frost_penalty(hist, d),
         "late_season_decay": -late_season_decay_penalty(d, location),
@@ -1475,7 +1493,7 @@ def status_category(status: Optional[str]) -> str:
     return "watch"
 
 
-def score_verdict_tag(score: int, status: Optional[str], threshold: int = 65) -> str:
+def score_verdict_tag(score: int, status: Optional[str], threshold: int = 55) -> str:
     status_text = (status or "").lower()
     if "no mushrooms found" in status_text:
         return "🔎 No mushrooms found (field observation)"

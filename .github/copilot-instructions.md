@@ -14,3 +14,8 @@ Rules for every task:
   stop and explain in the PR description instead of guessing.
 - PR description: what changed, what you verified, anything you could not verify.
 - One PR per task, branch named after the task.
+
+General Constraints:
+- Never commit secrets or raw data files (porcini_db.json, alert_state.json,
+  harvest_log.json, porcini_report.html, index.html).
+- Every phase must end with passing unit tests (`python -m unittest discover -v`).

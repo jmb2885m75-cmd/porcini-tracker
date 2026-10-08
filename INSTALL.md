@@ -9,7 +9,7 @@ and writes `porcini_report.html`. A separate GitHub issue workflow validates har
 - Keeps a multi-year weather archive per location in `porcini_db.json` (schema version 3) and a per-day score series.
 - Sends Telegram / Pushover / Twilio alerts (see below).
 - Generates `porcini_report.html`: a self-contained dashboard (no CDN) with a score chart, harvest pins, tooltips and an observation browser.
-- The dashboard includes keyboard-accessible “ⓘ” explanations, found/no-find markers, and a scrollable day-by-day timeline with date picking and previous/next controls. Its 0–100 value is a heuristic favourability index, not a calibrated chance or probability. Weather inputs include rain over the 26 complete days before each scored date, mean air temperature over the 20 complete days before it, a conservative soil-temperature signal (default weight 0.25; per-location `soil_temperature_score_weight` and `soil_temperature_optimal_range` overrides), and a local-history 90-day drought comparison when enough prior-year data is available. Rain input saturates at 100 mm; no additional high-rain penalty is assumed without local observations. The windows are informed by a [regional porcini preprint](https://doi.org/10.64898/2025.12.12.693895); score weights and cutoffs are not locally calibrated. Weekday and lunar phase do not affect scores. The weather feed provides 7 forecast days including today.
+- The dashboard includes keyboard-accessible “ⓘ” explanations, found/no-find markers, and a scrollable day-by-day timeline with date picking and previous/next controls. Its 0–100 value is a heuristic favourability index, not a calibrated chance or probability. Weather inputs include rain over the 26 complete days before each scored date, mean air temperature over the 20 complete days before it, a conservative soil-temperature signal (default weight 0.25; per-location `soil_temperature_score_weight` and `soil_temperature_optimal_range` overrides), and a local-history 90-day drought comparison when enough prior-year data is available. Rain input saturates at 60 mm; no additional high-rain penalty is assumed without local observations. The windows are informed by a [regional porcini preprint](https://doi.org/10.64898/2025.12.12.693895); score weights and cutoffs are not locally calibrated. Weekday and lunar phase do not affect scores. The weather feed provides 7 forecast days including today.
 - Harvest and no-mushrooms-found observations can be submitted as GitHub issues. A no-find observation caps that
   date's score at 20; it does not affect other dates. The intake workflow validates submissions from the
   repository owner or collaborators and stores them in `harvest_log.json`; browser drafts stay local until submitted.
@@ -28,7 +28,7 @@ and writes `porcini_report.html`. A separate GitHub issue workflow validates har
 
 ## 1. Setup
 
-1. Fork/clone the repository. Python 3.10+ and `pip install requests` are required for local runs.
+1. Fork/clone the repository. Python 3.10+ and `pip install -r requirements.txt` are required for local runs. The season window, frost and late-season decay logic assume the northern hemisphere.
 2. Configure `LOCATIONS` (name, `latitude`, `longitude`, `elevation_m`, `tree_species`, `tree_density`, `aspect`,
    `soil_pH`, `past_harvests`, `last_seen_fly_agaric`) and `ALERT_THRESHOLD` (default 55) in the JSON configuration.
    `aspect` and `canopy` are accepted configuration fields but currently unused by the scoring model.
@@ -75,7 +75,7 @@ time windows (Thu 17:00–20:59, Fri 05:00–07:59 UTC) absorb that. Manual runs
 ## 4. Running locally
 
 ```bash
-pip install requests
+pip install -r requirements.txt
 python porcini.py                         # auto-detects mode from UTC time
 python porcini.py --mode weekend_outlook  # or final_confirmation / default
 python porcini.py --test-alert            # send a test notification

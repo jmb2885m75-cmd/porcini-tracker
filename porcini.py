@@ -1688,7 +1688,7 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     .timeline-day.forecast { border-style: dashed; }
     .timeline-day.low-confidence { background-image: repeating-linear-gradient(135deg, transparent, transparent 6px, rgb(251 191 36 / 18%) 6px, rgb(251 191 36 / 18%) 9px); }
     .timeline-day.selected { outline: 2px solid var(--accent); outline-offset: 1px; }
-    .timeline-day.today::after { content: "Today"; position: absolute; top: 0; color: var(--focus); font-size: .65rem; }
+    .timeline-day.today::after { content: "Today"; position: absolute; top: 0; color: #facc15; font-weight: 700; font-size: .65rem; }
     .timeline-day .month { position: absolute; top: 0; font-size: .65rem; color: var(--accent); }
     .timeline-day .tick { height: 7px; border-left: 1px solid #9ca3af; }
     .timeline-day .day-number { font-weight: bold; }
@@ -1706,6 +1706,8 @@ DASHBOARD_TEMPLATE = r"""<!DOCTYPE html>
     th { color: var(--accent); background: var(--surface-raised); font-weight: 700; }
     tbody tr:nth-child(even) { background: rgb(255 255 255 / 2%); }
     .weather-table th:nth-child(n+2), .weather-table td:nth-child(n+2), .observation-table th:nth-child(n+2), .observation-table td:nth-child(n+2) { text-align: right; }
+    tr.today-row td { background: rgb(250 204 21 / 16%); font-weight: 700; } tr.today-row td:first-child { box-shadow: inset 3px 0 0 #facc15; }
+    .timeline-day.today { border: 2px solid #facc15; background-color: rgb(250 204 21 / 12%); }
     tr.row { cursor: pointer; } tr.row:hover { background: var(--surface-raised); }
     input, select, button { background: var(--bg); color: var(--text); border: 1px solid #607086; border-radius: 7px; padding: .55rem .7rem; font: inherit; }
     button { cursor: pointer; }
@@ -1826,6 +1828,7 @@ __OBSERVATION_LOG__
     function saveSynced(l) { try { localStorage.setItem(SYNCED_KEY, JSON.stringify(l)); } catch (e) { /* display cache only */ } }
     var MONTHS = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'Jun.', 'Jul.', 'Aug.', 'Sep.', 'Oct.', 'Nov.', 'Dec.'];
     var WEEKDAYS = ['Sun.', 'Mon.', 'Tue.', 'Wed.', 'Thu.', 'Fri.', 'Sat.'];
+    function todayStr() { var n = new Date(); return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0'); }
     function fmtDate(s) {
       var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || '');
       if (!m) return s;
@@ -1899,16 +1902,17 @@ __OBSERVATION_LOG__
     function rainMixMap() { var m = {}; (loc.rain_mix || []).forEach(function (r) { m[r[0]] = r; }); return m; }
     function scoreMap() { var m = {}; loc.scores.forEach(function (r) { m[r[0]] = r; }); return m; }
     function weatherOverview() {
-      var body = $('weather-rows'), today = new Date().toISOString().slice(0, 10);
+      var body = $('weather-rows'), today = todayStr();
       body.textContent = '';
       var future = loc.records.filter(function (r) { return r[0] >= today; }).slice(0, 7);
       var rows = future.length ? future : loc.records.slice(-7).reverse();
       $('weather-label').textContent = rows.length ? (future.length ? 'Forecast and current day' : 'Forecast unavailable; showing latest weather observations') : 'Weather overview unavailable: no weather records have been loaded.';
       rows.forEach(function (r) {
         var tr = document.createElement('tr');
+        if (r[0] === today) tr.className = 'today-row';
         [r[0], r[1], r[2], r[3]].forEach(function (v, i) {
           var td = document.createElement('td');
-          td.textContent = v == null ? '—' : (i === 0 ? fmtDate(v) : v + (i < 3 ? '°' : ''));
+          td.textContent = v == null ? '—' : (i === 0 ? fmtDate(v) + (r[0] === today ? ' · Today' : '') : v + (i < 3 ? '°' : ''));
           tr.appendChild(td);
         });
         body.appendChild(tr);
@@ -1975,7 +1979,7 @@ __OBSERVATION_LOG__
           confidenceTip = 'Lower confidence: preceding rain window uses forecast rain for ' + mix[1] + ' of ' + mix[3] + ' days; archive data covers ' + mix[2] + ' days.';
         }
         if (d === selectedDate) day.classList.add('selected');
-        if (d === new Date().toISOString().slice(0, 10)) day.classList.add('today');
+        if (d === todayStr()) day.classList.add('today');
         day.setAttribute('aria-pressed', d === selectedDate ? 'true' : 'false');
         var previous = activeTimelineDates[i - 1], dateParts = d.split('-');
         if ((dateParts[2] === '01' || !previous || previous.slice(0, 7) !== d.slice(0, 7)) && d !== new Date().toISOString().slice(0, 10)) {
@@ -2013,6 +2017,11 @@ __OBSERVATION_LOG__
       svg.appendChild(el('line', { x1: L, x2: W - R, y1: y(D.threshold), y2: y(D.threshold), stroke: '#f59e0b', 'stroke-dasharray': '5 4' }));
       svg.appendChild(el('text', { x: L, y: H - 6, fill: '#9ca3af', 'font-size': 11 }, fmtDate(pts[0][0])));
       svg.appendChild(el('text', { x: W - R, y: H - 6, fill: '#9ca3af', 'font-size': 11, 'text-anchor': 'end' }, fmtDate(pts[pts.length - 1][0])));
+      var todayTime = Date.parse(todayStr());
+      if (todayTime >= t0 && todayTime <= t1) {
+        svg.appendChild(el('line', { x1: x(todayTime), x2: x(todayTime), y1: T, y2: H - B, stroke: '#facc15', 'stroke-width': 2, 'stroke-dasharray': '4 3', class: 'today-line', 'aria-hidden': 'true' }));
+        svg.appendChild(el('text', { x: x(todayTime), y: T + 10, fill: '#facc15', 'font-size': 11, 'font-weight': 700, 'text-anchor': 'middle', class: 'today-label' }, 'Today'));
+      }
       var records = recMap();
       function drawWeatherSeries(index, className, color, enabled) {
         if (!enabled) return null;
@@ -2080,8 +2089,8 @@ __OBSERVATION_LOG__
       var pages = Math.max(1, Math.ceil(list.length / PAGE)); page = Math.min(page, pages - 1);
       var body = $('rows'); body.textContent = '';
       list.slice(page * PAGE, page * PAGE + PAGE).forEach(function (r) {
-        var tr = document.createElement('tr'); tr.className = 'row';
-        [fmtDate(r[0]), sm[r[0]] ? sm[r[0]][1] : '', r[1], r[3], r[4], r[5], r[6], r[8]].forEach(function (v) { var td = document.createElement('td'); td.textContent = v == null ? '' : v; tr.appendChild(td); });
+        var tr = document.createElement('tr'); tr.className = r[0] === todayStr() ? 'row today-row' : 'row';
+        [fmtDate(r[0]) + (r[0] === todayStr() ? ' · Today' : ''), sm[r[0]] ? sm[r[0]][1] : '', r[1], r[3], r[4], r[5], r[6], r[8]].forEach(function (v) { var td = document.createElement('td'); td.textContent = v == null ? '' : v; tr.appendChild(td); });
         tr.onclick = function () { pin(r[0]); };
         body.appendChild(tr);
       });

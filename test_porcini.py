@@ -114,6 +114,8 @@ class PrivacyTests(unittest.TestCase):
         self.assertNotIn("Private woodland", report)
         self.assertIn("Content-Security-Policy", report)
         self.assertIn("default-src 'none'", report)
+        for marker in ("function todayStr()", "today-row", "today-line"):
+            self.assertIn(marker, report)
         nonce = re.search(r"script-src 'nonce-([^']+)'", report)
         self.assertIsNotNone(nonce)
         self.assertIn(f'<script nonce="{nonce.group(1)}">', report)

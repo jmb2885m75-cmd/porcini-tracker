@@ -15,7 +15,8 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from dates import parse_user_date
 
-HARVEST_LOG_PATH = Path("harvest_log.json")
+DATA_DIR = Path(os.environ.get("DATA_DIR", "."))
+HARVEST_LOG_PATH = DATA_DIR / "harvest_log.json"
 LOG_SCHEMA_VERSION = 1
 YIELD_TIERS = ("small", "medium", "large")
 CAP_STAGES = ("buttons_young", "prime", "old_overripe")

@@ -24,11 +24,12 @@ from urllib3.util.retry import Retry
 from dates import format_display_date, parse_user_date
 from harvest import HarvestError, build_observation_log, entry_id, load_harvest_log, merge_harvests, summarize_observations
 
+DATA_DIR = Path(os.environ.get("DATA_DIR", "."))
 CONFIG_PATH = Path("config.json")
-DB_PATH = Path("porcini_db.json")
-ALERT_STATE_PATH = Path("alert_state.json")
-REPORT_PATH = Path("porcini_report.html")
-INDEX_PATH = Path("index.html")
+DB_PATH = DATA_DIR / "porcini_db.json"
+ALERT_STATE_PATH = DATA_DIR / "alert_state.json"
+REPORT_PATH = DATA_DIR / "porcini_report.html"
+INDEX_PATH = DATA_DIR / "index.html"
 
 ARCHIVE_API_URL = "https://archive-api.open-meteo.com/v1/archive"
 FORECAST_API_URL = "https://api.open-meteo.com/v1/forecast"
@@ -736,7 +737,7 @@ from scoring import (
     frost_penalty, _temp_range, get_seasonal_params, weight_by_recency, temperature_score,
     soil_temperature_points, rainfall_distribution_score, days_since_last_flush, flush_depletion_penalty,
     depletion_penalty_for_day, rainfall_score, soil_moisture_points, calculate_score_for_day, score_breakdown,
-    location_signature, update_daily_scores, backtest_accuracy, _binary_auc, forecast_snapshot_backtest,
+    location_signature, update_daily_scores, backtest_accuracy, compute_auc, _binary_auc, forecast_snapshot_backtest,
     format_forecast_backtest, find_weekday_counts, calibration_messages, find_weekend_best,
     estimate_days_until_threshold, explain_score, score_verdict_tag, score_color,
 )

@@ -119,3 +119,49 @@ Security caveat: anything in `localStorage` is readable by scripts on the same o
 this one repository with only Actions: Read and write, and clear it on shared devices. *Save as draft* works offline and never uses the token.
 
 `api.py` (`POST /api/submit-observation`) is still available for people who prefer to self-host a server.
+
+## Data Branch Separation
+
+Starting with this version, database files (porcini_db.json, harvest_log.json, alert_state.json, index.html, porcini_report.html) are stored in a separate `data` branch to isolate persistent data from code.
+
+### Why?
+- Code changes can be tracked independently from data
+- Easier to reset or archive data without affecting the codebase
+- Workflows can manage data lifecycle separately
+
+### Manual Migration (First-Time Setup)
+
+If you are upgrading from an earlier version:
+
+1. **Create the data branch from current main:**
+   ```bash
+   git checkout main
+   git checkout -b data
+   # The data branch now contains all current data files
+   git push origin data
+   ```
+
+2. **Switch main branch to use DATA_DIR:**
+   ```bash
+   git checkout main
+   # porcini.py and harvest.py now read/write to DATA_DIR (default: current dir)
+   # Workflows check out data branch into data/ and set DATA_DIR=data
+   ```
+
+3. **Update your local workflow:**
+   - If running locally, set `export DATA_DIR=data` before running Python
+   - Or keep DATA_DIR unset to use current directory (backward compatible)
+
+### Workflow Behavior
+
+- Code branch (main): Contains porcini.py, harvest.py, config.json, tests
+- Data branch (data): Contains porcini_db.json, harvest_log.json, alert_state.json, index.html, porcini_report.html
+- Workflows automatically check out both branches and manage updates to data only
+
+### Configuration
+
+To override the data directory location, set the `DATA_DIR` environment variable:
+```bash
+export DATA_DIR=/path/to/data
+python porcini.py
+```

@@ -85,7 +85,7 @@ SMALL_HARVEST_DEPLETION_RECOVERY_DAYS = 5
 DEFAULT_EARLY_HARVEST_PENALTY_FACTOR = 0.5
 
 
-MODEL_VERSION = 17  # 17: frost termination zeroes score, sparse weather windows give 'insufficient data'; 16: C1–C7 scoring updates (host-tree removal, depletion tiers, drought percentile, rain cap, frost/season, soil temp, utcnow fix)
+MODEL_VERSION = 18  # 18: lagged rain trigger/background windows, warmer early-season optimum, soil temperature as primary signal, limiting-factor score gates, softer frost/heat/humidity terms; 17: frost termination zeroes score, sparse weather windows give 'insufficient data'; 16: C1–C7 scoring updates (host-tree removal, depletion tiers, drought percentile, rain cap, frost/season, soil temp, utcnow fix)
 
 
 ARCHIVE_LAG_DAYS = 5
@@ -112,13 +112,22 @@ RECENCY_YEARS_BACK = 2  # harvests older than this count for OLD_OBSERVATION_WEI
 OLD_OBSERVATION_WEIGHT = 0.5
 
 
-RECENT_RAIN_WINDOW_DAYS = 7
+TRIGGER_RAIN_LAG_DAYS = 7  # the most recent days are still accumulating in the mycelium and add nothing
 
 
-RECENT_RAIN_WEIGHT = 0.6
+TRIGGER_RAIN_WINDOW_DAYS = 14  # days 7-21 before the scored day trigger fruiting
 
 
-BACKGROUND_RAIN_WEIGHT = 0.4
+TRIGGER_RAIN_WEIGHT = 0.6
+
+
+RECENT_RAIN_LAG_DAYS = 21
+
+
+RECENT_RAIN_WINDOW_DAYS = 30  # days 21-51 before the scored day: older, less predictive background signal
+
+
+RECENT_RAIN_WEIGHT = 0.4
 
 
 RAINY_DAY_MM = 2.0
@@ -130,10 +139,22 @@ RAIN_DISTRIBUTION_SCORE_MAX = 5
 DEFAULT_OPTIMAL_TEMP_RANGE = (10.0, 15.0)
 
 
+EARLY_SEASON_OPTIMAL_TEMP_RANGE = (14.0, 19.0)
+
+
 TEMPERATURE_SLOPE_PER_DEGREE = 2
 
 
 HUMIDITY_HIGH = 85
+
+
+HUMIDITY_HIGH_BONUS = 3
+
+
+HUMIDITY_LOW_PENALTY = 3
+
+
+HUMIDITY_LOOKBACK_DAYS = 7
 
 
 HUMIDITY_LOW = 60
@@ -178,7 +199,22 @@ LONG_TERM_RAIN_MIN_YEARS = 5
 FLUSH_RAIN_SCORE_MAX = 30
 
 
-RAIN_SATURATION_MM = 60.0  # rain total at which the rain score saturates
+RAINFALL_TRIGGER_SATURATION_MM = 40.0  # trigger-window rain total at which the rain score saturates
+
+
+RAINFALL_BACKGROUND_SATURATION_MM = 80.0  # older (background) rain needs more to saturate
+
+
+SCORE_GATE_DRY_THRESHOLD = 5
+
+
+SCORE_GATE_DRY_CAP = 25
+
+
+SCORE_GATE_TEMP_THRESHOLD = 3
+
+
+SCORE_GATE_TEMP_CAP = 20
 
 
 VERY_FAVOURABLE_THRESHOLD = 65
@@ -196,10 +232,10 @@ FROST_RECENT_DAYS = 3
 FROST_REPEAT_WINDOW_DAYS = 14
 
 
-FROST_REPEAT_PENALTY_PER_NIGHT = 4
+FROST_REPEAT_PENALTY_PER_NIGHT = 2
 
 
-FROST_REPEAT_PENALTY_MAX = 20
+FROST_REPEAT_PENALTY_MAX = 8
 
 
 LATE_SEASON_DECAY_START = (11, 15)
@@ -211,19 +247,28 @@ LATE_SEASON_DECAY_END = (12, 1)
 LATE_SEASON_DECAY_MAX = 15
 
 
-SOIL_TEMPERATURE_SCORE_WEIGHT = 0.25
+SOIL_TEMPERATURE_SCORE_MAX = 20
 
 
-FROST_LIGHT_PENALTY = 4
+SOIL_TEMPERATURE_PENALTY_MAX = 10
 
 
-HEAT_TMAX_C = 25.0
+SOIL_TEMPERATURE_SLOPE_PER_DEGREE = 3
 
 
-FROST_PENALTY = 10
+DEFAULT_SOIL_TEMPERATURE_RANGE = (8.0, 15.0)
 
 
-HEAT_PENALTY = 5
+FROST_LIGHT_PENALTY = 2
+
+
+HEAT_TMAX_C = 26.0
+
+
+FROST_PENALTY = 6
+
+
+HEAT_PENALTY = 2
 
 
 FLUSH_TEMPERATURE_SCORE_MAX = 20
@@ -568,12 +613,6 @@ def hard_freeze_recent(hist: History, day: date) -> bool:
                for r in hist.window(day - timedelta(days=1), FROST_RECENT_DAYS))
 
 
-def severe_freeze_recent(hist: History, day: date, tmin: float = -4.0) -> bool:
-    """True if any of the last FROST_RECENT_DAYS complete days before `day` had Tmin at or below tmin."""
-    return any(r.get("temperature_2m_min") is not None and float(r["temperature_2m_min"]) <= tmin
-               for r in hist.window(day - timedelta(days=1), FROST_RECENT_DAYS))
-
-
 def frost_penalty(hist: History, day: date) -> int:
     """Points to subtract for freezing nights in the recent window of complete days before `day`.
 
@@ -612,7 +651,7 @@ def get_seasonal_params(day: date, location: Optional[Dict[str, Any]] = None) ->
     Missing or invalid config falls back to the defaults.
     """
     if day.month in (8, 9):
-        season, window, temps = "early", 14, (12.0, 17.0)
+        season, window, temps = "early", 14, EARLY_SEASON_OPTIMAL_TEMP_RANGE
     elif day.month in (10, 11):
         season, window, temps = "mid", FLUSH_RAIN_WINDOW_DAYS, (8.0, 14.0)
     else:
@@ -646,8 +685,12 @@ def temperature_score(average_temperature: float, optimal_range: Tuple[float, fl
     return max(0, round(FLUSH_TEMPERATURE_SCORE_MAX - distance * TEMPERATURE_SLOPE_PER_DEGREE))
 
 
-def soil_temperature_points(hist: History, day: date) -> int:
-    """Score the mean soil temperature over the 7 complete days before `day`."""
+def soil_temperature_score(hist: History, day: date, location: Optional[Dict[str, Any]] = None) -> int:
+    """Score the mean soil temperature over the 7 complete days before `day`.
+
+    Full SOIL_TEMPERATURE_SCORE_MAX inside the optimum (location `soil_temperature_optimal_range`, else 8-15 °C),
+    falling off linearly with distance to at most -SOIL_TEMPERATURE_PENALTY_MAX.
+    """
     records = hist.window(day - timedelta(days=1), 7)
     values = [
         float(r["soil_temperature_0_to_7cm_mean"])
@@ -656,11 +699,11 @@ def soil_temperature_points(hist: History, day: date) -> int:
     ]
     if len(values) < 5:
         return 0
+    low, high = _temp_range((location or {}).get("soil_temperature_optimal_range")) or DEFAULT_SOIL_TEMPERATURE_RANGE
     mean = sum(values) / len(values)
-    if 8.0 <= mean <= 15.0:
-        return 3
-    distance = min(abs(mean - 8.0), abs(mean - 15.0))
-    return -min(5, round(distance))
+    distance = max(low - mean, mean - high, 0)
+    return max(-SOIL_TEMPERATURE_PENALTY_MAX,
+               round(SOIL_TEMPERATURE_SCORE_MAX - distance * SOIL_TEMPERATURE_SLOPE_PER_DEGREE))
 
 
 def rainfall_distribution_score(hist: History, day: date, window_days: int = FLUSH_RAIN_WINDOW_DAYS) -> int:
@@ -726,10 +769,53 @@ def depletion_penalty_for_day(location: Dict[str, Any], past_harvests: List[Dict
     return penalty
 
 
-def rainfall_score(rainfall: float) -> int:
-    """Give up to 30 points for recent rain, saturating at RAIN_SATURATION_MM without an uncalibrated wet penalty."""
-    scaled = max(0.0, min(FLUSH_RAIN_SCORE_MAX, rainfall * FLUSH_RAIN_SCORE_MAX / RAIN_SATURATION_MM))
+def rainfall_score(rainfall: float, saturation_mm: float = RAINFALL_TRIGGER_SATURATION_MM) -> int:
+    """Give up to 30 points for rain, saturating at `saturation_mm` without an uncalibrated wet penalty."""
+    scaled = max(0.0, min(FLUSH_RAIN_SCORE_MAX, rainfall * FLUSH_RAIN_SCORE_MAX / saturation_mm))
     return round(scaled)
+
+
+def lagged_rain_points(hist: History, day: date) -> Optional[int]:
+    """Rain points from the lagged windows: nothing from the last 7 days, then trigger (days 7-21) and background.
+
+    Returns None when the trigger window lacks data; a missing background window falls back to the trigger score.
+    """
+    trigger = observed_rainfall_total(hist, day - timedelta(days=TRIGGER_RAIN_LAG_DAYS), TRIGGER_RAIN_WINDOW_DAYS)
+    if trigger is None:
+        return None
+    trigger_score = rainfall_score(trigger, RAINFALL_TRIGGER_SATURATION_MM)
+    background = observed_rainfall_total(hist, day - timedelta(days=RECENT_RAIN_LAG_DAYS), RECENT_RAIN_WINDOW_DAYS)
+    if background is None:
+        return trigger_score
+    background_score = rainfall_score(background, RAINFALL_BACKGROUND_SATURATION_MM)
+    return round(TRIGGER_RAIN_WEIGHT * trigger_score + RECENT_RAIN_WEIGHT * background_score)
+
+
+def humidity_adjustment(hist: History, day: date) -> int:
+    """Humidity points from observed (non-forecast) records only, averaged over HUMIDITY_LOOKBACK_DAYS."""
+    values = [
+        float(r["relative_humidity_2m_mean"])
+        for r in hist.window(day - timedelta(days=1), HUMIDITY_LOOKBACK_DAYS)
+        if r.get("relative_humidity_2m_mean") is not None and r.get("source") != SOURCE_FORECAST
+    ]
+    if len(values) < math.ceil(HUMIDITY_LOOKBACK_DAYS * 0.8):
+        return 0
+    mean = sum(values) / len(values)
+    if mean > HUMIDITY_HIGH:
+        return HUMIDITY_HIGH_BONUS
+    if mean < HUMIDITY_LOW:
+        return -HUMIDITY_LOW_PENALTY
+    return 0
+
+
+def score_gate_cap(rain_points: int, temperature_points: int) -> Optional[int]:
+    """Limiting-factor cap: fruiting needs both water and suitable temperature."""
+    caps = []
+    if rain_points < SCORE_GATE_DRY_THRESHOLD:
+        caps.append(SCORE_GATE_DRY_CAP)
+    if temperature_points < SCORE_GATE_TEMP_THRESHOLD:
+        caps.append(SCORE_GATE_TEMP_CAP)
+    return min(caps) if caps else None
 
 
 def soil_moisture_points(moisture: float) -> int:
@@ -760,19 +846,11 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
 
     seasonal = get_seasonal_params(d, location)
     rain_window = seasonal["rain_window"]
-    rainfall = observed_rainfall_total(hist, d, rain_window)
-    recent_rainfall = observed_rainfall_total(hist, d, RECENT_RAIN_WINDOW_DAYS)
+    rain_points = lagged_rain_points(hist, d)
     average_temperature = mean_air_temperature(hist, d, FLUSH_TEMPERATURE_WINDOW_DAYS)
-    if rainfall is None or average_temperature is None:
+    if rain_points is None or average_temperature is None:
         return 0, "❔ Insufficient weather data", ""
-    background_score = rainfall_score(rainfall) if rainfall is not None else None
-    # Recent rain is scaled to the background window's units so both parts share one 0-30 scale.
-    recent_score = rainfall_score(recent_rainfall * rain_window / RECENT_RAIN_WINDOW_DAYS) if recent_rainfall is not None else None
-    if background_score is not None and recent_score is not None:
-        recent_score = min(recent_score, background_score + 8)
-        score += round(RECENT_RAIN_WEIGHT * recent_score + BACKGROUND_RAIN_WEIGHT * background_score)
-    elif background_score is not None or recent_score is not None:
-        score += background_score if background_score is not None else recent_score
+    score += rain_points
     score += rainfall_distribution_score(hist, d, rain_window)
 
     long_term_rainfall_percentile = historical_rainfall_percentile(hist, d)
@@ -781,8 +859,9 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
             DROUGHT_SCORE_PENALTY_MAX * (0.5 - long_term_rainfall_percentile) / 0.5
         )
 
-    score += temperature_score(average_temperature, seasonal["optimal_temp_range"])
-    score += soil_temperature_points(hist, d)
+    temperature_points = temperature_score(average_temperature, seasonal["optimal_temp_range"])
+    score += temperature_points
+    score += soil_temperature_score(hist, d, location)
 
     if has_runoff(hist, d):
         score -= 5
@@ -794,21 +873,20 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
     if any(r.get("temperature_2m_max") is not None and float(r["temperature_2m_max"]) > HEAT_TMAX_C for r in recent_days):
         score -= HEAT_PENALTY
 
-    humidity = daily.get("relative_humidity_2m_mean")
-    if humidity is not None:
-        if humidity > HUMIDITY_HIGH:
-            score += 5
-        elif humidity < HUMIDITY_LOW:
-            score -= 3
+    score += humidity_adjustment(hist, d)
 
     soil_moisture = daily.get("soil_moisture_0_to_7cm_mean")
     if soil_moisture is not None:
         score += soil_moisture_points(float(soil_moisture))
         if soil_moisture <= SOIL_DRY:
             status = "💧 Too dry – low soil moisture"
-    terminated = decay > 0 and (hard_freeze_recent(hist, d) or severe_freeze_recent(hist, d))
+    terminated = decay > 0 and hard_freeze_recent(hist, d)
     if terminated:
         status = "❄️ Season terminated by frost"
+
+    gate_cap = score_gate_cap(rain_points, temperature_points)
+    if gate_cap is not None:
+        score = min(score, gate_cap)
 
     if str(location.get("soil_pH") or "").strip().lower() in ("alkaline", "basic", "calcareous"):
         score -= 5
@@ -881,27 +959,14 @@ def score_breakdown(location: Dict[str, Any], daily: Dict[str, Any], hist: Histo
     """Diagnostics: the weather-driven terms of calculate_score_for_day for one day (excludes harvest-log adjustments)."""
     d = parse_date(daily["date"])
     seasonal = get_seasonal_params(d, location)
-    rain = observed_rainfall_total(hist, d, seasonal["rain_window"])
-    recent = observed_rainfall_total(hist, d, RECENT_RAIN_WINDOW_DAYS)
+    rain_points = lagged_rain_points(hist, d)
     temp = mean_air_temperature(hist, d, FLUSH_TEMPERATURE_WINDOW_DAYS)
     soil = daily.get("soil_moisture_0_to_7cm_mean")
-    background_score = rainfall_score(rain) if rain is not None else None
-    recent_score = (
-        rainfall_score(recent * seasonal["rain_window"] / RECENT_RAIN_WINDOW_DAYS)
-        if recent is not None else None
-    )
-    if background_score is not None and recent_score is not None:
-        recent_score = min(recent_score, background_score + 8)
-        rain_points = round(RECENT_RAIN_WEIGHT * recent_score + BACKGROUND_RAIN_WEIGHT * background_score)
-    elif background_score is not None or recent_score is not None:
-        rain_points = background_score if background_score is not None else recent_score
-    else:
-        rain_points = 0
     out = {
-        "rain": rain_points,
-        "rain_distribution": rainfall_distribution_score(hist, d, seasonal["rain_window"]) if rain is not None else 0,
+        "rain": rain_points or 0,
+        "rain_distribution": rainfall_distribution_score(hist, d, seasonal["rain_window"]) if rain_points is not None else 0,
         "temperature": temperature_score(temp, seasonal["optimal_temp_range"]) if temp is not None else 0,
-        "soil_temperature": soil_temperature_points(hist, d),
+        "soil_temperature": soil_temperature_score(hist, d, location),
         "soil_moisture": soil_moisture_points(float(soil)) if soil is not None else 0,
         "frost": -frost_penalty(hist, d),
         "late_season_decay": -late_season_decay_penalty(d, location),
@@ -912,7 +977,7 @@ def score_breakdown(location: Dict[str, Any], daily: Dict[str, Any], hist: Histo
 def location_signature(location: Dict[str, Any]) -> str:
     """Fingerprint of the config fields that influence scores; a change recomputes the stored series."""
     keys = ("tree_species", "soil_pH", "past_harvests", "optimal_temp_range", "seasonal_params", "season_start",
-            "season_end", "soil_temperature_optimal_range", "soil_temperature_score_weight")
+            "season_end", "soil_temperature_optimal_range")
     blob = json.dumps({k: location.get(k) for k in keys}, sort_keys=True, default=str)
     return f"{MODEL_VERSION}:{hashlib.sha1(blob.encode('utf-8')).hexdigest()[:12]}"
 

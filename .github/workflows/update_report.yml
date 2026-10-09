@@ -55,7 +55,9 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           touch alert_state.json
-          git add porcini_db.json harvest_log.json index.html porcini_report.html alert_state.json
+          for f in porcini_db.json harvest_log.json index.html porcini_report.html alert_state.json; do
+            if [ -e "$f" ]; then git add "$f"; fi
+          done
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else

@@ -1192,6 +1192,9 @@ class WeatherFailureTests(unittest.TestCase):
         self.assertIn("Favourability index: ' + sm[1] + '/100 — ' + sm[4]", report)
         self.assertIn("bar.style.background = row ? row[5]", report)
         self.assertIn("seasonOnly", report)
+        self.assertIn('id="seasonOnly" class="season-toggle" aria-pressed="true"', report)
+        self.assertIn("s[new Date().getFullYear()] = 1", report)
+        self.assertIn("$('range').value = cur || String(new Date().getFullYear())", report)
 
 
 class LegacyMigrationTests(unittest.TestCase):

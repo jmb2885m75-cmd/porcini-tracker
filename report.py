@@ -228,6 +228,8 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]],
       <div class="meta">Fields sent per ranked spot (top 3): rank, location name, best weekend favourability index (0–100), best day, status. The final line is the dashboard link.</div>
     </div>"""
     payload = dashboard_payload(cfg, analysis, mode)
+    if alert_message:
+        payload["alert"] = {"message": alias_public_text(alert_message, cfg.get("LOCATIONS", [])), "will_send": bool(alert_will_send)}
     public_names = {str(item.get("name")): public_location_alias(i) for i, item in enumerate(cfg.get("LOCATIONS", []))}
     public_entries = [
         dict(entry, location=public_names.get(str(entry.get("location")), "Unlisted location"))
@@ -247,3 +249,53 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]],
         .replace("__DATA__", data)
         .replace("__OBSERVATION_LOG__", observation_log)
     )
+
+
+INDEX_TEMPLATE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-__CSP_NONCE__'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'" />
+  <title>Porcini Tracker</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #111827; color: #e5e7eb; margin: 0; padding: 24px; }
+    main { max-width: 720px; margin: 48px auto; }
+    a { color: #a7f3d0; }
+    .card { background: #1f2937; border: 1px solid #374151; border-radius: 12px; padding: 20px; margin: 20px 0; }
+    pre { white-space: pre-wrap; background: #111827; border: 1px solid #374151; border-radius: 8px; padding: 12px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>\U0001F344 Porcini Tracker</h1>
+    <p><a href="porcini_report.html">Open the latest forecast dashboard</a></p>
+    <div class="card" id="alert-preview" hidden>
+      <h2>\U0001F4E8 Alert Preview</h2>
+      <p><small id="alert-status"></small></p>
+      <pre id="alert-text"></pre>
+    </div>
+  </main>
+  <script nonce="__CSP_NONCE__">
+    fetch('porcini_report.html', {cache: 'no-store'})
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+      .then(function (text) {
+        var doc = new DOMParser().parseFromString(text, 'text/html');
+        var data = JSON.parse(doc.getElementById('porcini-data').textContent);
+        if (!data.alert || !data.alert.message) return;
+        document.getElementById('alert-text').textContent = data.alert.message;
+        document.getElementById('alert-status').textContent = data.alert.will_send
+          ? 'This message will be sent with this run.'
+          : 'Preview only: no alert is triggered by this run.';
+        document.getElementById('alert-preview').hidden = false;
+      })
+      .catch(function () {});
+  </script>
+</body>
+</html>
+"""
+
+
+def generate_index_html() -> str:
+    """Landing page; its alert preview is read at view time from the porcini-data JSON embedded in porcini_report.html."""
+    return INDEX_TEMPLATE.replace("__CSP_NONCE__", secrets.token_urlsafe(18))

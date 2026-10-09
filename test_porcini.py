@@ -407,6 +407,9 @@ class ScoringTests(unittest.TestCase):
         percentile = p.historical_rainfall_percentile(p.History(records), target)
         self.assertIsNotNone(percentile)
         self.assertEqual(percentile, 0.5)
+        self.assertIsNotNone(
+            p.historical_rainfall_percentile(p.History(records), date(2024, 2, 28))
+        )
 
     def test_runoff_backfill_is_limited_to_four_hundred_days(self):
         today = datetime.now(timezone.utc).date()

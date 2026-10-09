@@ -174,6 +174,7 @@ class PrivacyTests(unittest.TestCase):
         self.assertFalse(self.contains_coordinate_field(loaded))
 
 
+@unittest.skipUnless(p.DB_PATH.exists() and p.REPORT_PATH.exists(), "runtime data files live on the data branch")
 class HistoricalWeatherTests(unittest.TestCase):
     def test_2023_weather_covers_full_year_and_has_scores(self):
         db = p.load_json(p.DB_PATH, {})

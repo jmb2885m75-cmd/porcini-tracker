@@ -350,16 +350,28 @@ class ScoringTests(unittest.TestCase):
         target = date(2025, 10, 18)
         records = series(target - timedelta(days=7), 7, soil_temperature_0_to_7cm_mean=10.0)
         hist = p.History(records)
-        self.assertEqual(p.soil_temperature_points(hist, target), 3)
-        self.assertEqual(p.score_breakdown(LOC, rec(target.isoformat()), hist)["soil_temperature"], 3)
+        # v18: soil temperature is a primary signal (up to +20, down to -10) instead of +3/-5.
+        self.assertEqual(p.soil_temperature_score(hist, target), 20)
+        self.assertEqual(p.score_breakdown(LOC, rec(target.isoformat()), hist)["soil_temperature"], 20)
 
         for record in records:
             record["soil_temperature_0_to_7cm_mean"] = 6.0
-        self.assertEqual(p.soil_temperature_points(hist, target), -2)
+        self.assertEqual(p.soil_temperature_score(hist, target), 14)
         for record in records:
             record["soil_temperature_0_to_7cm_mean"] = 20.0
-        self.assertEqual(p.soil_temperature_points(hist, target), -5)
-        self.assertEqual(p.soil_temperature_points(p.History(records[:4]), target), 0)
+        self.assertEqual(p.soil_temperature_score(hist, target), 5)
+        for record in records:
+            record["soil_temperature_0_to_7cm_mean"] = 35.0
+        self.assertEqual(p.soil_temperature_score(hist, target), -p.SOIL_TEMPERATURE_PENALTY_MAX)
+        self.assertEqual(p.soil_temperature_score(p.History(records[:4]), target), 0)
+
+    def test_soil_temperature_uses_configured_optimal_range(self):
+        target = date(2025, 10, 18)
+        hist = p.History(series(target - timedelta(days=7), 7, soil_temperature_0_to_7cm_mean=20.0))
+        loc = dict(LOC, soil_temperature_optimal_range=[18, 22])
+        self.assertEqual(p.soil_temperature_score(hist, target, loc), 20)
+        self.assertEqual(p.soil_temperature_score(hist, target, dict(LOC, soil_temperature_optimal_range="bad")), 5)
+        self.assertNotEqual(p.location_signature(loc), p.location_signature(LOC))
 
     def test_model_thresholds_host_tree_removal_and_weather_fields(self):
         self.assertFalse(hasattr(p, "HOST_TREES"))
@@ -380,27 +392,64 @@ class ScoringTests(unittest.TestCase):
             p.calculate_score_for_day({"tree_species": ["Birch", "Spruce"]}, day, hist, [])[0],
             baseline,
         )
-        self.assertEqual(p.MODEL_VERSION, 17)
+        self.assertEqual(p.MODEL_VERSION, 18)
 
     def test_depletion_tiers_and_recovery_periods(self):
         self.assertEqual(p.FLUSH_DEPLETION_TIERS, ((1, 35), (3, 25), (6, 12)))
         self.assertEqual(p.DEFAULT_DEPLETION_RECOVERY_DAYS, 6)
         self.assertEqual(p.SMALL_HARVEST_DEPLETION_RECOVERY_DAYS, 5)
 
-    def test_recent_rain_is_capped_by_background_score_plus_eight(self):
+    def test_last_seven_days_of_rain_do_not_contribute_and_trigger_window_does(self):
         target = date(2025, 10, 18)
         records = series(target - timedelta(days=30), 31, precipitation_sum=0.0)
-        for record in records[-8:-1]:
-            record["precipitation_sum"] = 1.0
+        for record in records[-8:-1]:  # days 1-7 before the scored day
+            record["precipitation_sum"] = 10.0
         hist = p.History(records)
-        self.assertEqual(p.score_breakdown(LOC, hist.get(target), hist)["rain"], 9)
+        self.assertEqual(p.score_breakdown(LOC, hist.get(target), hist)["rain"], 0)
 
         for record in records[-8:-1]:
             record["precipitation_sum"] = 0.0
-        for record in records[-27:-8]:
+        for record in records[-22:-8]:  # days 8-21 before the scored day
             record["precipitation_sum"] = 1.0
         hist = p.History(records)
-        self.assertEqual(p.score_breakdown(LOC, hist.get(target), hist)["rain"], 4)
+        self.assertEqual(p.score_breakdown(LOC, hist.get(target), hist)["rain"], p.rainfall_score(14.0))
+
+    def test_background_rain_uses_lower_weight_and_higher_saturation(self):
+        target = date(2025, 10, 18)
+        records = series(target - timedelta(days=60), 61, precipitation_sum=0.0)
+        for record in records[-52:-22]:  # days 22-51 before the scored day
+            record["precipitation_sum"] = 80.0 / 30
+        hist = p.History(records)
+        self.assertEqual(p.lagged_rain_points(hist, target), round(p.RECENT_RAIN_WEIGHT * p.FLUSH_RAIN_SCORE_MAX))
+        for record in records[-22:-8]:
+            record["precipitation_sum"] = 40.0 / 14
+        self.assertEqual(p.lagged_rain_points(p.History(records), target), p.FLUSH_RAIN_SCORE_MAX)
+
+    def test_score_gates_cap_total_when_rain_or_temperature_is_missing(self):
+        self.assertIsNone(p.score_gate_cap(30, 20))
+        self.assertEqual(p.score_gate_cap(4, 20), 25)
+        self.assertEqual(p.score_gate_cap(30, 2), 20)
+        self.assertEqual(p.score_gate_cap(0, 0), 20)
+        dry = series(date(2025, 8, 20), 60, precipitation_sum=0.0)
+        self.assertLessEqual(p.calculate_score_for_day(LOC, dry[-1], p.History(dry), [])[0], 25)
+        cold = series(date(2025, 8, 20), 60, precipitation_sum=4.0, temperature_2m_max=30.0, temperature_2m_min=20.0)
+        self.assertLessEqual(p.calculate_score_for_day(LOC, cold[-1], p.History(cold), [])[0], 20)
+
+    def test_frost_penalties_are_softened(self):
+        target = date(2025, 10, 18)
+        records = series(target - timedelta(days=20), 21)
+        hist = p.History(records)
+        records[-2]["temperature_2m_min"] = -3.0
+        self.assertEqual(p.frost_penalty(hist, target), 6)
+        records[-2]["temperature_2m_min"] = -0.5
+        self.assertEqual(p.frost_penalty(hist, target), 2)
+        for record in records[-12:-1]:
+            record["temperature_2m_min"] = -3.0
+        self.assertEqual(p.frost_penalty(hist, target), 6 + p.FROST_REPEAT_PENALTY_MAX)
+
+    def test_early_season_optimum_is_warmer_and_heat_penalty_is_softer(self):
+        self.assertEqual(p.get_seasonal_params(date(2025, 8, 15))["optimal_temp_range"], (14.0, 19.0))
+        self.assertEqual((p.HEAT_TMAX_C, p.HEAT_PENALTY, p.HUMIDITY_HIGH_BONUS), (26.0, 2, 3))
 
     def test_utcnow_removed_and_thresholds_match_model(self):
         source = Path(p.__file__).read_text(encoding="utf-8")
@@ -427,14 +476,15 @@ class ScoringTests(unittest.TestCase):
         self.assertFalse(p.needs_runoff_backfill(old))
         self.assertFalse(p.needs_runoff_backfill({"source": p.SOURCE_ARCHIVE}))
 
-    def test_severe_freeze_threshold_and_season_termination(self):
+    def test_hard_freeze_threshold_and_season_termination(self):
+        self.assertFalse(hasattr(p, "severe_freeze_recent"))
         target = date(2025, 11, 28)
         records = series(target - timedelta(days=30), 31)
         hist = p.History(records)
         records[-2]["temperature_2m_min"] = -4.0
-        self.assertTrue(p.severe_freeze_recent(hist, target))
-        records[-2]["temperature_2m_min"] = -3.0
-        self.assertFalse(p.severe_freeze_recent(hist, target))
+        self.assertTrue(p.hard_freeze_recent(hist, target))
+        records[-2]["temperature_2m_min"] = -1.0
+        self.assertFalse(p.hard_freeze_recent(hist, target))
 
         records[-2]["temperature_2m_min"] = -4.0
         result = p.calculate_score_for_day(LOC, hist.get(target), hist, [])
@@ -482,27 +532,28 @@ class ScoringTests(unittest.TestCase):
         self.assertGreater(next_day[0], score[0])
 
     def test_weekday_does_not_change_favourability(self):
-        recs = series(date(2025, 8, 1), 60, precipitation_sum=3.0)
+        recs = series(date(2025, 7, 1), 90, precipitation_sum=3.0)
         h = p.History(recs)
         saturday, monday = date(2025, 9, 13), date(2025, 9, 15)
         sat_score = p.calculate_score_for_day(LOC, h.get(saturday), h, [])[0]
         mon_score = p.calculate_score_for_day(LOC, h.get(monday), h, [])[0]
         self.assertEqual(sat_score, mon_score)
 
-    def test_rain_score_uses_26_day_total(self):
-        recs = series(date(2025, 9, 1), 50, precipitation_sum=0.0)
+    def test_rain_score_uses_lagged_trigger_window(self):
+        recs = series(date(2025, 8, 1), 90, precipitation_sum=0.0)
         h = p.History(recs)
         day = date(2025, 10, 18)
-        for record in h.window(day - timedelta(days=1), 26):
+        window = h.window(day - timedelta(days=p.TRIGGER_RAIN_LAG_DAYS + 1), p.TRIGGER_RAIN_WINDOW_DAYS)
+        for record in window:
             record["precipitation_sum"] = 1.0
         wet_score = p.calculate_score_for_day(LOC, h.get(day), h, [])[0]
-        for record in h.window(day - timedelta(days=1), 26):
+        for record in window:
             record["precipitation_sum"] = 0.0
         dry_score = p.calculate_score_for_day(LOC, h.get(day), h, [])[0]
-        self.assertEqual(wet_score - dry_score, 13)
+        self.assertGreater(wet_score, dry_score)
 
     def test_temperature_score_uses_20_day_mean_air_temperature(self):
-        recs = series(date(2025, 9, 1), 50, temperature_2m_max=20.0, temperature_2m_min=6.0)
+        recs = series(date(2025, 9, 1), 50, precipitation_sum=1.0, temperature_2m_max=20.0, temperature_2m_min=6.0)
         h = p.History(recs)
         day = date(2025, 10, 18)
         optimal = p.calculate_score_for_day(LOC, h.get(day), h, [])[0]
@@ -560,7 +611,9 @@ class ScoringTests(unittest.TestCase):
         dry = series(date(2025, 8, 20), 60, precipitation_sum=3.0, relative_humidity_2m_mean=40.0)
         humid = series(date(2025, 8, 20), 60, precipitation_sum=3.0, relative_humidity_2m_mean=90.0)
         self.assertEqual(base - 3, p.calculate_score_for_day(LOC, dry[-1], p.History(dry), [])[0])
-        self.assertEqual(base + 5, p.calculate_score_for_day(LOC, humid[-1], p.History(humid), [])[0])
+        self.assertEqual(base + 3, p.calculate_score_for_day(LOC, humid[-1], p.History(humid), [])[0])
+        forecast_only = series(date(2025, 8, 20), 60, source=p.SOURCE_FORECAST, precipitation_sum=3.0, relative_humidity_2m_mean=90.0)
+        self.assertEqual(p.humidity_adjustment(p.History(forecast_only), date(2025, 10, 18)), 0)
 
     def test_seasonal_params_and_location_overrides(self):
         self.assertEqual(p.get_seasonal_params(date(2025, 9, 1))["rain_window"], 14)
@@ -711,7 +764,8 @@ class ScoringTests(unittest.TestCase):
         no_frost = p.History([dict(r, temperature_2m_min=4.0) for r in recs])
         mild_score = p.calculate_score_for_day(LOC, daily, no_frost, [])[0]
         self.assertLess(score, p.VERY_FAVOURABLE_THRESHOLD)
-        self.assertLess(score, p.DEFAULT_ALERT_THRESHOLD)
+        # v18: softer frost penalties (6 instead of 10 for a hard freeze) mean this scenario no longer
+        # drops below the alert threshold; it must still score below the unfrozen scenario.
         self.assertLess(score, mild_score)
         breakdown = p.score_breakdown(LOC, daily, hist)
         self.assertEqual(breakdown["late_season_decay"], -p.late_season_decay_penalty(day, LOC))
@@ -749,8 +803,10 @@ class ScoringTests(unittest.TestCase):
 
     def test_rain_score_saturates_without_inventing_a_wet_penalty(self):
         self.assertEqual(p.rainfall_score(0), 0)
-        self.assertEqual(p.rainfall_score(30), 15)
-        self.assertEqual(p.rainfall_score(60), p.FLUSH_RAIN_SCORE_MAX)
+        self.assertEqual(p.rainfall_score(20), 15)
+        self.assertEqual(p.rainfall_score(p.RAINFALL_TRIGGER_SATURATION_MM), p.FLUSH_RAIN_SCORE_MAX)
+        self.assertEqual(p.rainfall_score(40, p.RAINFALL_BACKGROUND_SATURATION_MM), 15)
+        self.assertEqual(p.rainfall_score(p.RAINFALL_BACKGROUND_SATURATION_MM, p.RAINFALL_BACKGROUND_SATURATION_MM), p.FLUSH_RAIN_SCORE_MAX)
         self.assertEqual(p.rainfall_score(250), p.FLUSH_RAIN_SCORE_MAX)
         self.assertEqual(p.rainfall_score(-5), 0)
 

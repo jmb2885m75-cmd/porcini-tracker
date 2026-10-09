@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-iw6mw_pWhq-Sb4rn8SGOc1tw'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'" />
+  <title>Porcini Tracker</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #111827; color: #e5e7eb; margin: 0; padding: 24px; }
+    main { max-width: 720px; margin: 48px auto; }
+    a { color: #a7f3d0; }
+    .card { background: #1f2937; border: 1px solid #374151; border-radius: 12px; padding: 20px; margin: 20px 0; }
+    pre { white-space: pre-wrap; background: #111827; border: 1px solid #374151; border-radius: 8px; padding: 12px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>🍄 Porcini Tracker</h1>
+    <p><a href="porcini_report.html">Open the latest forecast dashboard</a></p>
+    <div class="card" id="alert-preview" hidden>
+      <h2>📨 Alert Preview</h2>
+      <p><small id="alert-status"></small></p>
+      <pre id="alert-text"></pre>
+    </div>
+  </main>
+  <script nonce="iw6mw_pWhq-Sb4rn8SGOc1tw">
+    fetch('porcini_report.html', {cache: 'no-store'})
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+      .then(function (text) {
+        var doc = new DOMParser().parseFromString(text, 'text/html');
+        var data = JSON.parse(doc.getElementById('porcini-data').textContent);
+        if (!data.alert || !data.alert.message) return;
+        document.getElementById('alert-text').textContent = data.alert.message;
+        document.getElementById('alert-status').textContent = data.alert.will_send
+          ? 'This message will be sent with this run.'
+          : 'Preview only: no alert is triggered by this run.';
+        document.getElementById('alert-preview').hidden = false;
+      })
+      .catch(function () {});
+  </script>
+</body>
+</html>

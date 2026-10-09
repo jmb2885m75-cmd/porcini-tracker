@@ -123,6 +123,20 @@ class PrivacyTests(unittest.TestCase):
         self.assertIsNotNone(nonce)
         self.assertIn(f'<script nonce="{nonce.group(1)}">', report)
 
+    def test_dashboard_payload_embeds_alert_and_index_reads_it(self):
+        cfg = {"ALERT_THRESHOLD": 65, "LOCATIONS": [{"name": "Private woodland"}]}
+        report = p.generate_dashboard_html(cfg, [], "1. Private woodland — 80/100")
+        match = re.search(r'<script id="porcini-data" type="application/json">(.*?)</script>', report, re.S)
+        alert = json.loads(match.group(1))["alert"]
+        self.assertIn("Location 1", alert["message"])
+        self.assertNotIn("Private woodland", alert["message"])
+        self.assertFalse(alert["will_send"])
+        index = p.generate_index_html()
+        self.assertIn("porcini_report.html", index)
+        self.assertIn("porcini-data", index)
+        self.assertNotIn("__CSP_NONCE__", index)
+        self.assertNotIn("Weekend Porcini Forecast", index)
+
     def test_dashboard_template_requires_alert_preview_placeholder(self):
         with patch.object(report_module, "TEMPLATE_PATH", Mock(read_text=Mock(return_value="<!doctype html>"))):
             with self.assertRaisesRegex(

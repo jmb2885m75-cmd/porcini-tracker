@@ -700,6 +700,7 @@ def main() -> int:
     message = build_alert_message(alert_results, dashboard_url, mode, threshold) if alert_results else ""
     report_html = generate_dashboard_html(cfg, analyses, message, bool(alert_queue), mode, harvest_log)
     REPORT_PATH.write_text(report_html, encoding="utf-8")
+    INDEX_PATH.write_text(generate_index_html(), encoding="utf-8")
 
     print("\n### Porcini Summary")
     for item in analyses:
@@ -754,7 +755,7 @@ from scoring import (
 from report import (
     MODE_DEFAULT, MODE_OUTLOOK, MODE_FINAL, MODE_LABELS, _TIER_LABELS, _STAGE_LABELS,
     public_location_alias, alias_public_text, dashboard_payload, render_observation_log,
-    generate_dashboard_html, alert_threshold, store_forecast_snapshot,
+    generate_dashboard_html, generate_index_html, alert_threshold, store_forecast_snapshot,
 )
 from notify import (
     DEFAULT_ALERT_THRESHOLD, MIN_ALERT_GAP_DAYS, FRIDAY_POLICY_THURSDAY_ONLY, FRIDAY_POLICY_ALL_ABOVE,

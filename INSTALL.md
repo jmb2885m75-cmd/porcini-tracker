@@ -24,7 +24,7 @@ and writes `porcini_report.html`. A separate GitHub issue workflow validates har
 - The daily score chart includes optional rain and temperature context lines, each scaled to its visible range and
   shown behind the more prominent favourability index. Toggle them from the chart legend; gaps mean weather data
   is unavailable for those dates.
-- `index.html` links to the generated report; GitHub Actions updates its alert preview.
+- `index.html` links to the generated report; its alert preview is read at view time from the data embedded in the report.
 
 ## 1. Setup
 

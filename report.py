@@ -92,6 +92,14 @@ def dashboard_payload(cfg: Dict[str, Any], analysis: List[Dict[str, Any]], mode:
         configured = cfg.get("LOCATIONS", [])
         location = configured[index] if index < len(configured) and isinstance(configured[index], dict) else {}
         harvests = [dict(h, location=alias) for h in item.get("harvests", [])]
+        backtest = item.get("backtest", {})
+        auc_display = ""
+        if backtest.get("auc") is not None:
+            finds_n, no_finds_n = backtest.get("find_days", 0), backtest.get("no_find_days", 0)
+            if finds_n >= 15 and no_finds_n >= 15:
+                auc_display = f"AUC {backtest['auc']:.2f} ({finds_n} finds / {no_finds_n} no-finds)"
+            else:
+                auc_display = f"not enough visits yet ({finds_n}/{no_finds_n})"
         locations.append({
             "name": alias,
             "scores": [[d, v["score"], v["status"], v.get("quality", ""),
@@ -105,7 +113,8 @@ def dashboard_payload(cfg: Dict[str, Any], analysis: List[Dict[str, Any]], mode:
                 for mix in [forecast_rain_window_mix(records, location, parse_date(r["date"]))]
             ],
             "harvests": harvests,
-            "backtest": item.get("backtest", {}),
+            "backtest": backtest,
+            "auc_display": auc_display,
         })
     repo = os.environ.get("GITHUB_REPOSITORY") or cfg.get("GITHUB_REPOSITORY") or "jmb2885m75-cmd/porcini-tracker"
     return {"mode": mode, "threshold": threshold, "repo": repo, "branch": str(cfg.get("GITHUB_BRANCH", "main")), "locations": locations}

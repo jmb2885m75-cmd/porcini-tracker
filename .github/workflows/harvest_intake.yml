@@ -43,6 +43,13 @@ jobs:
         run: |
           if [ -n "$CONFIG_JSON" ]; then printf '%s' "$CONFIG_JSON" > config.json; fi
 
+      - name: Checkout data branch
+        uses: actions/checkout@v4
+        with:
+          ref: data
+          path: data
+        continue-on-error: true
+
       - name: Refresh issue form location list
         continue-on-error: true
         run: python harvest.py --sync-form
@@ -57,13 +64,16 @@ jobs:
           ISSUE_AUTHOR_ASSOCIATION: ${{ github.event.issue.author_association }}
           REPO_OWNER: ${{ github.repository_owner }}
           HARVEST_ERROR_FILE: ${{ runner.temp }}/harvest_error.md
+          DATA_DIR: data
         run: python harvest.py
 
       - name: Rescore and rebuild dashboard
         id: build
         if: steps.ingest.outcome == 'success'
+        env:
+          DATA_DIR: data
         run: |
-          pip install requests
+          pip install -r requirements.txt
           python porcini.py
 
       - name: Commit updated data
@@ -72,14 +82,15 @@ jobs:
         env:
           ISSUE: ${{ github.event.issue.number }}
         run: |
+          cd data
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           touch alert_state.json
-          git add harvest_log.json porcini_db.json index.html porcini_report.html alert_state.json .github/ISSUE_TEMPLATE/harvest.yml
+          git add harvest_log.json porcini_db.json index.html porcini_report.html alert_state.json
           if ! git diff --cached --quiet; then
             git commit -m "🍄 Record harvest from issue #$ISSUE [skip ci]"
-            git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
-            git push
+            git pull --rebase --autostash origin data
+            git push origin data
           fi
 
       - name: Report result on the issue

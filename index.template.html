@@ -456,8 +456,8 @@ __OBSERVATION_LOG__
       $('pageinfo').textContent = 'Page ' + (page + 1) + ' / ' + pages + ' (' + list.length + ' days)';
     }
     function backtest() {
-      var b = loc.backtest || {};
-      $('backtest').textContent = b.observed_days ? 'Observed visits only (unvisited days are unknown): ' + b.finds_above_threshold + '/' + b.find_days + ' find-days and ' + b.no_finds_above_threshold + '/' + b.no_find_days + ' no-find days scored at least ' + b.threshold + '/100. Find-day scores include the harvest; no-find scores exclude their own observation. After a find, scores drop for up to 14 days (flush depletion). Small, potentially biased sample; not calibrated.' : 'Backtest: no recorded visit days with a stored weather record yet.';
+      var b = loc.backtest || {}, auc = loc.auc_display ? loc.auc_display + '. ' : '';
+      $('backtest').textContent = b.observed_days ? auc + 'Observed visits only (unvisited days are unknown): ' + b.finds_above_threshold + '/' + b.find_days + ' find-days and ' + b.no_finds_above_threshold + '/' + b.no_find_days + ' no-find days scored at least ' + b.threshold + '/100. Find-day scores include the harvest; no-find scores exclude their own observation. After a find, scores drop for up to 14 days (flush depletion). Small, potentially biased sample; not calibrated.' : 'Backtest: no recorded visit days with a stored weather record yet.';
     }
     function refresh() { fillRange(); draw(); rows(); backtest(); weatherOverview(); renderTimeline(); }
     function showLocation(index) {

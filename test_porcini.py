@@ -784,6 +784,39 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(results["no_finds_above_threshold"], 1)
         self.assertGreater(results["mean_score_on_no_find_days"], 20)
 
+    def test_auc_perfect_separation(self):
+        self.assertEqual(p.compute_auc([80, 90, 100], [10, 20, 30]), 1.0)
+
+    def test_auc_inverted_separation(self):
+        self.assertEqual(p.compute_auc([10, 20, 30], [80, 90, 100]), 0.0)
+
+    def test_auc_all_tied(self):
+        self.assertEqual(p.compute_auc([50, 50, 50], [50, 50, 50]), 0.5)
+
+    def test_auc_with_ties(self):
+        self.assertEqual(p.compute_auc([50, 60], [50, 40]), 0.875)
+
+    def test_auc_empty_lists(self):
+        self.assertIsNone(p.compute_auc([], [50]))
+        self.assertIsNone(p.compute_auc([50], []))
+        self.assertIsNone(p.compute_auc([], []))
+
+    def test_backtest_includes_auc(self):
+        recs = series(date(2025, 8, 1), 60, precipitation_sum=5.0)
+        found = {"date": "2025-09-05", "observation_type": "harvest", "yield_tier": "small"}
+        no_find = {"date": "2025-09-26", "observation_type": "no_mushrooms"}
+        results = p.backtest_accuracy(LOC, recs, [found, no_find], 40)
+        self.assertIsNotNone(results["auc"])
+        self.assertIsNone(p.backtest_accuracy(LOC, recs, [found], 40)["auc"])
+
+    def test_dashboard_payload_auc_display(self):
+        def display(finds, no_finds, auc):
+            item = {"records": [], "scores": {}, "harvests": [], "backtest": {"auc": auc, "find_days": finds, "no_find_days": no_finds}}
+            return p.dashboard_payload({"LOCATIONS": [{}]}, [item], "default")["locations"][0]["auc_display"]
+        self.assertEqual(display(15, 16, 0.8), "AUC 0.80 (15 finds / 16 no-finds)")
+        self.assertEqual(display(3, 20, 0.8), "not enough visits yet (3/20)")
+        self.assertEqual(display(0, 0, None), "")
+
     def test_flush_depletion_penalty_tiers(self):
         h = [date(2025, 9, 18)]
         expected = {0: 0, 1: -35, 2: -25, 3: -25, 4: -12, 6: -12, 7: 0}

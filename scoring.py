@@ -945,6 +945,14 @@ def update_daily_scores(location: Dict[str, Any], records: List[Dict[str, Any]],
     return updated
 
 
+def compute_auc(positives: List[int], negatives: List[int]) -> Optional[float]:
+    """AUC = sum((p > n) + 0.5 * (p == n)) / (len(positives) * len(negatives)); None if either list is empty."""
+    if not positives or not negatives:
+        return None
+    wins = sum(1 if p > n else 0.5 if p == n else 0 for p in positives for n in negatives)
+    return wins / (len(positives) * len(negatives))
+
+
 def backtest_accuracy(location: Dict[str, Any], records: List[Dict[str, Any]],
                       harvests: List[Dict[str, Any]], threshold: int) -> Dict[str, Any]:
     """Compare scores only with dated visits; unvisited days are unknown, not failures.
@@ -1012,6 +1020,7 @@ def backtest_accuracy(location: Dict[str, Any], records: List[Dict[str, Any]],
         },
         "post_harvest_false_positives": len(post_harvest_false_positives),
         "find_weekday_counts": find_weekday_counts(location, harvests),
+        "auc": compute_auc(finds, no_finds),
     }
 
 

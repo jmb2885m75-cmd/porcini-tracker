@@ -86,7 +86,9 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           touch alert_state.json
-          git add harvest_log.json porcini_db.json index.html porcini_report.html alert_state.json
+          for f in harvest_log.json porcini_db.json index.html porcini_report.html alert_state.json; do
+            if [ -e "$f" ]; then git add "$f"; fi
+          done
           if ! git diff --cached --quiet; then
             git commit -m "🍄 Record harvest from issue #$ISSUE [skip ci]"
             git pull --rebase --autostash origin data

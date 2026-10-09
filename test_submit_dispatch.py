@@ -36,6 +36,12 @@ class DispatchTests(unittest.TestCase):
         self.assertNotIn("${{", commit_step)
         self.assertIn("$ISSUE", commit_step)
 
+    def test_workflows_stage_only_existing_generated_files(self):
+        for name in ("porcini_tracker", "update_report", "harvest_intake"):
+            workflow = Path(f".github/workflows/{name}.yml").read_text(encoding="utf-8")
+            self.assertIn('if [ -e "$f" ]; then git add "$f"; fi', workflow, name)
+            self.assertNotRegex(workflow, r"git add [^\n]*index\.html", name)
+
 
 if __name__ == "__main__":
     unittest.main()

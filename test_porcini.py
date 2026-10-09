@@ -1250,6 +1250,13 @@ class WeatherFailureTests(unittest.TestCase):
         self.assertIn(">N/A</div>", report)
         self.assertNotIn(">0%</div>", report)
 
+    def test_season_toggle_defaults_on_with_visible_active_style(self):
+        tpl = Path(report_module.__file__).with_name("index.template.html").read_text(encoding="utf-8")
+        self.assertRegex(tpl, r'id="seasonOnly"[^>]*aria-pressed="true"')
+        self.assertIn('.season-toggle[aria-pressed="true"] { background: #166534;', tpl)
+        wf = Path(report_module.__file__).with_name(".github") / "workflows" / "update_report.yml"
+        self.assertIn("- 'index.template.html'", wf.read_text(encoding="utf-8"))
+
     def test_dashboard_renders_verdict_and_score_color_everywhere(self):
         status = "⚠️ Watch closely"
         report = p.generate_dashboard_html(

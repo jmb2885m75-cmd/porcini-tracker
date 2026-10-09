@@ -9,6 +9,7 @@ on:
       - 'scoring.py'
       - 'report.py'
       - 'notify.py'
+      - 'index.template.html'
   workflow_dispatch:
 
 permissions:

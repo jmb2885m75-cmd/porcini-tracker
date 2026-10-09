@@ -9,6 +9,7 @@ from contextlib import redirect_stdout
 from unittest.mock import Mock, patch
 
 import porcini as p
+import report as report_module
 
 
 def rec(d, source=p.SOURCE_ARCHIVE, **kw):
@@ -114,11 +115,21 @@ class PrivacyTests(unittest.TestCase):
         self.assertNotIn("Private woodland", report)
         self.assertIn("Content-Security-Policy", report)
         self.assertIn("default-src 'none'", report)
+        self.assertNotIn("{{ALERT_PREVIEW}}", report)
+        self.assertIn("<h2>📨 Alert Preview</h2>", report)
         for marker in ("function todayStr()", "today-row", "today-line"):
             self.assertIn(marker, report)
         nonce = re.search(r"script-src 'nonce-([^']+)'", report)
         self.assertIsNotNone(nonce)
         self.assertIn(f'<script nonce="{nonce.group(1)}">', report)
+
+    def test_dashboard_template_requires_alert_preview_placeholder(self):
+        with patch.object(report_module, "TEMPLATE_PATH", Mock(read_text=Mock(return_value="<!doctype html>"))):
+            with self.assertRaisesRegex(
+                ValueError,
+                r"index\.template\.html is missing the \{\{ALERT_PREVIEW\}\} placeholder for alert preview injection",
+            ):
+                report_module.generate_dashboard_html({}, [])
 
     def test_location_coordinates_are_not_persisted(self):
         db = {"locations": {"Location 1": {
@@ -396,6 +407,9 @@ class ScoringTests(unittest.TestCase):
         percentile = p.historical_rainfall_percentile(p.History(records), target)
         self.assertIsNotNone(percentile)
         self.assertEqual(percentile, 0.5)
+        self.assertIsNotNone(
+            p.historical_rainfall_percentile(p.History(records), date(2024, 2, 28))
+        )
 
     def test_runoff_backfill_is_limited_to_four_hundred_days(self):
         today = datetime.now(timezone.utc).date()
@@ -1103,7 +1117,6 @@ class WeatherFailureTests(unittest.TestCase):
             patch.object(p, "check_db_integrity", return_value=[]),
             patch.object(p, "save_json"),
             patch.object(p, "generate_dashboard_html", return_value=""),
-            patch.object(p, "inject_alert_into_index"),
             patch("pathlib.Path.write_text"),
         ):
             self.assertEqual(p.main(), 0)

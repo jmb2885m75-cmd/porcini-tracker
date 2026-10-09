@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-__CSP_NONCE__'; style-src 'unsafe-inline'; connect-src https://api.github.com; img-src data:; form-action 'none'; base-uri 'none'; object-src 'none'" />
+  <title>Porcini Tracker Dashboard</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1220; --surface: #151f30; --surface-raised: #1c293b; --border: #34445a;
+      --text: #edf2f7; --muted: #b8c4d4; --accent: #a7f3d0; --focus: #fbbf24;
+      --space-1: .35rem; --space-2: .65rem; --space-3: 1rem; --space-4: 1.4rem;
+      --radius: 12px; --small: .82rem; --body: 1rem; --heading: 1.35rem;
+    }
+    * { box-sizing: border-box; }
+    body { font: var(--body)/1.5 system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: clamp(1rem, 3vw, 2rem); }
+    .wrap { max-width: 1100px; margin: 0 auto; }
+    h1 { color: var(--accent); font-size: clamp(1.7rem, 4vw, 2.2rem); line-height: 1.2; margin: 0 0 var(--space-1); }
+    h2 { color: var(--text); font-size: var(--heading); line-height: 1.3; margin: var(--space-4) 0 var(--space-2); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: var(--space-3); }
+    .card { min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: clamp(.9rem, 2vw, 1.2rem); margin-bottom: var(--space-3); }
+    .score-line { display: flex; flex-wrap: wrap; align-items: center; gap: .65rem; }
+    .score { font-size: clamp(2.3rem, 6vw, 3rem); font-weight: 800; line-height: 1; }
+    .verdict-tag { display: inline-block; background: var(--surface-raised); border: 1px solid var(--border); border-radius: 999px; padding: .25rem .65rem; font-size: var(--small); font-weight: 700; }
+    .name { font-size: 1.12rem; margin-top: var(--space-2); font-weight: 700; }
+    .meta { color: var(--muted); margin-top: var(--space-2); font-size: var(--small); }
+    .best-day strong { color: var(--text); margin-left: .3rem; }
+    .badge { display: inline-block; background: #065f46; border-radius: 999px; padding: 2px 10px; font-size: var(--small); }
+    .go { background: #065f46; } .nogo { background: #7f1d1d; }
+    .alert { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; white-space: pre-wrap; }
+    .note { color: #fcd34d; font-size: var(--small); }
+    .toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-2); margin: 0 0 var(--space-2); }
+    .toolbar label, .field { display: grid; gap: 3px; color: var(--muted); font-size: var(--small); }
+    .season-toggle[aria-pressed="true"] { background: var(--accent, #2e7d32); color: #fff; font-weight: 700; }
+    .toolbar strong { align-self: center; }
+    #chartbox { position: relative; }
+    #chart { display: block; width: 100%; height: auto; background: var(--bg); border-radius: 8px; }
+    #tip { position: absolute; display: none; pointer-events: none; background: #030712; border: 1px solid #64748b; border-radius: 8px; padding: 8px 10px; font-size: var(--small); max-width: min(290px, 80vw); z-index: 5; }
+    .info-button { border-radius: 50%; color: var(--accent); font-size: 1rem; line-height: 1; padding: 4px 7px; }
+    dialog { width: min(34rem, calc(100% - 2rem)); max-height: 80vh; overflow: auto; background: var(--surface); color: var(--text); border: 1px solid #718096; border-radius: var(--radius); padding: 1.25rem; }
+    dialog::backdrop { background: rgb(3 7 18 / 75%); }
+    #timeline-scroll { overflow-x: auto; overscroll-behavior-x: contain; padding: 8px 2px 12px; }
+    #timeline { display: flex; gap: 3px; min-width: max-content; align-items: stretch; }
+    .timeline-day { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; width: 42px; min-height: 80px; padding: 14px 3px 5px; margin: 0; border-radius: 7px; }
+    .timeline-day.weekend { background: #273449; }
+    .timeline-day.forecast { border-style: dashed; }
+    .timeline-day.low-confidence { background-image: repeating-linear-gradient(135deg, transparent, transparent 6px, rgb(251 191 36 / 18%) 6px, rgb(251 191 36 / 18%) 9px); }
+    .timeline-day.selected { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .timeline-day.today::after { content: "Today"; position: absolute; top: 0; color: #facc15; font-weight: 700; font-size: .65rem; }
+    .timeline-day .month { position: absolute; top: 0; font-size: .65rem; color: var(--accent); }
+    .timeline-day .tick { height: 7px; border-left: 1px solid #9ca3af; }
+    .timeline-day .day-number { font-weight: bold; }
+    .timeline-day .observation { min-height: 1.2em; font-size: .9rem; }
+    .timeline-day .heat { width: 100%; height: 4px; background: var(--border); border-radius: 3px; overflow: hidden; }
+    .timeline-day .heat span { display: block; height: 100%; }
+    .legend { display: flex; flex-wrap: wrap; gap: var(--space-1); margin: var(--space-2) 0; }
+    .legend-chip { display: inline-flex; align-items: center; gap: .35rem; background: var(--surface-raised); border: 1px solid var(--border); border-radius: 999px; padding: .25rem .6rem; color: var(--muted); font-size: var(--small); }
+    .legend-chip input { accent-color: var(--accent); margin: 0; }
+    .line-key { display: inline-block; width: 1rem; border-top: 2px solid; }
+    .line-score { border-color: #34d399; } .line-rain { border-color: #60a5fa; } .line-temp { border-color: #fb923c; }
+    .table-wrap { overflow-x: auto; border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: var(--small); }
+    th, td { text-align: left; padding: .55rem .6rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    th { color: var(--accent); background: var(--surface-raised); font-weight: 700; }
+    tbody tr:nth-child(even) { background: rgb(255 255 255 / 2%); }
+    .weather-table th:nth-child(n+2), .weather-table td:nth-child(n+2), .observation-table th:nth-child(n+2), .observation-table td:nth-child(n+2) { text-align: right; }
+    tr.today-row td { background: rgb(250 204 21 / 16%); font-weight: 700; } tr.today-row td:first-child { box-shadow: inset 3px 0 0 #facc15; }
+    .timeline-day.today { border: 2px solid #facc15; background-color: rgb(250 204 21 / 12%); }
+    tr.row { cursor: pointer; } tr.row:hover { background: var(--surface-raised); }
+    input, select, button { background: var(--bg); color: var(--text); border: 1px solid #607086; border-radius: 7px; padding: .55rem .7rem; font: inherit; }
+    button { cursor: pointer; }
+    button:hover { background: var(--surface-raised); border-color: #94a3b8; }
+    :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+    .pin { cursor: pointer; }
+    .log-summary { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0 0 var(--space-2); }
+    .log-summary .chip { background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius); padding: .4rem .7rem; font-size: var(--small); color: var(--muted); }
+    .log-summary .chip strong { color: var(--text); display: block; }
+    .log-table td.notes { white-space: normal; min-width: 12rem; max-width: 26rem; }
+    .log-table td.num, .log-table th.num { text-align: right; }
+    .type-found { color: var(--accent); } .type-none { color: #fca5a5; }
+    #logform { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); align-items: end; }
+    #harvest-fields { display: contents; }
+    #harvest-fields[hidden] { display: none; }
+    #logform button { justify-self: start; }
+    details { margin-top: var(--space-2); }
+    summary { color: var(--accent); cursor: pointer; }
+    @media (max-width: 600px) {
+      #logform { grid-template-columns: 1fr; }
+      #harvest-fields { display: contents; }
+      .toolbar > * { flex: 1 1 auto; }
+      .toolbar input, .toolbar select { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🍄 Porcini Tracker Dashboard</h1>
+    <div class="meta"><span class="badge">__MODE_LABEL__</span> Generated __GENERATED__ UTC</div>
+    <div class="grid">__CARDS__</div>{{ALERT_PREVIEW}}
+    <h2>🌦 Rain &amp; Temperature Overview <button class="info-button" type="button" data-info="weather" aria-label="How to read the weather factors" aria-haspopup="dialog" aria-controls="info-dialog">ⓘ</button></h2>
+    <div class="card">
+      <div class="toolbar"><label for="loc">Location<select id="loc"></select></label>
+        <button type="button" id="prev-loc">◀ Previous Location</button>
+        <button type="button" id="next-loc">Next Location ▶</button>
+        <strong id="loc-indicator" aria-live="polite"></strong></div>
+      <div id="weather-label" class="meta"></div>
+      <div class="table-wrap"><table class="weather-table"><thead><tr><th>Date</th><th>High °C</th><th>Low °C</th><th>Rain mm</th></tr></thead><tbody id="weather-rows"></tbody></table></div>
+    </div>
+    <h2>📈 Daily Score History &amp; Field Observations <button class="info-button" type="button" data-info="score" aria-label="How the forecast score is calculated" aria-haspopup="dialog" aria-controls="info-dialog">ⓘ</button></h2>
+    <div class="card">
+      <div class="toolbar"><label for="range">Date range<select id="range"></select></label><button type="button" id="seasonOnly" class="season-toggle" aria-pressed="false" title="Show only Aug 15 – Dec 10">Season Only</button></div>
+      <div id="chartbox"><svg id="chart" viewBox="0 0 900 320" role="img" aria-label="Daily favourability index with optional rain and temperature trends"></svg><div id="tip"></div></div>
+      <div class="meta">Favourability index (0–100; not a probability). Hover or tap for daily details. Dashed line marks the alert threshold.</div>
+      <div class="legend" aria-label="Chart and timeline legend">
+        <span class="legend-chip"><span class="line-key line-score"></span>Favourability index</span>
+        <label class="legend-chip"><input id="rain-toggle" type="checkbox" checked> <span class="line-key line-rain"></span>Rain</label>
+        <label class="legend-chip"><input id="temp-toggle" type="checkbox" checked> <span class="line-key line-temp"></span>Temperature</label>
+        <span class="legend-chip">🍄 Found</span><span class="legend-chip">❌ No find</span>
+        <span class="legend-chip">Solid: recorded · Dashed: forecast</span>
+        <span class="legend-chip">Striped: forecast-heavy rain window (lower confidence)</span>
+      </div>
+      <div class="meta">Choose a date or use previous/next; arrow keys also move through days.</div>
+      <div class="toolbar">
+        <button id="day-prev" type="button" aria-label="Previous day">&larr; Previous day</button>
+        <label for="selected-date">Choose date:</label> <input type="date" id="selected-date" />
+        <button id="day-next" type="button" aria-label="Next day">Next day &rarr;</button>
+        <strong id="selected-label" aria-live="polite"></strong>
+      </div>
+      <div id="timeline-scroll" tabindex="0" role="group" aria-label="Daily forecast timeline. Use left and right arrow keys to change day.">
+        <div id="timeline"></div>
+      </div>
+      <div id="selected-day" class="meta" aria-live="polite"></div>
+      <div id="pins" class="meta"></div>
+      <div id="backtest" class="meta"></div>
+    </div>
+    <h2>🔎 Observation Browser <button class="info-button" type="button" data-info="observations" aria-label="How field observations affect the score" aria-haspopup="dialog" aria-controls="info-dialog">ⓘ</button></h2>
+    <div class="card">
+      <div class="toolbar"><label for="q">Date filter<input id="q" placeholder="ISO prefix, e.g. 2025-09" /></label>
+      <label for="src">Weather source<select id="src"><option value="">All sources</option><option>archive</option><option>forecast</option><option>sample</option></select></label></div>
+      <div class="table-wrap"><table class="observation-table"><thead><tr><th>Date</th><th>Index</th><th>Tmax</th><th>Rain mm</th><th>Wind</th><th>Soil °C</th><th>RH %</th><th>Source</th></tr></thead><tbody id="rows"></tbody></table></div>
+      <div class="toolbar"><button id="prev">&laquo; Previous</button><button id="next">Next &raquo;</button><span id="pageinfo" class="meta"></span></div>
+    </div>
+__OBSERVATION_LOG__
+    <h2>📝 Log Field Observation</h2>
+    <div class="card">
+      <form id="logform">
+        <label class="field" for="ldate">Observation date<input type="date" id="ldate" required /></label>
+        <label class="field" for="lobservation">Visit result<select id="lobservation"><option value="harvest">Found mushrooms</option><option value="no_mushrooms">Visited, found no mushrooms</option></select></label>
+        <span id="harvest-fields">
+          <label class="field" for="ltier">Harvest size<select id="ltier"><option>small</option><option>medium</option><option>large</option></select></label>
+          <label class="field" for="lstage">Mushroom stage<select id="lstage"><option>buttons_young</option><option>prime</option><option>old_overripe</option></select></label>
+          <label class="field" for="lweight">Weight (g)<input type="number" id="lweight" min="0" /></label>
+        </span>
+        <label class="field" for="lnotes">Notes<input id="lnotes" placeholder="Optional notes" /></label>
+        <label class="field" for="lkey">GitHub token (fine-grained PAT, Actions: Read and write)<input type="password" id="lkey" autocomplete="off" /></label>
+        <button type="submit" id="lsubmit">Submit observation</button>
+        <button type="button" id="lsavedraft">Save as draft</button>
+        <p id="draft-status" class="note" aria-live="polite">Observations are submitted directly to the shared log. If you are offline, save a draft in this browser instead.</p>
+      </form>
+      <details><summary>How observations are submitted and saved</summary><p class="note">Submit queues a GitHub Actions workflow that validates the observation and commits it to harvest_log.json; it appears here after the workflow finishes and the report is regenerated. Your token is stored in this browser's localStorage. If GitHub rejects the request, nothing is lost: fix the form or use Save as draft, which stays only in this browser. A no-find report caps that day's score at 20.</p></details>
+      <div class="toolbar"><button id="export">Export drafts (JSON)</button><button id="clearlogs">Clear drafts</button><button id="clearsynced">Clear synced observations</button></div>
+      <pre id="exported" class="alert" style="display:none"></pre>
+    </div>
+  </div>
+  <dialog id="info-dialog" aria-labelledby="info-title" aria-describedby="info-copy" aria-modal="true">
+    <h2 id="info-title"></h2>
+    <div id="info-copy"></div>
+    <button id="info-close" type="button">Close</button>
+  </dialog>
+  <dialog id="delete-dialog" aria-labelledby="delete-title" aria-modal="true">
+    <h2 id="delete-title">Delete observation?</h2>
+    <p id="delete-copy"></p>
+    <button id="delete-confirm" type="button">Delete</button>
+    <button id="delete-cancel" type="button">Cancel</button>
+  </dialog>
+  <script id="porcini-data" type="application/json">__DATA__</script>
+  <script nonce="__CSP_NONCE__">
+  (function () {
+    var D = JSON.parse(document.getElementById('porcini-data').textContent);
+    var LOG_KEY = 'porcini_logs_v1', SYNCED_KEY = 'porcini_synced_v1', KEY_KEY = 'porcini_api_key', PAGE = 15;
+    var LABELS = { small: 'Small', medium: 'Medium', large: 'Large', buttons_young: 'Buttons / young', prime: 'Prime', old_overripe: 'Old / overripe' };
+    function $(id) { return document.getElementById(id); }
+    function loadLogs() { try { return JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); } catch (e) { return []; } }
+    function saveLogs(l) { try { localStorage.setItem(LOG_KEY, JSON.stringify(l)); } catch (e) { alert('Could not save: storage unavailable'); } }
+    function loadSynced() { try { return JSON.parse(localStorage.getItem(SYNCED_KEY) || '[]'); } catch (e) { return []; } }
+    function saveSynced(l) { try { localStorage.setItem(SYNCED_KEY, JSON.stringify(l)); } catch (e) { /* display cache only */ } }
+    var MONTHS = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'Jun.', 'Jul.', 'Aug.', 'Sep.', 'Oct.', 'Nov.', 'Dec.'];
+    var WEEKDAYS = ['Sun.', 'Mon.', 'Tue.', 'Wed.', 'Thu.', 'Fri.', 'Sat.'];
+    function todayStr() { var n = new Date(); return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0'); }
+    function fmtDate(s) {
+      var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || '');
+      if (!m) return s;
+      var day = new Date(s + 'T00:00:00Z');
+      return isNaN(day.getTime()) ? s : WEEKDAYS[day.getUTCDay()] + ' ' + m[3] + ' ' + MONTHS[+m[2] - 1] + ' ' + m[1];
+    }
+    function localToday() {
+      var d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+    var INFO = {
+      weather: ['Weather indicators', [
+        'Daily high and low are averaged to form a 20-day mean air temperature signal. A value near 13°C contributes most to the heuristic score; this is based on one regional porcini study, not a universal optimum.',
+        'The main rain signal blends recent rain (7 complete days, weight 0.6) with background rain over the seasonal window (26 days by default; 14 early season Aug–Sep, 30 in December; weight 0.4). It adds points up to a 100 mm plateau; steady rain (many days over 2 mm) earns a small bonus over one heavy event; there is no extra uncalibrated penalty for sustained high totals.',
+        'A 90-day rainfall comparison can apply a modest drought penalty when rain is unusually low against seasonally comparable prior-year periods. It is omitted until enough local archive data is available.',
+        'Measured 0–7 cm soil moisture is a smaller supporting signal. Soil texture and local calibration affect what a given volumetric moisture value means. Soil temperature adds up to 5 points at its seasonal optimum by default; its weight and optimal range can be overridden per location.',
+        'Concentrated heavy rain can apply a small runoff penalty. No new high-rain cutoff is assumed without local observations. Aspect/canopy rain-retention adjustments are not used.',
+        'Weather source “archive” means recorded past weather; “forecast” means weather-model data; “sample” means generated example weather, not observations. Weather inputs guide the score; they do not confirm mushrooms are present.'
+      ]],
+      score: ['How the forecast score works', [
+        'The weather feed supplies 7 forecast days in total (including today) and the previous 7 days of recent weather. That means it can score up to 6 calendar days after today; beyond that, this dashboard has no forward weather forecast. Older observed weather is kept in the archive.',
+        'For each scored day, the model uses rain from the 26 complete days before that date and mean air temperature from the 20 complete days before it, when at least 80% of daily values are present. Forecast rain/temperature on the scored date itself do not count. Temperature is scored against an optimal range that varies by season (or a per-location optimal_temp_range). Air humidity above 85% adds a small bonus and below 60% a small penalty, and a find 7–14 days earlier with still-favourable conditions adds a post-flush persistence bonus. A seasonally matched 90-day rainfall comparison adds a modest drought penalty when enough prior-year records exist. The score also includes measured soil moisture, a modest host-tree/site signal, and field observations.',
+        'The score does not vary by weekday or lunar phase. The cited preprint found associations in one central European beech-forest setting; applying it elsewhere needs local validation. No-find observations cap that date at 20 and slightly lower the next two days. After a harvest the flush is depleted, so scores drop by up to 40 points and recover over about 14 days (smaller for small or young-button finds); that is depletion logic, not a prediction error.',
+        'The displayed 0–100 value is a favourability index, not a measured chance of finding mushrooms or a probability. The default alert threshold is 55 index points; the index and its thresholds are not locally calibrated.',
+        'Verdict guide below 25 Not worth it; 25–44 Unlikely; 45–59 Long shot; 60 up to the alert threshold Worth a look; at or above ALERT_THRESHOLD (65 unless configured; 75 minimum for the top tier) Favourable conditions; 75+ Very favourable conditions. The alert boundary follows ALERT_THRESHOLD.',
+        'The chart’s light rain and temperature lines add weather context on their own visible-range scales; missing readings leave gaps, and the score line remains the main signal.',
+        'Harvest-quality notes are separate from flush favorability: recent average highs flag possible maggot risk or prime-quality conditions and do not change the score.',
+        'Scores are estimates and become less dependable further into the 7-day weather forecast. Conditions and local growing spots can differ from the weather grid.'
+      ]],
+      observations: ['How observations affect the forecast', [
+        'A visit with no mushrooms is valid evidence, not missing data. On that date it caps the score at 20, even if weather or other bonuses would have made it higher.',
+        'A no-find observation also lowers scores slightly on the next two days. A harvest depletes the flush: scores fall 40/30/20/10 points over the following ~14 days while the mycelium recovers. It does not change unrelated dates.',
+        'A recent button-stage find modestly raises scores for a few days; an old/overripe find modestly lowers them. Repeated medium or large finds can add a small site-familiarity bonus. These weights are heuristic, not calibrated.',
+        '🍄 marks a recorded find and ❌ marks a visit where none were found. Draft observations stay in this browser until submitted; synced ones are already in the shared log.'
+      ]]
+    };
+    var infoDialog = $('info-dialog');
+    function openInfo(key) {
+      var info = INFO[key];
+      if (!info) return;
+      $('info-title').textContent = info[0];
+      var body = $('info-copy'); body.textContent = '';
+      info[1].forEach(function (text) { var p = document.createElement('p'); p.textContent = text; body.appendChild(p); });
+      infoDialog.showModal();
+    }
+    document.querySelectorAll('[data-info]').forEach(function (button) {
+      button.addEventListener('click', function () { openInfo(button.dataset.info); });
+    });
+    $('info-close').addEventListener('click', function () { infoDialog.close(); });
+    infoDialog.addEventListener('click', function (ev) { if (ev.target === infoDialog) infoDialog.close(); });
+    var NS = 'http://www.w3.org/2000/svg';
+    function el(name, attrs, text) { var e = document.createElementNS(NS, name); for (var k in attrs) e.setAttribute(k, attrs[k]); if (text) e.textContent = text; return e; }
+    var loc = D.locations[0], pinned = [], page = 0, selectedDate = '', activeTimelineDates = [];
+    if (!loc) { $('chart').replaceWith(document.createTextNode('No locations configured.')); return; }
+    D.locations.forEach(function (l, i) { var o = document.createElement('option'); o.value = i; o.textContent = l.name; $('loc').appendChild(o); });
+    function years() { var s = {}; loc.scores.forEach(function (r) { s[r[0].slice(0, 4)] = 1; }); return Object.keys(s).sort(); }
+    function fillRange() {
+      var cur = $('range').value; $('range').textContent = '';
+      ['all', '365'].concat(years()).forEach(function (v) { var o = document.createElement('option'); o.value = v; o.textContent = v === 'all' ? 'All years' : v === '365' ? 'Last 365 days' : v; $('range').appendChild(o); });
+      if (cur) $('range').value = cur;
+    }
+    function inSeason(d) { var md = d.slice(5, 10); return md >= '08-15' && md <= '12-10'; }
+    function inRange(d) { if ($('seasonOnly').getAttribute('aria-pressed') === 'true' && !inSeason(d)) return false; var r = $('range').value || 'all'; if (r === 'all') return true; if (r === '365') return Date.parse(d) >= Date.now() - 365 * 864e5; return d.slice(0, 4) === r; }
+    function harvestsFor() {
+      var h = (loc.harvests || []).map(function (x) { return Object.assign({}, x, { origin: x.origin === 'log' ? 'harvest_log.json' : 'config' }); });
+      loadSynced().filter(function (x) { return x.location === loc.name; }).forEach(function (x) { h.push(Object.assign({ origin: 'synced' }, x)); });
+      loadLogs().filter(function (x) { return x.location === loc.name; }).forEach(function (x) { h.push(Object.assign({ origin: 'draft (unsynced)' }, x)); });
+      return h;
+    }
+    function recMap() { var m = {}; loc.records.forEach(function (r) { m[r[0]] = r; }); return m; }
+    function rainMixMap() { var m = {}; (loc.rain_mix || []).forEach(function (r) { m[r[0]] = r; }); return m; }
+    function scoreMap() { var m = {}; loc.scores.forEach(function (r) { m[r[0]] = r; }); return m; }
+    function weatherOverview() {
+      var body = $('weather-rows'), today = todayStr();
+      body.textContent = '';
+      var future = loc.records.filter(function (r) { return r[0] >= today; }).slice(0, 7);
+      var rows = future.length ? future : loc.records.slice(-7).reverse();
+      $('weather-label').textContent = rows.length ? (future.length ? 'Forecast and current day' : 'Forecast unavailable; showing latest weather observations') : 'Weather overview unavailable: no weather records have been loaded.';
+      rows.forEach(function (r) {
+        var tr = document.createElement('tr');
+        if (r[0] === today) tr.className = 'today-row';
+        [r[0], r[1], r[2], r[3]].forEach(function (v, i) {
+          var td = document.createElement('td');
+          td.textContent = v == null ? '—' : (i === 0 ? fmtDate(v) + (r[0] === today ? ' · Today' : '') : v + (i < 3 ? '°' : ''));
+          tr.appendChild(td);
+        });
+        body.appendChild(tr);
+      });
+    }
+    function describe(date, extra) {
+      var rm = recMap()[date], sm = scoreMap()[date], out = [fmtDate(date)];
+      if (sm) { out.push('Score: ' + sm[1] + '% – ' + sm[4] + ' — ' + sm[2]); if (sm[3]) out.push(sm[3]); }
+      if (rm) {
+        var weather = [];
+        if (rm[1] != null) weather.push('Tmax ' + rm[1] + '°C');
+        if (rm[2] != null) weather.push('Tmin ' + rm[2] + '°C');
+        if (rm[3] != null) weather.push('Rain ' + rm[3] + ' mm');
+        if (rm[4] != null) weather.push('wind ' + rm[4] + ' km/h');
+        if (rm[6] != null) weather.push('RH ' + rm[6] + '%');
+        if (weather.length) out.push(weather.join(', ') + ' (' + rm[8] + ')');
+      }
+      (extra || []).forEach(function (h) { out.push((h.observation_type === 'no_mushrooms' ? '🔎 No mushrooms found' : '🍄 ' + (h.yield_tier || '?') + ' / ' + (h.cap_stage || '?')) + ' (' + h.origin + ')' + (h.weight_g ? ' / ' + h.weight_g + ' g' : '') + (h.notes ? ' - ' + h.notes : '')); });
+      return out;
+    }
+    function setLines(node, lines) { node.textContent = ''; lines.forEach(function (t, i) { var d = document.createElement('div'); d.textContent = t; if (i === 0) d.style.fontWeight = 'bold'; node.appendChild(d); }); }
+    function renderPins() {
+      var box = $('pins'); box.textContent = '';
+      pinned.forEach(function (p, i) { var d = document.createElement('div'); d.textContent = '📌 ' + describe(p.date, p.h).join(' | ') + ' (click to unpin)'; d.style.cursor = 'pointer'; d.onclick = function () { pinned.splice(i, 1); renderPins(); }; box.appendChild(d); });
+    }
+    function pin(date) { var hs = harvestsFor().filter(function (h) { return h.date === date; }); if (!pinned.some(function (p) { return p.date === date; })) pinned.push({ date: date, h: hs }); renderPins(); }
+    function nearestDate(target, dates) {
+      if (!dates.length) return '';
+      var best = dates[0], distance = Infinity, time = Date.parse(target + 'T00:00:00Z');
+      dates.forEach(function (d) { var delta = Math.abs(Date.parse(d + 'T00:00:00Z') - time); if (delta < distance) { best = d; distance = delta; } });
+      return best;
+    }
+    function initialDate() { return nearestDate(new Date().toISOString().slice(0, 10), loc.scores.map(function (r) { return r[0]; })); }
+    function renderSelectedDay() {
+      var sm = scoreMap()[selectedDate], rm = recMap()[selectedDate], hs = harvestsFor().filter(function (h) { return h.date === selectedDate; });
+      $('selected-label').textContent = selectedDate ? 'Selected: ' + fmtDate(selectedDate) : 'No score dates available';
+      $('selected-date').value = selectedDate;
+      var lines = selectedDate ? [fmtDate(selectedDate)] : [];
+      if (sm) lines.push('Favourability index: ' + sm[1] + '/100 — ' + sm[4] + ' — ' + sm[2], 'Weather: ' + (rm && rm[8] === 'forecast' ? 'forecast' : 'recorded'));
+      else if (selectedDate) lines.push('No score is available for this day.');
+      hs.forEach(function (h) { lines.push((h.observation_type === 'no_mushrooms' ? '❌ Visited, no mushrooms found' : '🍄 Mushrooms found') + (h.origin === 'draft (unsynced)' ? ' (unsynced draft)' : h.origin === 'synced' ? ' (synced)' : '')); });
+      setLines($('selected-day'), lines);
+    }
+    function renderTimeline() {
+      var days = loc.scores;
+      if (!selectedDate && days.length) selectedDate = initialDate();
+      var target = selectedDate || initialDate(), centerDate = nearestDate(target, days.map(function (r) { return r[0]; }));
+      var center = days.findIndex(function (r) { return r[0] === centerDate; });
+      var start = Math.max(0, center - 17), end = Math.min(days.length, start + 35);
+      start = Math.max(0, end - 35);
+      activeTimelineDates = days.slice(start, end).map(function (r) { return r[0]; });
+      var timeline = $('timeline'), records = recMap(), scores = scoreMap(), rainMix = rainMixMap(), visits = harvestsFor();
+      timeline.textContent = '';
+      activeTimelineDates.forEach(function (d, i) {
+        var row = scores[d], weather = records[d], observations = visits.filter(function (h) { return h.date === d; });
+        var day = document.createElement('button');
+        day.type = 'button'; day.className = 'timeline-day';
+        var weekday = new Date(d + 'T00:00:00Z').getUTCDay();
+        if (weekday === 0 || weekday === 6) day.classList.add('weekend');
+        if (weather && weather[8] === 'forecast') day.classList.add('forecast');
+        var mix = rainMix[d], confidenceTip = '';
+        if (mix && mix[3] > 0 && mix[1] / mix[3] >= __HEAVY_FORECAST_RAIN_SHARE__) {
+          day.classList.add('low-confidence');
+          confidenceTip = 'Lower confidence: preceding rain window uses forecast rain for ' + mix[1] + ' of ' + mix[3] + ' days; archive data covers ' + mix[2] + ' days.';
+        }
+        if (d === selectedDate) day.classList.add('selected');
+        if (d === todayStr()) day.classList.add('today');
+        day.setAttribute('aria-pressed', d === selectedDate ? 'true' : 'false');
+        var previous = activeTimelineDates[i - 1], dateParts = d.split('-');
+        if ((dateParts[2] === '01' || !previous || previous.slice(0, 7) !== d.slice(0, 7)) && d !== new Date().toISOString().slice(0, 10)) {
+          var month = document.createElement('span'); month.className = 'month'; month.textContent = MONTHS[+dateParts[1] - 1].slice(0, 3); day.appendChild(month);
+        }
+        var tick = document.createElement('span'); tick.className = 'tick'; tick.setAttribute('aria-hidden', 'true'); day.appendChild(tick);
+        var number = document.createElement('span'); number.className = 'day-number'; number.textContent = dateParts[2]; day.appendChild(number);
+        var marker = document.createElement('span'); marker.className = 'observation'; marker.textContent = observations.map(function (h) { return h.observation_type === 'no_mushrooms' ? '❌' : '🍄'; }).join(''); day.appendChild(marker);
+        var heat = document.createElement('span'); heat.className = 'heat'; heat.setAttribute('aria-hidden', 'true');
+        var bar = document.createElement('span'), score = row ? row[1] : 0;
+        bar.style.width = Math.max(0, Math.min(100, score)) + '%'; bar.style.background = row ? row[5] : '';
+        heat.appendChild(bar); day.appendChild(heat);
+        day.title = fmtDate(d) + (row ? ', favourability index ' + score + ' of 100' : '') + (observations.length ? ', ' + observations.map(function (h) { return h.observation_type === 'no_mushrooms' ? 'no mushrooms found' : 'mushrooms found'; }).join(', ') : '') + (confidenceTip ? '. ' + confidenceTip : '');
+        day.setAttribute('aria-label', day.title);
+        day.addEventListener('click', function () { selectedDate = d; renderTimeline(); var button = Array.prototype.find.call($('timeline').children, function (item) { return item.getAttribute('aria-label').indexOf(fmtDate(d)) === 0; }); if (button) button.focus(); });
+        timeline.appendChild(day);
+      });
+      renderSelectedDay();
+    }
+    function moveSelectedDay(direction) {
+      var all = loc.scores.map(function (r) { return r[0]; }), index = all.indexOf(selectedDate);
+      if (index < 0) index = all.indexOf(nearestDate(selectedDate || initialDate(), all));
+      var next = all[Math.max(0, Math.min(all.length - 1, index + direction))];
+      if (next) { selectedDate = next; renderTimeline(); var button = Array.prototype.find.call($('timeline').children, function (item) { return item.getAttribute('aria-label').indexOf(fmtDate(next)) === 0; }); if (button) button.focus(); }
+    }
+    function draw() {
+      var svg = $('chart'), tip = $('tip'); svg.textContent = '';
+      var pts = loc.scores.filter(function (r) { return inRange(r[0]); });
+      if (!pts.length) { svg.appendChild(el('text', { x: 20, y: 40, fill: '#cbd5e1' }, 'No data in range')); return; }
+      var W = 900, H = 320, L = 36, R = 145, T = 10, B = 24;
+      var t0 = Date.parse(pts[0][0]), t1 = Date.parse(pts[pts.length - 1][0]);
+      function x(t) { return L + (W - L - R) * ((t - t0) / Math.max(1, t1 - t0)); }
+      function y(v) { return T + (H - T - B) * (1 - v / 100); }
+      [0, 25, 50, 75, 100].forEach(function (v) { svg.appendChild(el('line', { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: '#374151' })); svg.appendChild(el('text', { x: 4, y: y(v) + 4, fill: '#9ca3af', 'font-size': 11 }, String(v))); });
+      svg.appendChild(el('line', { x1: L, x2: W - R, y1: y(D.threshold), y2: y(D.threshold), stroke: '#f59e0b', 'stroke-dasharray': '5 4' }));
+      svg.appendChild(el('text', { x: L, y: H - 6, fill: '#9ca3af', 'font-size': 11 }, fmtDate(pts[0][0])));
+      svg.appendChild(el('text', { x: W - R, y: H - 6, fill: '#9ca3af', 'font-size': 11, 'text-anchor': 'end' }, fmtDate(pts[pts.length - 1][0])));
+      var todayTime = Date.parse(todayStr());
+      if (todayTime >= t0 && todayTime <= t1) {
+        svg.appendChild(el('line', { x1: x(todayTime), x2: x(todayTime), y1: T, y2: H - B, stroke: '#facc15', 'stroke-width': 2, 'stroke-dasharray': '4 3', class: 'today-line', 'aria-hidden': 'true' }));
+        svg.appendChild(el('text', { x: x(todayTime), y: T + 10, fill: '#facc15', 'font-size': 11, 'font-weight': 700, 'text-anchor': 'middle', class: 'today-label' }, 'Today'));
+      }
+      var records = recMap();
+      function drawWeatherSeries(index, className, color, enabled) {
+        if (!enabled) return null;
+        var values = pts.map(function (r) {
+          var record = records[r[0]], value = record && record[index];
+          return typeof value === 'number' && isFinite(value) ? value : null;
+        });
+        var visible = values.filter(function (value) { return value !== null; });
+        if (!visible.length) return null;
+        var low = Math.min.apply(null, visible), high = Math.max.apply(null, visible);
+        function weatherY(value) { return T + (H - T - B) * (1 - (high === low ? .5 : (value - low) / (high - low))); }
+        var run = [];
+        function appendRun() {
+          if (run.length > 1) svg.appendChild(el('polyline', { points: run.join(' '), fill: 'none', stroke: color, 'stroke-width': 1.7, opacity: .42, class: 'weather-series ' + className, 'aria-hidden': 'true' }));
+          else if (run.length === 1) {
+            var xy = run[0].split(',');
+            svg.appendChild(el('circle', { cx: xy[0], cy: xy[1], r: 2, fill: color, opacity: .5, class: 'weather-series ' + className, 'aria-hidden': 'true' }));
+          }
+        }
+        values.forEach(function (value, i) {
+          if (value === null) { appendRun(); run = []; }
+          else run.push(x(Date.parse(pts[i][0])) + ',' + weatherY(value));
+        });
+        appendRun();
+        return { min: low, max: high };
+      }
+      var rain = drawWeatherSeries(3, 'weather-rain', '#60a5fa', $('rain-toggle').checked);
+      var temperature = drawWeatherSeries(1, 'weather-temperature', '#fb923c', $('temp-toggle').checked);
+      function rangeText(value) { return Math.round(value * 10) / 10; }
+      svg.appendChild(el('text', { x: W - 5, y: T + 12, fill: '#93c5fd', 'font-size': 10, 'text-anchor': 'end' }, rain ? 'rain max ' + rangeText(rain.max) + ' mm' : 'rain unavailable'));
+      svg.appendChild(el('text', { x: W - 5, y: T + 26, fill: '#fdba74', 'font-size': 10, 'text-anchor': 'end' }, temperature ? 'temp ' + rangeText(temperature.min) + '–' + rangeText(temperature.max) + ' °C' : 'temp unavailable'));
+      svg.appendChild(el('polyline', { points: pts.map(function (r) { return x(Date.parse(r[0])) + ',' + y(r[1]); }).join(' '), fill: 'none', stroke: '#34d399', 'stroke-width': 2.8, class: 'score-series' }));
+      pts.forEach(function (r) { svg.appendChild(el('circle', { cx: x(Date.parse(r[0])), cy: y(r[1]), r: 2.2, fill: r[5], class: 'score-point', 'aria-hidden': 'true' })); });
+      var sm = scoreMap(), cursor = el('line', { y1: T, y2: H - B, stroke: '#6b7280', visibility: 'hidden' });
+      svg.appendChild(cursor);
+      var markerOffsets = {};
+      harvestsFor().forEach(function (h) {
+        var t = Date.parse(h.date); if (isNaN(t) || t < t0 || t > t1) return;
+        var offset = markerOffsets[h.date] || 0; markerOffsets[h.date] = offset + 18;
+        var found = h.observation_type !== 'no_mushrooms';
+        var c = el('text', { x: x(t), y: y(sm[h.date] ? sm[h.date][1] : 0) - offset, 'text-anchor': 'middle', 'font-size': 17, class: 'pin', tabindex: '0', role: 'button' }, found ? '🍄' : '❌');
+        var markerLabel = fmtDate(h.date) + (found ? ': mushrooms found' : ': visited, no mushrooms found');
+        c.setAttribute('aria-label', markerLabel); c.appendChild(el('title', {}, markerLabel));
+        c.addEventListener('click', function (ev) { ev.stopPropagation(); pin(h.date); selectedDate = h.date; renderTimeline(); setLines(tip, describe(h.date, harvestsFor().filter(function (item) { return item.date === h.date; }))); tip.style.display = 'block'; });
+        c.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); pin(h.date); } });
+        svg.appendChild(c);
+      });
+      svg.onmousemove = function (ev) {
+        var box = svg.getBoundingClientRect(), px = (ev.clientX - box.left) * (W / box.width), t = t0 + (px - L) / (W - L - R) * (t1 - t0), best = pts[0], bd = Infinity;
+        pts.forEach(function (r) { var dd = Math.abs(Date.parse(r[0]) - t); if (dd < bd) { bd = dd; best = r; } });
+        var hs = harvestsFor().filter(function (h) { return h.date === best[0]; });
+        setLines(tip, describe(best[0], hs)); tip.dataset.date = best[0]; tip.style.display = 'block';
+        tip.style.left = Math.min(ev.clientX - box.left + 12, box.width - 290) + 'px'; tip.style.top = (ev.clientY - box.top + 12) + 'px';
+        cursor.setAttribute('x1', x(Date.parse(best[0]))); cursor.setAttribute('x2', x(Date.parse(best[0]))); cursor.setAttribute('visibility', 'visible');
+      };
+      svg.onmouseleave = function () { tip.style.display = 'none'; cursor.setAttribute('visibility', 'hidden'); };
+      svg.onclick = function (ev) {
+        if (ev.target.classList && ev.target.classList.contains('pin')) return;
+        if (tip.dataset.date) { pin(tip.dataset.date); selectedDate = tip.dataset.date; renderTimeline(); }
+      };
+    }
+    function rows() {
+      var q = $('q').value.trim(), s = $('src').value, sm = scoreMap();
+      var list = loc.records.filter(function (r) { return inRange(r[0]) && (!q || r[0].indexOf(q) === 0) && (!s || r[8] === s); }).reverse();
+      var pages = Math.max(1, Math.ceil(list.length / PAGE)); page = Math.min(page, pages - 1);
+      var body = $('rows'); body.textContent = '';
+      list.slice(page * PAGE, page * PAGE + PAGE).forEach(function (r) {
+        var tr = document.createElement('tr'); tr.className = r[0] === todayStr() ? 'row today-row' : 'row';
+        [fmtDate(r[0]) + (r[0] === todayStr() ? ' · Today' : ''), sm[r[0]] ? sm[r[0]][1] : '', r[1], r[3], r[4], r[5], r[6], r[8]].forEach(function (v) { var td = document.createElement('td'); td.textContent = v == null ? '' : v; tr.appendChild(td); });
+        tr.onclick = function () { pin(r[0]); };
+        body.appendChild(tr);
+      });
+      $('pageinfo').textContent = 'Page ' + (page + 1) + ' / ' + pages + ' (' + list.length + ' days)';
+    }
+    function backtest() {
+      var b = loc.backtest || {};
+      $('backtest').textContent = b.observed_days ? 'Observed visits only (unvisited days are unknown): ' + b.finds_above_threshold + '/' + b.find_days + ' find-days and ' + b.no_finds_above_threshold + '/' + b.no_find_days + ' no-find days scored at least ' + b.threshold + '/100. Find-day scores include the harvest; no-find scores exclude their own observation. After a find, scores drop for up to 14 days (flush depletion). Small, potentially biased sample; not calibrated.' : 'Backtest: no recorded visit days with a stored weather record yet.';
+    }
+    function refresh() { fillRange(); draw(); rows(); backtest(); weatherOverview(); renderTimeline(); }
+    function showLocation(index) {
+      var n = D.locations.length, i = ((index % n) + n) % n;
+      loc = D.locations[i]; $('loc').value = i; pinned = []; page = 0; selectedDate = initialDate();
+      $('loc-indicator').textContent = loc.name + ' (Location ' + (i + 1) + ' of ' + n + ')';
+      renderPins(); refresh();
+    }
+    $('loc').onchange = function () { showLocation(+this.value); };
+    $('prev-loc').onclick = function () { showLocation(+$('loc').value - 1); };
+    $('next-loc').onclick = function () { showLocation(+$('loc').value + 1); };
+    $('loc-indicator').textContent = loc.name + ' (Location 1 of ' + D.locations.length + ')';
+    $('seasonOnly').onclick = function () { this.setAttribute('aria-pressed', this.getAttribute('aria-pressed') === 'true' ? 'false' : 'true'); page = 0; draw(); rows(); };
+    $('range').onchange = function () { page = 0; draw(); rows(); };
+    $('rain-toggle').onchange = $('temp-toggle').onchange = draw;
+    $('q').oninput = $('src').onchange = function () { page = 0; rows(); };
+    $('prev').onclick = function () { page = Math.max(0, page - 1); rows(); };
+    $('next').onclick = function () { page++; rows(); };
+    $('day-prev').onclick = function () { moveSelectedDay(-1); };
+    $('day-next').onclick = function () { moveSelectedDay(1); };
+    $('selected-date').onchange = function () { if (this.value) { selectedDate = this.value; renderTimeline(); } };
+    $('timeline-scroll').addEventListener('keydown', function (ev) {
+      if (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') { ev.preventDefault(); moveSelectedDay(ev.key === 'ArrowLeft' ? -1 : 1); }
+    });
+    function toggleHarvestFields() { $('harvest-fields').hidden = $('lobservation').value !== 'harvest'; }
+    $('lobservation').onchange = toggleHarvestFields;
+    toggleHarvestFields();
+    function setObservationDate() { if (!$('ldate').value) $('ldate').value = localToday(); }
+    setObservationDate();
+    function readEntry() {
+      var entry = { location: loc.name, date: $('ldate').value, observation_type: $('lobservation').value, notes: $('lnotes').value };
+      if (entry.observation_type === 'harvest') {
+        entry.yield_tier = $('ltier').value; entry.cap_stage = $('lstage').value;
+        entry.weight_g = $('lweight').value === '' ? undefined : +$('lweight').value;
+      }
+      return entry;
+    }
+    function resetForm() { $('logform').reset(); toggleHarvestFields(); setObservationDate(); }
+    function setStatus(t) { $('draft-status').textContent = t; }
+    $('lsavedraft').onclick = function () {
+      var logs = loadLogs(); logs.push(readEntry()); saveLogs(logs); resetForm(); draw();
+      setStatus('Draft saved in this browser only. It is not in the shared log.');
+    };
+    $('lkey').value = (function () { try { return localStorage.getItem(KEY_KEY) || ''; } catch (e) { return ''; } })();
+    $('logform').onsubmit = function (e) {
+      e.preventDefault();
+      var entry = readEntry(), key = $('lkey').value.trim();
+      if (!key) { setStatus('❌ Enter a GitHub token (fine-grained PAT with Actions: Read and write) to submit, or use Save as draft.'); return; }
+      try { localStorage.setItem(KEY_KEY, key); } catch (err) { /* optional */ }
+      var inputs = {
+        location: entry.location, date: entry.date || '', observation_type: entry.observation_type,
+        yield_tier: entry.yield_tier || '', cap_stage: entry.cap_stage || '',
+        weight_g: entry.weight_g === undefined ? '' : String(entry.weight_g), notes: entry.notes || ''
+      };
+      $('lsubmit').disabled = true; setStatus('Submitting…');
+      fetch('https://api.github.com/repos/' + D.repo + '/actions/workflows/submit-observation.yml/dispatches', {
+        method: 'POST',
+        headers: { 'Accept': 'application/vnd.github+json', 'Authorization': 'Bearer ' + key, 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ref: D.branch || 'main', inputs: inputs })
+      })
+        .then(function (r) {
+          if (r.status === 204) { resetForm(); setStatus('✅ Submitted. GitHub workflow queued; refresh later to see synced log.'); return; }
+          return r.json().catch(function () { return {}; }).then(function (b) {
+            var hint = { 401: 'Check your token.', 403: 'The token needs Actions: Read and write on this repository.', 404: 'Repository or workflow not found, or the token cannot access it.', 422: 'GitHub rejected the request (check the branch and workflow inputs).' }[r.status] || '';
+            setStatus('❌ GitHub error ' + r.status + (b.message ? ': ' + b.message : '') + '. ' + hint + ' Correct and retry, or use Save as draft.');
+          });
+        })
+        .catch(function () { setStatus('❌ Could not reach GitHub. Use Save as draft to keep this observation in this browser.'); })
+        .then(function () { $('lsubmit').disabled = false; });
+    };
+    $('export').onclick = function () { var pre = $('exported'); pre.style.display = 'block'; pre.textContent = JSON.stringify(loadLogs(), null, 2); };
+    $('clearlogs').onclick = function () { if (confirm('Delete all drafts stored in this browser?')) { saveLogs([]); draw(); } };
+    $('clearsynced').onclick = function () { if (confirm('Clear synced observations shown from this browser? They stay in the shared log and reappear when the report is regenerated.')) { saveSynced([]); draw(); } };
+    (function () {
+      var lf = $('log-loc'), tf = $('log-type');
+      if (!lf || !tf) return;
+      function filterLog() {
+        var shown = 0;
+        document.querySelectorAll('#log-rows tr').forEach(function (tr) {
+          var ok = (!lf.value || tr.dataset.location === lf.value) && (!tf.value || tr.dataset.type === tf.value);
+          tr.hidden = !ok; if (ok) shown++;
+        });
+        $('log-count').textContent = shown + ' shown';
+      }
+      lf.onchange = filterLog; tf.onchange = filterLog; filterLog();
+    })();
+    (function () {
+      var dlg = $('delete-dialog'), body = $('log-rows');
+      if (!dlg || !body) return;
+      var pending = null;
+      function status(t) { $('delete-status').textContent = t; }
+      function entryId(e) {
+        if (e.submitted_at) return (e.location || '') + '|' + e.submitted_at;
+        return typeof e.issue === 'number' ? 'issue-' + e.issue : '';
+      }
+      function gh(path, opts, key) {
+        opts = opts || {};
+        opts.headers = Object.assign({ 'Accept': 'application/vnd.github+json', 'Authorization': 'Bearer ' + key, 'X-GitHub-Api-Version': '2022-11-28' }, opts.headers || {});
+        return fetch('https://api.github.com' + path, opts).then(function (r) {
+          return r.json().catch(function () { return {}; }).then(function (b) {
+            if (!r.ok) { var err = new Error(b.message || ('GitHub error ' + r.status)); err.status = r.status; throw err; }
+            return b;
+          });
+        });
+      }
+      function deleteEntry(id, key) {
+        var file = '/repos/' + D.repo + '/contents/harvest_log.json', ref = encodeURIComponent(D.branch || 'main');
+        return Promise.all([gh('/user', {}, key), gh('/repos/' + D.repo, {}, key), gh(file + '?ref=' + ref, {}, key)]).then(function (res) {
+          var login = res[0].login, perms = res[1].permissions || {}, meta = res[2];
+          if (!perms.push && !perms.admin) throw new Error('Your token needs write access to this repository.');
+          var log = JSON.parse(decodeURIComponent(escape(atob(meta.content.replace(/\s/g, '')))));
+          var idx = -1;
+          log.harvests.forEach(function (e, i) { if (idx < 0 && entryId(e) === id) idx = i; });
+          if (idx < 0) { var gone = new Error('Entry not found; it may already have been deleted.'); gone.gone = true; throw gone; }
+          var removed = log.harvests[idx];
+          if (!perms.admin && removed.reporter !== login) throw new Error('You can only delete entries you submitted.');
+          log.harvests.splice(idx, 1);
+          var text = JSON.stringify(log, null, 2) + '\n';
+          return gh(file, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              message: 'Delete observation ' + id + ' (deleted by ' + login + ')\n\nRemoved entry: ' + JSON.stringify(removed),
+              content: btoa(unescape(encodeURIComponent(text))), sha: meta.sha, branch: D.branch || 'main'
+            })
+          }, key);
+        });
+      }
+      body.addEventListener('click', function (ev) {
+        var btn = ev.target.closest && ev.target.closest('.del-btn');
+        if (!btn) return;
+        pending = btn.closest('tr');
+        var c = pending.children;
+        $('delete-copy').textContent = 'Delete the ' + c[2].textContent.trim() + ' entry for ' + c[1].textContent + ' on ' + c[0].textContent + '? This cannot be undone from the dashboard.';
+        dlg.showModal();
+      });
+      $('delete-cancel').onclick = function () { pending = null; dlg.close(); };
+      $('delete-confirm').onclick = function () {
+        var row = pending, key = '';
+        try { key = ($('lkey').value || localStorage.getItem(KEY_KEY) || '').trim(); } catch (e) { key = ($('lkey').value || '').trim(); }
+        dlg.close();
+        if (!row) return;
+        if (!key) { status('❌ Enter your GitHub token in the observation form first.'); return; }
+        status('Deleting…');
+        deleteEntry(row.dataset.id, key).then(function () {
+          row.remove(); status('✅ Entry deleted. Scores and charts update the next time the report is regenerated.');
+          $('log-type').onchange();
+        }).catch(function (err) {
+          if (err.gone) { row.remove(); $('log-type').onchange(); }
+          var hint = err.status === 403 || err.status === 404 ? ' The token needs Contents: Read and write on this repository.' : '';
+          status('❌ ' + err.message + hint);
+        });
+      };
+    })();
+    refresh();
+  })();
+  </script>
+</body>
+</html>

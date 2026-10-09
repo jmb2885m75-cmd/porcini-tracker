@@ -2,14 +2,13 @@
   "last_alert_date": "2026-10-02",
   "locations": {
     "Location 1": {
-      "last_alert_date": "2026-10-08",
-      "last_score": 62,
+      "last_alert_date": "2026-10-09",
+      "last_score": 57,
       "last_status": "✅ Viable conditions",
-      "last_alert_mode": "weekend_outlook",
-      "last_confirmation_date": "2026-10-09"
+      "last_alert_mode": "default"
     },
     "Location 2": {
-      "last_score": 57,
+      "last_score": 46,
       "last_status": "✅ Viable conditions",
       "last_alert_date": "2026-10-08",
       "last_alert_mode": "default"

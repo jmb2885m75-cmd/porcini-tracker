@@ -43831,23 +43831,23 @@
         {
           "date": "2026-10-11",
           "source": "forecast",
-          "precipitation_sum": 3.55,
-          "temperature_2m_max": 11.6,
+          "precipitation_sum": 3.65,
+          "temperature_2m_max": 11.9,
           "temperature_2m_min": 6.9,
           "soil_temperature_0_to_7cm_mean": 10.2,
           "relative_humidity_2m_mean": 87,
           "soil_moisture_0_to_7cm_mean": 0.312,
-          "precip_peak_2h_mm": 1.2,
+          "precip_peak_2h_mm": 1.1,
           "precip_peak_basis": "hourly"
         },
         {
           "date": "2026-10-12",
           "source": "forecast",
           "precipitation_sum": 0.1,
-          "temperature_2m_max": 12.6,
-          "temperature_2m_min": 3.6,
+          "temperature_2m_max": 12.7,
+          "temperature_2m_min": 3.7,
           "soil_temperature_0_to_7cm_mean": 9.7,
-          "relative_humidity_2m_mean": 83,
+          "relative_humidity_2m_mean": 82,
           "soil_moisture_0_to_7cm_mean": 0.307,
           "precip_peak_2h_mm": 0.1,
           "precip_peak_basis": "hourly"
@@ -43856,7 +43856,7 @@
           "date": "2026-10-13",
           "source": "forecast",
           "precipitation_sum": 1.7,
-          "temperature_2m_max": 13.6,
+          "temperature_2m_max": 13.5,
           "temperature_2m_min": 0.0,
           "soil_temperature_0_to_7cm_mean": 8.7,
           "relative_humidity_2m_mean": 86,
@@ -43869,7 +43869,7 @@
           "source": "forecast",
           "precipitation_sum": 1.0,
           "temperature_2m_max": 15.1,
-          "temperature_2m_min": 9.1,
+          "temperature_2m_min": 9.2,
           "soil_temperature_0_to_7cm_mean": 10.9,
           "relative_humidity_2m_mean": 88,
           "soil_moisture_0_to_7cm_mean": 0.301,
@@ -46037,7 +46037,7 @@
         "2017-10-03": {
           "score": 64,
           "status": "✅ Viable conditions",
-          "quality": "Warmer week: higher maggot risk, pick early",
+          "quality": "",
           "source": "archive"
         },
         "2017-10-04": {
@@ -46173,7 +46173,7 @@
           "source": "archive"
         },
         "2017-10-26": {
-          "score": 74,
+          "score": 73,
           "status": "✅ Viable conditions",
           "quality": "",
           "source": "archive"
@@ -48237,7 +48237,7 @@
           "source": "archive"
         },
         "2018-10-05": {
-          "score": 58,
+          "score": 57,
           "status": "✅ Viable conditions",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
@@ -48555,7 +48555,7 @@
           "source": "archive"
         },
         "2018-11-27": {
-          "score": 9,
+          "score": 10,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
@@ -59415,32 +59415,32 @@
           "source": "archive"
         },
         "2023-11-11": {
-          "score": 77,
-          "status": "✅ Viable conditions",
+          "score": 59,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2023-11-12": {
-          "score": 77,
-          "status": "✅ Viable conditions",
+          "score": 65,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2023-11-13": {
-          "score": 77,
-          "status": "✅ Viable conditions",
+          "score": 65,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2023-11-14": {
-          "score": 76,
-          "status": "✅ Viable conditions",
+          "score": 70,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2023-11-15": {
-          "score": 79,
-          "status": "✅ Viable conditions",
+          "score": 73,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
@@ -59451,38 +59451,38 @@
           "source": "archive"
         },
         "2023-11-17": {
-          "score": 79,
-          "status": "✅ Viable conditions",
+          "score": 89,
+          "status": "🔄 Post-flush conditions persist",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2023-11-18": {
-          "score": 75,
-          "status": "✅ Viable conditions",
+          "score": 57,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2023-11-19": {
-          "score": 70,
-          "status": "✅ Viable conditions",
+          "score": 58,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2023-11-20": {
-          "score": 67,
-          "status": "✅ Viable conditions",
+          "score": 55,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2023-11-21": {
-          "score": 71,
-          "status": "✅ Viable conditions",
+          "score": 65,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2023-11-22": {
-          "score": 66,
-          "status": "✅ Viable conditions",
+          "score": 60,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
@@ -59505,8 +59505,8 @@
           "source": "archive"
         },
         "2023-11-26": {
-          "score": 47,
-          "status": "✅ Viable conditions",
+          "score": 57,
+          "status": "🔄 Post-flush conditions persist",
           "quality": "",
           "source": "archive"
         },
@@ -61395,68 +61395,68 @@
           "source": "archive"
         },
         "2024-10-06": {
-          "score": 63,
-          "status": "✅ Viable conditions",
-          "quality": "Cool week: firm caps likely",
-          "source": "archive"
-        },
-        "2024-10-07": {
           "score": 62,
           "status": "✅ Viable conditions",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
+        "2024-10-07": {
+          "score": 44,
+          "status": "🌱 Flush depleted after harvest",
+          "quality": "Cool week: firm caps likely",
+          "source": "archive"
+        },
         "2024-10-08": {
-          "score": 61,
-          "status": "✅ Viable conditions",
+          "score": 49,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2024-10-09": {
-          "score": 68,
-          "status": "✅ Viable conditions",
+          "score": 56,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2024-10-10": {
-          "score": 66,
-          "status": "✅ Viable conditions",
+          "score": 60,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "",
           "source": "archive"
         },
         "2024-10-11": {
-          "score": 68,
-          "status": "✅ Viable conditions",
+          "score": 62,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "",
           "source": "archive"
         },
         "2024-10-12": {
-          "score": 67,
-          "status": "✅ Viable conditions",
+          "score": 59,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "",
           "source": "archive"
         },
         "2024-10-13": {
-          "score": 68,
-          "status": "✅ Viable conditions",
+          "score": 66,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "",
           "source": "archive"
         },
         "2024-10-14": {
-          "score": 68,
-          "status": "✅ Viable conditions",
+          "score": 66,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "",
           "source": "archive"
         },
         "2024-10-15": {
-          "score": 68,
-          "status": "✅ Viable conditions",
+          "score": 72,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "",
           "source": "archive"
         },
         "2024-10-16": {
-          "score": 67,
-          "status": "✅ Viable conditions",
+          "score": 61,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
@@ -61467,92 +61467,92 @@
           "source": "archive"
         },
         "2024-10-18": {
-          "score": 68,
-          "status": "✅ Viable conditions",
+          "score": 78,
+          "status": "🔄 Post-flush conditions persist",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2024-10-19": {
-          "score": 68,
-          "status": "✅ Viable conditions",
+          "score": 33,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2024-10-20": {
-          "score": 68,
-          "status": "✅ Viable conditions",
+          "score": 43,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2024-10-21": {
-          "score": 71,
-          "status": "✅ Viable conditions",
+          "score": 46,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "",
           "source": "archive"
         },
         "2024-10-22": {
-          "score": 71,
-          "status": "✅ Viable conditions",
+          "score": 59,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "",
           "source": "archive"
         },
         "2024-10-23": {
-          "score": 67,
-          "status": "✅ Viable conditions",
+          "score": 55,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "",
           "source": "archive"
         },
         "2024-10-24": {
-          "score": 67,
-          "status": "✅ Viable conditions",
+          "score": 55,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "",
           "source": "archive"
         },
         "2024-10-25": {
-          "score": 66,
-          "status": "✅ Viable conditions",
+          "score": 76,
+          "status": "🔄 Post-flush conditions persist",
           "quality": "",
           "source": "archive"
         },
         "2024-10-26": {
-          "score": 62,
-          "status": "✅ Viable conditions",
+          "score": 72,
+          "status": "🔄 Post-flush conditions persist",
           "quality": "",
           "source": "archive"
         },
         "2024-10-27": {
-          "score": 62,
-          "status": "✅ Viable conditions",
+          "score": 72,
+          "status": "🔄 Post-flush conditions persist",
           "quality": "",
           "source": "archive"
         },
         "2024-10-28": {
-          "score": 61,
-          "status": "✅ Viable conditions",
+          "score": 71,
+          "status": "🔄 Post-flush conditions persist",
           "quality": "",
           "source": "archive"
         },
         "2024-10-29": {
-          "score": 61,
-          "status": "✅ Viable conditions",
+          "score": 71,
+          "status": "🔄 Post-flush conditions persist",
           "quality": "",
           "source": "archive"
         },
         "2024-10-30": {
-          "score": 60,
-          "status": "✅ Viable conditions",
+          "score": 70,
+          "status": "🔄 Post-flush conditions persist",
           "quality": "",
           "source": "archive"
         },
         "2024-10-31": {
-          "score": 55,
-          "status": "✅ Viable conditions",
+          "score": 65,
+          "status": "🔄 Post-flush conditions persist",
           "quality": "",
           "source": "archive"
         },
         "2024-11-01": {
-          "score": 55,
-          "status": "✅ Viable conditions",
+          "score": 65,
+          "status": "🔄 Post-flush conditions persist",
           "quality": "",
           "source": "archive"
         },
@@ -63483,385 +63483,385 @@
           "source": "archive"
         },
         "2025-09-19": {
-          "score": 70,
-          "status": "✅ Viable conditions",
+          "score": 40,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2025-09-20": {
-          "score": 69,
-          "status": "✅ Viable conditions",
+          "score": 49,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2025-09-21": {
-          "score": 63,
-          "status": "✅ Viable conditions",
+          "score": 43,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2025-09-22": {
-          "score": 62,
-          "status": "✅ Viable conditions",
+          "score": 55,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2025-09-23": {
-          "score": 64,
-          "status": "✅ Viable conditions",
+          "score": 57,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2025-09-24": {
-          "score": 65,
-          "status": "✅ Viable conditions",
+          "score": 58,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2025-09-25": {
-          "score": 65,
-          "status": "✅ Viable conditions",
+          "score": 80,
+          "status": "🔄 Post-flush conditions persist",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2025-09-26": {
-          "score": 65,
-          "status": "✅ Viable conditions",
+          "score": 80,
+          "status": "🔄 Post-flush conditions persist",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2025-09-27": {
-          "score": 66,
-          "status": "✅ Viable conditions",
+          "score": 81,
+          "status": "🔄 Post-flush conditions persist",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2025-09-28": {
-          "score": 65,
-          "status": "✅ Viable conditions",
+          "score": 80,
+          "status": "🔄 Post-flush conditions persist",
           "quality": "",
           "source": "archive"
         },
         "2025-09-29": {
-          "score": 64,
-          "status": "✅ Viable conditions",
+          "score": 34,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "",
           "source": "archive"
         },
         "2025-09-30": {
-          "score": 65,
-          "status": "✅ Viable conditions",
+          "score": 45,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "",
           "source": "archive"
         },
         "2025-10-01": {
-          "score": 64,
-          "status": "✅ Viable conditions",
+          "score": 44,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "",
           "source": "archive"
         },
         "2025-10-02": {
-          "score": 63,
-          "status": "✅ Viable conditions",
+          "score": 56,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "",
           "source": "archive"
         },
         "2025-10-03": {
-          "score": 63,
-          "status": "✅ Viable conditions",
+          "score": 56,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "",
           "source": "archive"
         },
         "2025-10-04": {
-          "score": 65,
-          "status": "✅ Viable conditions",
+          "score": 58,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "",
           "source": "archive"
         },
         "2025-10-05": {
-          "score": 65,
-          "status": "✅ Viable conditions",
+          "score": 80,
+          "status": "🔄 Post-flush conditions persist",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2025-10-06": {
-          "score": 64,
-          "status": "✅ Viable conditions",
+          "score": 79,
+          "status": "🔄 Post-flush conditions persist",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2025-10-07": {
-          "score": 62,
-          "status": "✅ Viable conditions",
+          "score": 77,
+          "status": "🔄 Post-flush conditions persist",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2025-10-08": {
-          "score": 62,
-          "status": "✅ Viable conditions",
+          "score": 77,
+          "status": "🔄 Post-flush conditions persist",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2025-10-09": {
-          "score": 61,
-          "status": "✅ Viable conditions",
+          "score": 76,
+          "status": "🔄 Post-flush conditions persist",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2025-10-10": {
-          "score": 61,
-          "status": "✅ Viable conditions",
+          "score": 76,
+          "status": "🔄 Post-flush conditions persist",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2025-10-11": {
-          "score": 61,
-          "status": "✅ Viable conditions",
+          "score": 48,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2025-10-12": {
-          "score": 63,
-          "status": "✅ Viable conditions",
+          "score": 56,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "",
           "source": "archive"
         },
         "2025-10-13": {
-          "score": 63,
-          "status": "✅ Viable conditions",
+          "score": 56,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "",
           "source": "archive"
         },
         "2025-10-14": {
-          "score": 64,
-          "status": "✅ Viable conditions",
+          "score": 63,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "",
           "source": "archive"
         },
         "2025-10-15": {
-          "score": 64,
-          "status": "✅ Viable conditions",
+          "score": 63,
+          "status": "🌱 Flush depleted after harvest",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2025-10-16": {
-          "score": 63,
+          "score": 68,
           "status": "✅ Viable conditions",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2025-10-17": {
-          "score": 66,
-          "status": "✅ Viable conditions",
+          "score": 81,
+          "status": "🔄 Post-flush conditions persist",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2025-10-18": {
-          "score": 67,
-          "status": "✅ Viable conditions",
+          "score": 82,
+          "status": "🔄 Post-flush conditions persist",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2025-10-19": {
-          "score": 64,
-          "status": "✅ Viable conditions",
+          "score": 79,
+          "status": "🔄 Post-flush conditions persist",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2025-10-20": {
-          "score": 53,
-          "status": "✅ Viable conditions",
+          "score": 68,
+          "status": "🔄 Post-flush conditions persist",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2025-10-21": {
-          "score": 53,
-          "status": "✅ Viable conditions",
+          "score": 68,
+          "status": "🔄 Post-flush conditions persist",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2025-10-22": {
-          "score": 54,
-          "status": "✅ Viable conditions",
+          "score": 69,
+          "status": "🔄 Post-flush conditions persist",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2025-10-23": {
-          "score": 56,
-          "status": "✅ Viable conditions",
+          "score": 71,
+          "status": "🔄 Post-flush conditions persist",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2025-10-24": {
-          "score": 55,
-          "status": "✅ Viable conditions",
+          "score": 70,
+          "status": "🔄 Post-flush conditions persist",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2025-10-25": {
-          "score": 56,
-          "status": "✅ Viable conditions",
-          "quality": "Cool week: firm caps likely",
-          "source": "archive"
-        },
-        "2025-10-26": {
-          "score": 54,
-          "status": "✅ Viable conditions",
-          "quality": "Cool week: firm caps likely",
-          "source": "archive"
-        },
-        "2025-10-27": {
-          "score": 56,
-          "status": "✅ Viable conditions",
-          "quality": "Cool week: firm caps likely",
-          "source": "archive"
-        },
-        "2025-10-28": {
-          "score": 57,
-          "status": "✅ Viable conditions",
-          "quality": "Cool week: firm caps likely",
-          "source": "archive"
-        },
-        "2025-10-29": {
-          "score": 60,
-          "status": "✅ Viable conditions",
-          "quality": "Cool week: firm caps likely",
-          "source": "archive"
-        },
-        "2025-10-30": {
-          "score": 59,
-          "status": "✅ Viable conditions",
-          "quality": "Cool week: firm caps likely",
-          "source": "archive"
-        },
-        "2025-10-31": {
-          "score": 60,
-          "status": "✅ Viable conditions",
-          "quality": "Cool week: firm caps likely",
-          "source": "archive"
-        },
-        "2025-11-01": {
-          "score": 56,
-          "status": "✅ Viable conditions",
-          "quality": "Cool week: firm caps likely",
-          "source": "archive"
-        },
-        "2025-11-02": {
-          "score": 55,
-          "status": "✅ Viable conditions",
-          "quality": "Cool week: firm caps likely",
-          "source": "archive"
-        },
-        "2025-11-03": {
-          "score": 58,
-          "status": "✅ Viable conditions",
-          "quality": "Cool week: firm caps likely",
-          "source": "archive"
-        },
-        "2025-11-04": {
           "score": 61,
           "status": "✅ Viable conditions",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
-        "2025-11-05": {
-          "score": 63,
-          "status": "✅ Viable conditions",
-          "quality": "Cool week: firm caps likely",
-          "source": "archive"
-        },
-        "2025-11-06": {
-          "score": 62,
-          "status": "✅ Viable conditions",
-          "quality": "Cool week: firm caps likely",
-          "source": "archive"
-        },
-        "2025-11-07": {
-          "score": 64,
-          "status": "✅ Viable conditions",
-          "quality": "Cool week: firm caps likely",
-          "source": "archive"
-        },
-        "2025-11-08": {
-          "score": 64,
-          "status": "✅ Viable conditions",
-          "quality": "Cool week: firm caps likely",
-          "source": "archive"
-        },
-        "2025-11-09": {
-          "score": 65,
-          "status": "✅ Viable conditions",
-          "quality": "Cool week: firm caps likely",
-          "source": "archive"
-        },
-        "2025-11-10": {
-          "score": 65,
-          "status": "✅ Viable conditions",
-          "quality": "Cool week: firm caps likely",
-          "source": "archive"
-        },
-        "2025-11-11": {
-          "score": 67,
-          "status": "✅ Viable conditions",
-          "quality": "Cool week: firm caps likely",
-          "source": "archive"
-        },
-        "2025-11-12": {
-          "score": 66,
-          "status": "✅ Viable conditions",
-          "quality": "Cool week: firm caps likely",
-          "source": "archive"
-        },
-        "2025-11-13": {
-          "score": 64,
-          "status": "✅ Viable conditions",
-          "quality": "Cool week: firm caps likely",
-          "source": "archive"
-        },
-        "2025-11-14": {
-          "score": 63,
-          "status": "✅ Viable conditions",
-          "quality": "Cool week: firm caps likely",
-          "source": "archive"
-        },
-        "2025-11-15": {
-          "score": 64,
-          "status": "✅ Viable conditions",
-          "quality": "Cool week: firm caps likely",
-          "source": "archive"
-        },
-        "2025-11-16": {
-          "score": 64,
-          "status": "✅ Viable conditions",
-          "quality": "Cool week: firm caps likely",
-          "source": "archive"
-        },
-        "2025-11-17": {
-          "score": 64,
-          "status": "✅ Viable conditions",
-          "quality": "Cool week: firm caps likely",
-          "source": "archive"
-        },
-        "2025-11-18": {
+        "2025-10-26": {
           "score": 59,
           "status": "✅ Viable conditions",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
+        "2025-10-27": {
+          "score": 61,
+          "status": "✅ Viable conditions",
+          "quality": "Cool week: firm caps likely",
+          "source": "archive"
+        },
+        "2025-10-28": {
+          "score": 62,
+          "status": "✅ Viable conditions",
+          "quality": "Cool week: firm caps likely",
+          "source": "archive"
+        },
+        "2025-10-29": {
+          "score": 65,
+          "status": "✅ Viable conditions",
+          "quality": "Cool week: firm caps likely",
+          "source": "archive"
+        },
+        "2025-10-30": {
+          "score": 64,
+          "status": "✅ Viable conditions",
+          "quality": "Cool week: firm caps likely",
+          "source": "archive"
+        },
+        "2025-10-31": {
+          "score": 65,
+          "status": "✅ Viable conditions",
+          "quality": "Cool week: firm caps likely",
+          "source": "archive"
+        },
+        "2025-11-01": {
+          "score": 61,
+          "status": "✅ Viable conditions",
+          "quality": "Cool week: firm caps likely",
+          "source": "archive"
+        },
+        "2025-11-02": {
+          "score": 60,
+          "status": "✅ Viable conditions",
+          "quality": "Cool week: firm caps likely",
+          "source": "archive"
+        },
+        "2025-11-03": {
+          "score": 63,
+          "status": "✅ Viable conditions",
+          "quality": "Cool week: firm caps likely",
+          "source": "archive"
+        },
+        "2025-11-04": {
+          "score": 66,
+          "status": "✅ Viable conditions",
+          "quality": "Cool week: firm caps likely",
+          "source": "archive"
+        },
+        "2025-11-05": {
+          "score": 68,
+          "status": "✅ Viable conditions",
+          "quality": "Cool week: firm caps likely",
+          "source": "archive"
+        },
+        "2025-11-06": {
+          "score": 67,
+          "status": "✅ Viable conditions",
+          "quality": "Cool week: firm caps likely",
+          "source": "archive"
+        },
+        "2025-11-07": {
+          "score": 69,
+          "status": "✅ Viable conditions",
+          "quality": "Cool week: firm caps likely",
+          "source": "archive"
+        },
+        "2025-11-08": {
+          "score": 69,
+          "status": "✅ Viable conditions",
+          "quality": "Cool week: firm caps likely",
+          "source": "archive"
+        },
+        "2025-11-09": {
+          "score": 70,
+          "status": "✅ Viable conditions",
+          "quality": "Cool week: firm caps likely",
+          "source": "archive"
+        },
+        "2025-11-10": {
+          "score": 70,
+          "status": "✅ Viable conditions",
+          "quality": "Cool week: firm caps likely",
+          "source": "archive"
+        },
+        "2025-11-11": {
+          "score": 72,
+          "status": "✅ Viable conditions",
+          "quality": "Cool week: firm caps likely",
+          "source": "archive"
+        },
+        "2025-11-12": {
+          "score": 71,
+          "status": "✅ Viable conditions",
+          "quality": "Cool week: firm caps likely",
+          "source": "archive"
+        },
+        "2025-11-13": {
+          "score": 69,
+          "status": "✅ Viable conditions",
+          "quality": "Cool week: firm caps likely",
+          "source": "archive"
+        },
+        "2025-11-14": {
+          "score": 68,
+          "status": "✅ Viable conditions",
+          "quality": "Cool week: firm caps likely",
+          "source": "archive"
+        },
+        "2025-11-15": {
+          "score": 69,
+          "status": "✅ Viable conditions",
+          "quality": "Cool week: firm caps likely",
+          "source": "archive"
+        },
+        "2025-11-16": {
+          "score": 69,
+          "status": "✅ Viable conditions",
+          "quality": "Cool week: firm caps likely",
+          "source": "archive"
+        },
+        "2025-11-17": {
+          "score": 69,
+          "status": "✅ Viable conditions",
+          "quality": "Cool week: firm caps likely",
+          "source": "archive"
+        },
+        "2025-11-18": {
+          "score": 64,
+          "status": "✅ Viable conditions",
+          "quality": "Cool week: firm caps likely",
+          "source": "archive"
+        },
         "2025-11-19": {
-          "score": 56,
+          "score": 61,
           "status": "✅ Viable conditions",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2025-11-20": {
-          "score": 54,
+          "score": 59,
           "status": "✅ Viable conditions",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
         },
         "2025-11-21": {
-          "score": 46,
+          "score": 51,
           "status": "✅ Viable conditions",
           "quality": "",
           "source": "archive"
@@ -63903,79 +63903,79 @@
           "source": "archive"
         },
         "2025-11-28": {
-          "score": 15,
+          "score": 20,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-11-29": {
-          "score": 12,
+          "score": 16,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-11-30": {
-          "score": 19,
+          "score": 23,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-12-01": {
-          "score": 26,
+          "score": 31,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-12-02": {
-          "score": 26,
+          "score": 31,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-12-03": {
-          "score": 25,
+          "score": 30,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-12-04": {
-          "score": 25,
+          "score": 30,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-12-05": {
-          "score": 23,
+          "score": 28,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-12-06": {
-          "score": 23,
+          "score": 28,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-12-07": {
-          "score": 18,
+          "score": 23,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-12-08": {
-          "score": 18,
+          "score": 23,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-12-09": {
-          "score": 14,
+          "score": 19,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
         },
         "2025-12-10": {
-          "score": 23,
+          "score": 28,
           "status": "⚠️ Watch closely",
           "quality": "",
           "source": "archive"
@@ -65463,397 +65463,397 @@
           "source": "archive"
         },
         "2026-08-15": {
-          "score": 25,
+          "score": 30,
           "status": "💧 Too dry – low soil moisture",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2026-08-16": {
-          "score": 25,
+          "score": 30,
           "status": "⚠️ Watch closely",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2026-08-17": {
-          "score": 32,
+          "score": 37,
           "status": "⚠️ Watch closely",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2026-08-18": {
-          "score": 34,
+          "score": 39,
           "status": "⚠️ Watch closely",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2026-08-19": {
-          "score": 40,
-          "status": "⚠️ Watch closely",
+          "score": 45,
+          "status": "✅ Viable conditions",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2026-08-20": {
-          "score": 46,
+          "score": 51,
           "status": "✅ Viable conditions",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2026-08-21": {
-          "score": 43,
-          "status": "⚠️ Watch closely",
+          "score": 48,
+          "status": "✅ Viable conditions",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2026-08-22": {
-          "score": 52,
+          "score": 57,
           "status": "✅ Viable conditions",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2026-08-23": {
-          "score": 48,
+          "score": 53,
           "status": "✅ Viable conditions",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2026-08-24": {
-          "score": 52,
+          "score": 57,
           "status": "✅ Viable conditions",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2026-08-25": {
-          "score": 52,
+          "score": 57,
           "status": "✅ Viable conditions",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2026-08-26": {
-          "score": 47,
+          "score": 52,
           "status": "✅ Viable conditions",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2026-08-27": {
-          "score": 45,
+          "score": 50,
           "status": "✅ Viable conditions",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2026-08-28": {
-          "score": 42,
+          "score": 47,
           "status": "💧 Too dry – low soil moisture",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2026-08-29": {
-          "score": 43,
+          "score": 48,
           "status": "💧 Too dry – low soil moisture",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2026-08-30": {
-          "score": 44,
+          "score": 49,
           "status": "💧 Too dry – low soil moisture",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2026-08-31": {
-          "score": 45,
+          "score": 50,
           "status": "✅ Viable conditions",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2026-09-01": {
-          "score": 53,
+          "score": 58,
           "status": "✅ Viable conditions",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2026-09-02": {
-          "score": 53,
+          "score": 58,
           "status": "✅ Viable conditions",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2026-09-03": {
-          "score": 56,
+          "score": 61,
           "status": "✅ Viable conditions",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2026-09-04": {
-          "score": 55,
+          "score": 60,
           "status": "✅ Viable conditions",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2026-09-05": {
-          "score": 58,
-          "status": "✅ Viable conditions",
-          "quality": "Warmer week: higher maggot risk, pick early",
-          "source": "archive"
-        },
-        "2026-09-06": {
-          "score": 58,
-          "status": "✅ Viable conditions",
-          "quality": "Warmer week: higher maggot risk, pick early",
-          "source": "archive"
-        },
-        "2026-09-07": {
-          "score": 61,
-          "status": "✅ Viable conditions",
-          "quality": "Warmer week: higher maggot risk, pick early",
-          "source": "archive"
-        },
-        "2026-09-08": {
-          "score": 62,
-          "status": "✅ Viable conditions",
-          "quality": "Warmer week: higher maggot risk, pick early",
-          "source": "archive"
-        },
-        "2026-09-09": {
-          "score": 55,
-          "status": "✅ Viable conditions",
-          "quality": "Warmer week: higher maggot risk, pick early",
-          "source": "archive"
-        },
-        "2026-09-10": {
-          "score": 48,
-          "status": "✅ Viable conditions",
-          "quality": "Warmer week: higher maggot risk, pick early",
-          "source": "archive"
-        },
-        "2026-09-11": {
-          "score": 51,
-          "status": "✅ Viable conditions",
-          "quality": "Warmer week: higher maggot risk, pick early",
-          "source": "archive"
-        },
-        "2026-09-12": {
-          "score": 56,
-          "status": "✅ Viable conditions",
-          "quality": "Warmer week: higher maggot risk, pick early",
-          "source": "archive"
-        },
-        "2026-09-13": {
-          "score": 58,
-          "status": "✅ Viable conditions",
-          "quality": "Warmer week: higher maggot risk, pick early",
-          "source": "archive"
-        },
-        "2026-09-14": {
-          "score": 55,
-          "status": "✅ Viable conditions",
-          "quality": "Warmer week: higher maggot risk, pick early",
-          "source": "archive"
-        },
-        "2026-09-15": {
-          "score": 53,
-          "status": "✅ Viable conditions",
-          "quality": "Warmer week: higher maggot risk, pick early",
-          "source": "archive"
-        },
-        "2026-09-16": {
-          "score": 54,
-          "status": "✅ Viable conditions",
-          "quality": "Warmer week: higher maggot risk, pick early",
-          "source": "archive"
-        },
-        "2026-09-17": {
-          "score": 58,
-          "status": "✅ Viable conditions",
-          "quality": "Warmer week: higher maggot risk, pick early",
-          "source": "archive"
-        },
-        "2026-09-18": {
-          "score": 57,
-          "status": "✅ Viable conditions",
-          "quality": "Warmer week: higher maggot risk, pick early",
-          "source": "archive"
-        },
-        "2026-09-19": {
-          "score": 55,
-          "status": "✅ Viable conditions",
-          "quality": "Warmer week: higher maggot risk, pick early",
-          "source": "archive"
-        },
-        "2026-09-20": {
-          "score": 52,
-          "status": "✅ Viable conditions",
-          "quality": "Warmer week: higher maggot risk, pick early",
-          "source": "archive"
-        },
-        "2026-09-21": {
-          "score": 55,
-          "status": "✅ Viable conditions",
-          "quality": "Warmer week: higher maggot risk, pick early",
-          "source": "archive"
-        },
-        "2026-09-22": {
-          "score": 54,
-          "status": "✅ Viable conditions",
-          "quality": "Warmer week: higher maggot risk, pick early",
-          "source": "archive"
-        },
-        "2026-09-23": {
-          "score": 52,
-          "status": "✅ Viable conditions",
-          "quality": "Warmer week: higher maggot risk, pick early",
-          "source": "archive"
-        },
-        "2026-09-24": {
-          "score": 59,
-          "status": "✅ Viable conditions",
-          "quality": "Warmer week: higher maggot risk, pick early",
-          "source": "archive"
-        },
-        "2026-09-25": {
           "score": 63,
           "status": "✅ Viable conditions",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
-        "2026-09-26": {
-          "score": 61,
+        "2026-09-06": {
+          "score": 63,
           "status": "✅ Viable conditions",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
-        "2026-09-27": {
-          "score": 57,
+        "2026-09-07": {
+          "score": 66,
           "status": "✅ Viable conditions",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
-        "2026-09-28": {
-          "score": 54,
+        "2026-09-08": {
+          "score": 67,
           "status": "✅ Viable conditions",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
-        "2026-09-29": {
+        "2026-09-09": {
+          "score": 60,
+          "status": "✅ Viable conditions",
+          "quality": "Warmer week: higher maggot risk, pick early",
+          "source": "archive"
+        },
+        "2026-09-10": {
           "score": 53,
           "status": "✅ Viable conditions",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
+        "2026-09-11": {
+          "score": 56,
+          "status": "✅ Viable conditions",
+          "quality": "Warmer week: higher maggot risk, pick early",
+          "source": "archive"
+        },
+        "2026-09-12": {
+          "score": 61,
+          "status": "✅ Viable conditions",
+          "quality": "Warmer week: higher maggot risk, pick early",
+          "source": "archive"
+        },
+        "2026-09-13": {
+          "score": 63,
+          "status": "✅ Viable conditions",
+          "quality": "Warmer week: higher maggot risk, pick early",
+          "source": "archive"
+        },
+        "2026-09-14": {
+          "score": 60,
+          "status": "✅ Viable conditions",
+          "quality": "Warmer week: higher maggot risk, pick early",
+          "source": "archive"
+        },
+        "2026-09-15": {
+          "score": 58,
+          "status": "✅ Viable conditions",
+          "quality": "Warmer week: higher maggot risk, pick early",
+          "source": "archive"
+        },
+        "2026-09-16": {
+          "score": 59,
+          "status": "✅ Viable conditions",
+          "quality": "Warmer week: higher maggot risk, pick early",
+          "source": "archive"
+        },
+        "2026-09-17": {
+          "score": 63,
+          "status": "✅ Viable conditions",
+          "quality": "Warmer week: higher maggot risk, pick early",
+          "source": "archive"
+        },
+        "2026-09-18": {
+          "score": 62,
+          "status": "✅ Viable conditions",
+          "quality": "Warmer week: higher maggot risk, pick early",
+          "source": "archive"
+        },
+        "2026-09-19": {
+          "score": 60,
+          "status": "✅ Viable conditions",
+          "quality": "Warmer week: higher maggot risk, pick early",
+          "source": "archive"
+        },
+        "2026-09-20": {
+          "score": 57,
+          "status": "✅ Viable conditions",
+          "quality": "Warmer week: higher maggot risk, pick early",
+          "source": "archive"
+        },
+        "2026-09-21": {
+          "score": 60,
+          "status": "✅ Viable conditions",
+          "quality": "Warmer week: higher maggot risk, pick early",
+          "source": "archive"
+        },
+        "2026-09-22": {
+          "score": 59,
+          "status": "✅ Viable conditions",
+          "quality": "Warmer week: higher maggot risk, pick early",
+          "source": "archive"
+        },
+        "2026-09-23": {
+          "score": 57,
+          "status": "✅ Viable conditions",
+          "quality": "Warmer week: higher maggot risk, pick early",
+          "source": "archive"
+        },
+        "2026-09-24": {
+          "score": 64,
+          "status": "✅ Viable conditions",
+          "quality": "Warmer week: higher maggot risk, pick early",
+          "source": "archive"
+        },
+        "2026-09-25": {
+          "score": 68,
+          "status": "✅ Viable conditions",
+          "quality": "Warmer week: higher maggot risk, pick early",
+          "source": "archive"
+        },
+        "2026-09-26": {
+          "score": 66,
+          "status": "✅ Viable conditions",
+          "quality": "Warmer week: higher maggot risk, pick early",
+          "source": "archive"
+        },
+        "2026-09-27": {
+          "score": 62,
+          "status": "✅ Viable conditions",
+          "quality": "Warmer week: higher maggot risk, pick early",
+          "source": "archive"
+        },
+        "2026-09-28": {
+          "score": 59,
+          "status": "✅ Viable conditions",
+          "quality": "Warmer week: higher maggot risk, pick early",
+          "source": "archive"
+        },
+        "2026-09-29": {
+          "score": 58,
+          "status": "✅ Viable conditions",
+          "quality": "Warmer week: higher maggot risk, pick early",
+          "source": "archive"
+        },
         "2026-09-30": {
-          "score": 51,
+          "score": 56,
           "status": "✅ Viable conditions",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2026-10-01": {
-          "score": 45,
+          "score": 50,
           "status": "✅ Viable conditions",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2026-10-02": {
-          "score": 45,
-          "status": "✅ Viable conditions",
+          "score": 20,
+          "status": "🔎 No mushrooms found (field observation)",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2026-10-03": {
-          "score": 46,
-          "status": "✅ Viable conditions",
+          "score": 41,
+          "status": "🔎 Recent empty visit lowers odds",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2026-10-04": {
           "score": 43,
-          "status": "⚠️ Watch closely",
+          "status": "🔎 Recent empty visit lowers odds",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2026-10-05": {
-          "score": 38,
+          "score": 43,
           "status": "⚠️ Watch closely",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "forecast"
         },
         "2026-10-06": {
-          "score": 41,
-          "status": "⚠️ Watch closely",
+          "score": 46,
+          "status": "✅ Viable conditions",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "forecast"
         },
         "2026-10-07": {
-          "score": 39,
-          "status": "⚠️ Watch closely",
-          "quality": "Warmer week: higher maggot risk, pick early",
-          "source": "forecast"
-        },
-        "2026-10-08": {
           "score": 44,
           "status": "⚠️ Watch closely",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "forecast"
         },
+        "2026-10-08": {
+          "score": 49,
+          "status": "✅ Viable conditions",
+          "quality": "Warmer week: higher maggot risk, pick early",
+          "source": "forecast"
+        },
         "2026-10-09": {
-          "score": 47,
+          "score": 52,
           "status": "✅ Viable conditions",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "forecast"
         },
         "2026-10-10": {
-          "score": 48,
+          "score": 53,
           "status": "✅ Viable conditions",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "forecast"
         },
         "2026-10-11": {
-          "score": 57,
+          "score": 62,
           "status": "✅ Viable conditions",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "forecast"
         },
         "2026-10-12": {
-          "score": 55,
+          "score": 60,
           "status": "✅ Viable conditions",
           "quality": "",
           "source": "forecast"
         },
         "2026-10-13": {
-          "score": 52,
+          "score": 57,
           "status": "✅ Viable conditions",
           "quality": "",
           "source": "forecast"
         },
         "2026-10-14": {
-          "score": 52,
+          "score": 57,
           "status": "✅ Viable conditions",
           "quality": "",
           "source": "forecast"
         },
         "2026-10-15": {
-          "score": 50,
+          "score": 55,
           "status": "✅ Viable conditions",
           "quality": "Cool week: firm caps likely",
           "source": "forecast"
         }
       },
-      "scores_signature": "18:f6f7a0980876",
+      "scores_signature": "18:bdfb8761253f",
       "backtest": {
         "threshold": 55,
-        "observed_days": 0,
-        "find_days": 0,
-        "no_find_days": 0,
-        "finds_above_threshold": 0,
+        "observed_days": 9,
+        "find_days": 8,
+        "no_find_days": 1,
+        "finds_above_threshold": 8,
         "no_finds_above_threshold": 0,
-        "find_hit_rate": null,
-        "no_find_above_threshold_rate": null,
-        "mean_score_on_find_days": null,
-        "mean_score_on_no_find_days": null,
-        "suggested_threshold": null,
+        "find_hit_rate": 1.0,
+        "no_find_above_threshold_rate": 0.0,
+        "mean_score_on_find_days": 74.1,
+        "mean_score_on_no_find_days": 50.0,
+        "suggested_threshold": 70,
         "true_false_negatives": 0,
         "genuine_miss_dates": [],
         "post_harvest_low_find_days": 0,
         "post_harvest_low_find_dates": [],
         "find_breakdown": {
-          "above_threshold": 0,
+          "above_threshold": 8,
           "post_harvest_below_threshold": 0,
           "genuine_below_threshold": 0
         },
@@ -65862,12 +65862,12 @@
           "Mon": 0,
           "Tue": 0,
           "Wed": 0,
-          "Thu": 0,
-          "Fri": 0,
+          "Thu": 1,
+          "Fri": 5,
           "Sat": 0,
-          "Sun": 0
+          "Sun": 2
         },
-        "auc": null
+        "auc": 1.0
       }
     },
     "Location 2": {
@@ -109631,7 +109631,7 @@
           "source": "forecast",
           "precipitation_sum": 0.0,
           "temperature_2m_max": 20.9,
-          "temperature_2m_min": 6.5,
+          "temperature_2m_min": 6.0,
           "soil_temperature_0_to_7cm_mean": 13.4,
           "relative_humidity_2m_mean": 74,
           "soil_moisture_0_to_7cm_mean": 0.206,
@@ -109642,10 +109642,10 @@
           "date": "2026-10-06",
           "source": "forecast",
           "precipitation_sum": 0.0,
-          "temperature_2m_max": 20.3,
-          "temperature_2m_min": 9.0,
+          "temperature_2m_max": 20.4,
+          "temperature_2m_min": 7.4,
           "soil_temperature_0_to_7cm_mean": 13.6,
-          "relative_humidity_2m_mean": 77,
+          "relative_humidity_2m_mean": 78,
           "soil_moisture_0_to_7cm_mean": 0.201,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
@@ -109654,10 +109654,10 @@
           "date": "2026-10-07",
           "source": "forecast",
           "precipitation_sum": 0.0,
-          "temperature_2m_max": 21.5,
-          "temperature_2m_min": 7.9,
+          "temperature_2m_max": 21.7,
+          "temperature_2m_min": 8.0,
           "soil_temperature_0_to_7cm_mean": 13.8,
-          "relative_humidity_2m_mean": 76,
+          "relative_humidity_2m_mean": 77,
           "soil_moisture_0_to_7cm_mean": 0.181,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
@@ -109665,57 +109665,57 @@
         {
           "date": "2026-10-08",
           "source": "forecast",
-          "precipitation_sum": 6.2,
-          "temperature_2m_max": 18.0,
+          "precipitation_sum": 6.0,
+          "temperature_2m_max": 18.2,
           "temperature_2m_min": 8.9,
           "soil_temperature_0_to_7cm_mean": 13.3,
-          "relative_humidity_2m_mean": 83,
+          "relative_humidity_2m_mean": 84,
           "soil_moisture_0_to_7cm_mean": 0.22,
-          "precip_peak_2h_mm": 3.6,
+          "precip_peak_2h_mm": 3.5,
           "precip_peak_basis": "hourly"
         },
         {
           "date": "2026-10-09",
           "source": "forecast",
-          "precipitation_sum": 3.4,
+          "precipitation_sum": 3.2,
           "temperature_2m_max": 13.1,
-          "temperature_2m_min": 7.9,
+          "temperature_2m_min": 7.8,
           "soil_temperature_0_to_7cm_mean": 11.3,
           "relative_humidity_2m_mean": 79,
           "soil_moisture_0_to_7cm_mean": 0.245,
-          "precip_peak_2h_mm": 1.4,
+          "precip_peak_2h_mm": 1.5,
           "precip_peak_basis": "hourly"
         },
         {
           "date": "2026-10-10",
           "source": "forecast",
-          "precipitation_sum": 3.9,
-          "temperature_2m_max": 16.0,
+          "precipitation_sum": 3.8,
+          "temperature_2m_max": 16.2,
           "temperature_2m_min": 9.3,
           "soil_temperature_0_to_7cm_mean": 12.8,
-          "relative_humidity_2m_mean": 74,
+          "relative_humidity_2m_mean": 73,
           "soil_moisture_0_to_7cm_mean": 0.27,
-          "precip_peak_2h_mm": 2.6,
+          "precip_peak_2h_mm": 2.5,
           "precip_peak_basis": "hourly"
         },
         {
           "date": "2026-10-11",
           "source": "forecast",
-          "precipitation_sum": 3.7,
-          "temperature_2m_max": 11.8,
-          "temperature_2m_min": 7.1,
+          "precipitation_sum": 3.73,
+          "temperature_2m_max": 11.9,
+          "temperature_2m_min": 7.0,
           "soil_temperature_0_to_7cm_mean": 10.5,
           "relative_humidity_2m_mean": 82,
           "soil_moisture_0_to_7cm_mean": 0.291,
-          "precip_peak_2h_mm": 1.3,
+          "precip_peak_2h_mm": 1.2,
           "precip_peak_basis": "hourly"
         },
         {
           "date": "2026-10-12",
           "source": "forecast",
           "precipitation_sum": 0.6,
-          "temperature_2m_max": 12.6,
-          "temperature_2m_min": 3.3,
+          "temperature_2m_max": 12.8,
+          "temperature_2m_min": 3.6,
           "soil_temperature_0_to_7cm_mean": 10.1,
           "relative_humidity_2m_mean": 84,
           "soil_moisture_0_to_7cm_mean": 0.306,
@@ -109725,9 +109725,9 @@
         {
           "date": "2026-10-13",
           "source": "forecast",
-          "precipitation_sum": 0.8,
-          "temperature_2m_max": 14.0,
-          "temperature_2m_min": 0.3,
+          "precipitation_sum": 1.1,
+          "temperature_2m_max": 14.2,
+          "temperature_2m_min": 0.4,
           "soil_temperature_0_to_7cm_mean": 9.2,
           "relative_humidity_2m_mean": 83,
           "soil_moisture_0_to_7cm_mean": 0.284,
@@ -109738,10 +109738,10 @@
           "date": "2026-10-14",
           "source": "forecast",
           "precipitation_sum": 0.4,
-          "temperature_2m_max": 15.4,
-          "temperature_2m_min": 9.4,
+          "temperature_2m_max": 15.5,
+          "temperature_2m_min": 9.6,
           "soil_temperature_0_to_7cm_mean": 11.6,
-          "relative_humidity_2m_mean": 87,
+          "relative_humidity_2m_mean": 88,
           "soil_moisture_0_to_7cm_mean": 0.284,
           "precip_peak_2h_mm": 0.4,
           "precip_peak_basis": "hourly"
@@ -109750,8 +109750,8 @@
           "date": "2026-10-15",
           "source": "forecast",
           "precipitation_sum": 0.0,
-          "temperature_2m_max": 18.6,
-          "temperature_2m_min": 8.2,
+          "temperature_2m_max": 19.0,
+          "temperature_2m_min": 9.3,
           "soil_temperature_0_to_7cm_mean": 12.2,
           "relative_humidity_2m_mean": 88,
           "soil_moisture_0_to_7cm_mean": 0.266,
@@ -114095,7 +114095,7 @@
           "source": "archive"
         },
         "2018-10-03": {
-          "score": 59,
+          "score": 58,
           "status": "✅ Viable conditions",
           "quality": "",
           "source": "archive"
@@ -116123,7 +116123,7 @@
           "source": "archive"
         },
         "2019-09-06": {
-          "score": 7,
+          "score": 6,
           "status": "💧 Too dry – low soil moisture",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
@@ -122663,7 +122663,7 @@
           "source": "archive"
         },
         "2022-08-31": {
-          "score": 27,
+          "score": 25,
           "status": "⚠️ Watch closely",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
@@ -123137,7 +123137,7 @@
           "source": "archive"
         },
         "2022-11-18": {
-          "score": 48,
+          "score": 47,
           "status": "✅ Viable conditions",
           "quality": "Cool week: firm caps likely",
           "source": "archive"
@@ -131627,20 +131627,20 @@
           "source": "archive"
         },
         "2026-10-03": {
-          "score": 48,
-          "status": "✅ Viable conditions",
+          "score": 20,
+          "status": "🔎 No mushrooms found (field observation)",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2026-10-04": {
-          "score": 47,
-          "status": "✅ Viable conditions",
+          "score": 37,
+          "status": "🔎 Recent empty visit lowers odds",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "archive"
         },
         "2026-10-05": {
-          "score": 43,
-          "status": "⚠️ Watch closely",
+          "score": 38,
+          "status": "🔎 Recent empty visit lowers odds",
           "quality": "Warmer week: higher maggot risk, pick early",
           "source": "forecast"
         },
@@ -131705,18 +131705,18 @@
           "source": "forecast"
         }
       },
-      "scores_signature": "18:f6f7a0980876",
+      "scores_signature": "18:6bde6e440360",
       "backtest": {
         "threshold": 55,
-        "observed_days": 0,
+        "observed_days": 1,
         "find_days": 0,
-        "no_find_days": 0,
+        "no_find_days": 1,
         "finds_above_threshold": 0,
         "no_finds_above_threshold": 0,
         "find_hit_rate": null,
-        "no_find_above_threshold_rate": null,
+        "no_find_above_threshold_rate": 0.0,
         "mean_score_on_find_days": null,
-        "mean_score_on_no_find_days": null,
+        "mean_score_on_no_find_days": 48.0,
         "suggested_threshold": null,
         "true_false_negatives": 0,
         "genuine_miss_dates": [],
@@ -131749,31 +131749,31 @@
         "Location 1": [
           [
             "2026-10-09",
-            47
+            52
           ],
           [
             "2026-10-10",
-            48
+            53
           ],
           [
             "2026-10-11",
-            57
+            62
           ],
           [
             "2026-10-12",
-            55
+            60
           ],
           [
             "2026-10-13",
-            52
+            57
           ],
           [
             "2026-10-14",
-            52
+            57
           ],
           [
             "2026-10-15",
-            50
+            55
           ]
         ],
         "Location 2": [
@@ -131810,7 +131810,7 @@
     }
   ],
   "meta": {
-    "last_run_utc": "2026-10-09T12:48:05Z",
+    "last_run_utc": "2026-10-09T13:07:17Z",
     "last_run_mode": "default",
     "model_version": 18
   }

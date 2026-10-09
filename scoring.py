@@ -85,7 +85,7 @@ SMALL_HARVEST_DEPLETION_RECOVERY_DAYS = 5
 DEFAULT_EARLY_HARVEST_PENALTY_FACTOR = 0.5
 
 
-MODEL_VERSION = 16  # 16: C1–C7 scoring updates (host-tree removal, depletion tiers, drought percentile, rain cap, frost/season, soil temp, utcnow fix)
+MODEL_VERSION = 17  # 17: frost termination zeroes score, sparse weather windows give 'insufficient data'; 16: C1–C7 scoring updates (host-tree removal, depletion tiers, drought percentile, rain cap, frost/season, soil temp, utcnow fix)
 
 
 ARCHIVE_LAG_DAYS = 5
@@ -250,6 +250,7 @@ VERDICT_DEFINITE_GO = "🔥 Very favourable conditions"
 
 VERDICT_SPECIAL_TAGS = {
     "terminated": "❄️ Season over",
+    "insufficient": "❔ Insufficient data",
     "off_season": "🍂 Off season",
     "delayed": "🔥 Too warm – wait",
     "dry": "💧 Too dry – wait",
@@ -761,6 +762,9 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
     rain_window = seasonal["rain_window"]
     rainfall = observed_rainfall_total(hist, d, rain_window)
     recent_rainfall = observed_rainfall_total(hist, d, RECENT_RAIN_WINDOW_DAYS)
+    average_temperature = mean_air_temperature(hist, d, FLUSH_TEMPERATURE_WINDOW_DAYS)
+    if rainfall is None or average_temperature is None:
+        return 0, "❔ Insufficient weather data", ""
     background_score = rainfall_score(rainfall) if rainfall is not None else None
     # Recent rain is scaled to the background window's units so both parts share one 0-30 scale.
     recent_score = rainfall_score(recent_rainfall * rain_window / RECENT_RAIN_WINDOW_DAYS) if recent_rainfall is not None else None
@@ -769,8 +773,7 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
         score += round(RECENT_RAIN_WEIGHT * recent_score + BACKGROUND_RAIN_WEIGHT * background_score)
     elif background_score is not None or recent_score is not None:
         score += background_score if background_score is not None else recent_score
-    if rainfall is not None:
-        score += rainfall_distribution_score(hist, d, rain_window)
+    score += rainfall_distribution_score(hist, d, rain_window)
 
     long_term_rainfall_percentile = historical_rainfall_percentile(hist, d)
     if long_term_rainfall_percentile is not None and long_term_rainfall_percentile < 0.5:
@@ -778,9 +781,7 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
             DROUGHT_SCORE_PENALTY_MAX * (0.5 - long_term_rainfall_percentile) / 0.5
         )
 
-    average_temperature = mean_air_temperature(hist, d, FLUSH_TEMPERATURE_WINDOW_DAYS)
-    if average_temperature is not None:
-        score += temperature_score(average_temperature, seasonal["optimal_temp_range"])
+    score += temperature_score(average_temperature, seasonal["optimal_temp_range"])
     score += soil_temperature_points(hist, d)
 
     if has_runoff(hist, d):
@@ -805,7 +806,8 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
         score += soil_moisture_points(float(soil_moisture))
         if soil_moisture <= SOIL_DRY:
             status = "💧 Too dry – low soil moisture"
-    if decay > 0 and (hard_freeze_recent(hist, d) or severe_freeze_recent(hist, d)):
+    terminated = decay > 0 and (hard_freeze_recent(hist, d) or severe_freeze_recent(hist, d))
+    if terminated:
         status = "❄️ Season terminated by frost"
 
     if str(location.get("soil_pH") or "").strip().lower() in ("alkaline", "basic", "calcareous"):
@@ -868,6 +870,8 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
     if no_find_today:
         score = min(score, 20)
     score = max(0, min(100, score))
+    if terminated:
+        return 0, "❄️ Season terminated by frost", quality
     if not status or status == "🟡 Monitoring":
         status = "✅ Viable conditions" if score >= DEFAULT_ALERT_THRESHOLD else "⚠️ Watch closely"
     return int(score), status, quality

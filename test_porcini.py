@@ -143,6 +143,14 @@ class PrivacyTests(unittest.TestCase):
             p.ensure_location_history("Location 1", db, 12.3, 45.6, 7, date(2025, 9, 20))
         self.assertFalse(self.contains_coordinate_field(db))
 
+    def test_failed_archive_sync_does_not_advance_last_sync_date(self):
+        db = {"locations": {"L": {"daily_records": [rec("2025-09-01", p.SOURCE_ARCHIVE)], "last_sync_date": "2025-09-10"}}}
+        with patch.object(p, "fetch_archive_day_range", return_value=[]), \
+                patch.object(p, "fetch_forecast_day_range", return_value=[rec("2025-09-20")]), \
+                patch.object(p, "backfill_runoff_data", return_value=[]):
+            p.ensure_location_history("L", db, 1.0, 2.0, 3, date(2025, 9, 20))
+        self.assertEqual(db["locations"]["L"]["last_sync_date"], "2025-09-10")
+
     def test_database_load_strips_coordinates_from_unconfigured_locations(self):
         legacy = {"locations": {"Location 99": {
             "latitude": 1.2, "longitude": 3.4, "elevation_m": 5, "daily_records": [],
@@ -372,7 +380,7 @@ class ScoringTests(unittest.TestCase):
             p.calculate_score_for_day({"tree_species": ["Birch", "Spruce"]}, day, hist, [])[0],
             baseline,
         )
-        self.assertEqual(p.MODEL_VERSION, 16)
+        self.assertEqual(p.MODEL_VERSION, 17)
 
     def test_depletion_tiers_and_recovery_periods(self):
         self.assertEqual(p.FLUSH_DEPLETION_TIERS, ((1, 35), (3, 25), (6, 12)))
@@ -421,7 +429,7 @@ class ScoringTests(unittest.TestCase):
 
     def test_severe_freeze_threshold_and_season_termination(self):
         target = date(2025, 11, 28)
-        records = series(target - timedelta(days=3), 4)
+        records = series(target - timedelta(days=30), 31)
         hist = p.History(records)
         records[-2]["temperature_2m_min"] = -4.0
         self.assertTrue(p.severe_freeze_recent(hist, target))
@@ -431,6 +439,15 @@ class ScoringTests(unittest.TestCase):
         records[-2]["temperature_2m_min"] = -4.0
         result = p.calculate_score_for_day(LOC, hist.get(target), hist, [])
         self.assertIn("Season terminated by frost", result[1])
+        self.assertEqual(result[0], 0)
+
+    def test_sparse_weather_windows_report_insufficient_data(self):
+        target = date(2025, 10, 18)
+        hist = p.History(series(target - timedelta(days=3), 4))
+        score, status, _ = p.calculate_score_for_day(LOC, hist.get(target), hist, [])
+        self.assertEqual(score, 0)
+        self.assertIn("Insufficient", status)
+        self.assertEqual(p.status_category(status), "insufficient")
 
     def test_rain_and_freeze_score_invariants(self):
         start, day = date(2025, 8, 1), date(2025, 10, 1)
@@ -864,13 +881,13 @@ class ScoringTests(unittest.TestCase):
 
     def test_quality_warning_does_not_change_flush_score(self):
         target = date(2025, 10, 18)
-        start = target - timedelta(days=20)
-        hot = series(start, 21, temperature_2m_max=13.0, temperature_2m_min=13.0)
-        cool = series(start, 21, temperature_2m_max=13.0, temperature_2m_min=13.0)
+        start = target - timedelta(days=30)
+        hot = series(start, 31, temperature_2m_max=13.0, temperature_2m_min=13.0)
+        cool = series(start, 31, temperature_2m_max=13.0, temperature_2m_min=13.0)
         for records in (hot, cool):
             for record in records:
                 record["date"] = p.parse_date(record["date"]).isoformat()
-        for record in hot[13:20]:
+        for record in hot[23:30]:
             record["temperature_2m_max"] = 20.0
             record["temperature_2m_min"] = 6.0
         hot_score = p.calculate_score_for_day(LOC, hot[-1], p.History(hot), [])

@@ -56,6 +56,8 @@ def status_category(status: Optional[str]) -> str:
     s = (status or "").lower()
     if "frost" in s or "terminated" in s:
         return "terminated"
+    if "insufficient" in s:
+        return "insufficient"
     if "delayed" in s:
         return "delayed"
     if "exhaustion" in s:

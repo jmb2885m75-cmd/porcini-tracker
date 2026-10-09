@@ -32,7 +32,8 @@
     .note { color: #fcd34d; font-size: var(--small); }
     .toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-2); margin: 0 0 var(--space-2); }
     .toolbar label, .field { display: grid; gap: 3px; color: var(--muted); font-size: var(--small); }
-    .season-toggle[aria-pressed="true"] { background: var(--accent, #2e7d32); color: #fff; font-weight: 700; }
+    .season-toggle[aria-pressed="true"] { background: #166534; border-color: var(--accent); color: #fff; font-weight: 700; }
+    .season-toggle[aria-pressed="true"]::before { content: "✓ "; }
     .toolbar strong { align-self: center; }
     #chartbox { position: relative; }
     #chart { display: block; width: 100%; height: auto; background: var(--bg); border-radius: 8px; }

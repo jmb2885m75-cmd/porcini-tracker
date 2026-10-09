@@ -373,8 +373,13 @@ def ensure_location_history(location_name: str, db: Dict[str, Any], latitude: fl
     starts = [max(archive_dates) + timedelta(days=1)] if archive_dates else [today - timedelta(days=INITIAL_ARCHIVE_DAYS)]
     starts += [min(forecast_dates)] if forecast_dates else []
     start, end = min(starts), today - timedelta(days=ARCHIVE_LAG_DAYS)
+    archive_ok = True
     if start <= end:
-        records = merge_records(records, fetch_archive_day_range(latitude, longitude, elevation, start, end))
+        archive_records = fetch_archive_day_range(latitude, longitude, elevation, start, end)
+        archive_ok = bool(archive_records)
+        records = merge_records(records, archive_records)
+        if not archive_ok:
+            print(f"[WARN] {location_name}: archive API returned no data for {iso_date(start)}..{iso_date(end)}; not advancing last_sync_date")
     forecast_records = fetch_forecast_day_range(latitude, longitude, elevation)
     if not any(parse_date(record["date"]) >= today for record in forecast_records):
         raise WeatherNoDataError(
@@ -391,9 +396,10 @@ def ensure_location_history(location_name: str, db: Dict[str, Any], latitude: fl
         pending.update(iso_date(parse_date(d) + timedelta(days=i)) for i in range(3))
     loc_data["pending_rescore"] = sorted(pending)
 
+    if archive_ok:
+        loc_data["last_sync_date"] = iso_date(today)
     loc_data.update({
         "daily_records": records,
-        "last_sync_date": iso_date(today),
         "record_count": len(records),
         "merge_policy": "archive replaces forecast for the same date; forecast-only dates are kept; newer forecast replaces older forecast",
     })

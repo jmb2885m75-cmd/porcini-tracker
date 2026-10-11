@@ -86,6 +86,14 @@
       "cap_stage": "prime",
       "submitted_at": "2026-10-05T14:34:53Z",
       "reporter": "jmb2885m75-cmd"
+    },
+    {
+      "location": "Fangschleuse",
+      "date": "2026-10-11",
+      "observation_type": "no_mushrooms",
+      "notes": "hallimasch, krauseglucke",
+      "submitted_at": "2026-10-11T12:39:33Z",
+      "reporter": "jmb2885m75-cmd"
     }
   ]
 }

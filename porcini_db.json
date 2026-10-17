@@ -43855,7 +43855,7 @@
         {
           "date": "2026-10-13",
           "source": "forecast",
-          "precipitation_sum": 0.3,
+          "precipitation_sum": 0.0,
           "temperature_2m_max": 14.7,
           "temperature_2m_min": -2.4,
           "soil_temperature_0_to_7cm_mean": 7.9,
@@ -43867,9 +43867,9 @@
         {
           "date": "2026-10-14",
           "source": "forecast",
-          "precipitation_sum": 0.0,
+          "precipitation_sum": 0.3,
           "temperature_2m_max": 15.8,
-          "temperature_2m_min": 6.0,
+          "temperature_2m_min": 6.9,
           "soil_temperature_0_to_7cm_mean": 11.3,
           "relative_humidity_2m_mean": 82,
           "soil_moisture_0_to_7cm_mean": 0.309,
@@ -43892,8 +43892,8 @@
           "date": "2026-10-16",
           "source": "forecast",
           "precipitation_sum": 0.0,
-          "temperature_2m_max": 18.4,
-          "temperature_2m_min": 5.8,
+          "temperature_2m_max": 18.3,
+          "temperature_2m_min": 5.9,
           "soil_temperature_0_to_7cm_mean": 9.9,
           "relative_humidity_2m_mean": 84,
           "soil_moisture_0_to_7cm_mean": 0.292,
@@ -43904,7 +43904,7 @@
           "date": "2026-10-17",
           "source": "forecast",
           "precipitation_sum": 0.0,
-          "temperature_2m_max": 13.7,
+          "temperature_2m_max": 13.6,
           "temperature_2m_min": 7.7,
           "soil_temperature_0_to_7cm_mean": 10.3,
           "relative_humidity_2m_mean": 92,
@@ -43916,8 +43916,8 @@
           "date": "2026-10-18",
           "source": "forecast",
           "precipitation_sum": 0.0,
-          "temperature_2m_max": 13.2,
-          "temperature_2m_min": 8.3,
+          "temperature_2m_max": 13.1,
+          "temperature_2m_min": 9.1,
           "soil_temperature_0_to_7cm_mean": 11.2,
           "relative_humidity_2m_mean": 85,
           "soil_moisture_0_to_7cm_mean": 0.295,
@@ -43928,10 +43928,10 @@
           "date": "2026-10-19",
           "source": "forecast",
           "precipitation_sum": 0.0,
-          "temperature_2m_max": 11.8,
-          "temperature_2m_min": -0.2,
+          "temperature_2m_max": 11.9,
+          "temperature_2m_min": 0.6,
           "soil_temperature_0_to_7cm_mean": 9.3,
-          "relative_humidity_2m_mean": 72,
+          "relative_humidity_2m_mean": 71,
           "soil_moisture_0_to_7cm_mean": 0.29,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
@@ -43941,7 +43941,7 @@
           "source": "forecast",
           "precipitation_sum": 0.0,
           "temperature_2m_max": 10.4,
-          "temperature_2m_min": -0.1,
+          "temperature_2m_min": 0.5,
           "soil_temperature_0_to_7cm_mean": 8.4,
           "relative_humidity_2m_mean": 82,
           "soil_moisture_0_to_7cm_mean": 0.29,
@@ -43952,8 +43952,8 @@
           "date": "2026-10-21",
           "source": "forecast",
           "precipitation_sum": 0.0,
-          "temperature_2m_max": 12.7,
-          "temperature_2m_min": 6.8,
+          "temperature_2m_max": 12.8,
+          "temperature_2m_min": 6.9,
           "soil_temperature_0_to_7cm_mean": 8.6,
           "relative_humidity_2m_mean": 85,
           "soil_moisture_0_to_7cm_mean": 0.324,
@@ -43963,9 +43963,9 @@
         {
           "date": "2026-10-22",
           "source": "forecast",
-          "precipitation_sum": 0.9,
+          "precipitation_sum": 0.7,
           "temperature_2m_max": 14.3,
-          "temperature_2m_min": 6.6,
+          "temperature_2m_min": 6.8,
           "soil_temperature_0_to_7cm_mean": 9.7,
           "relative_humidity_2m_mean": 87,
           "soil_moisture_0_to_7cm_mean": 0.391,
@@ -43975,9 +43975,9 @@
         {
           "date": "2026-10-23",
           "source": "forecast",
-          "precipitation_sum": 0.0,
+          "precipitation_sum": 0.2,
           "temperature_2m_max": 13.4,
-          "temperature_2m_min": 4.7,
+          "temperature_2m_min": 4.8,
           "soil_temperature_0_to_7cm_mean": 9.0,
           "relative_humidity_2m_mean": 86,
           "soil_moisture_0_to_7cm_mean": 0.337,
@@ -65955,25 +65955,25 @@
           "source": "forecast"
         },
         "2026-10-20": {
-          "score": 48,
+          "score": 52,
           "status": "✅ Viable conditions",
           "quality": "Cool week: firm caps likely",
           "source": "forecast"
         },
         "2026-10-21": {
-          "score": 46,
+          "score": 52,
           "status": "✅ Viable conditions",
           "quality": "Cool week: firm caps likely",
           "source": "forecast"
         },
         "2026-10-22": {
-          "score": 48,
+          "score": 54,
           "status": "✅ Viable conditions",
           "quality": "Cool week: firm caps likely",
           "source": "forecast"
         },
         "2026-10-23": {
-          "score": 47,
+          "score": 53,
           "status": "✅ Viable conditions",
           "quality": "Cool week: firm caps likely",
           "source": "forecast"
@@ -65989,7 +65989,7 @@
         "no_finds_above_threshold": 1,
         "find_hit_rate": 1.0,
         "no_find_above_threshold_rate": 0.5,
-        "mean_score_on_find_days": 74.1,
+        "mean_score_on_find_days": 74.2,
         "mean_score_on_no_find_days": 52.5,
         "suggested_threshold": 70,
         "true_false_negatives": 0,
@@ -109869,21 +109869,21 @@
         {
           "date": "2026-10-13",
           "source": "forecast",
-          "precipitation_sum": 1.5,
-          "temperature_2m_max": 15.1,
-          "temperature_2m_min": 1.1,
+          "precipitation_sum": 1.1,
+          "temperature_2m_max": 15.2,
+          "temperature_2m_min": 0.6,
           "soil_temperature_0_to_7cm_mean": 8.7,
           "relative_humidity_2m_mean": 77,
           "soil_moisture_0_to_7cm_mean": 0.284,
-          "precip_peak_2h_mm": 0.5,
+          "precip_peak_2h_mm": 0.7,
           "precip_peak_basis": "hourly"
         },
         {
           "date": "2026-10-14",
           "source": "forecast",
-          "precipitation_sum": 0.0,
+          "precipitation_sum": 0.6,
           "temperature_2m_max": 15.4,
-          "temperature_2m_min": 3.9,
+          "temperature_2m_min": 4.8,
           "soil_temperature_0_to_7cm_mean": 12.0,
           "relative_humidity_2m_mean": 83,
           "soil_moisture_0_to_7cm_mean": 0.28,
@@ -109894,10 +109894,10 @@
           "date": "2026-10-15",
           "source": "forecast",
           "precipitation_sum": 0.0,
-          "temperature_2m_max": 16.0,
-          "temperature_2m_min": 3.2,
+          "temperature_2m_max": 16.1,
+          "temperature_2m_min": 3.0,
           "soil_temperature_0_to_7cm_mean": 10.2,
-          "relative_humidity_2m_mean": 85,
+          "relative_humidity_2m_mean": 86,
           "soil_moisture_0_to_7cm_mean": 0.273,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
@@ -109906,10 +109906,10 @@
           "date": "2026-10-16",
           "source": "forecast",
           "precipitation_sum": 0.0,
-          "temperature_2m_max": 18.9,
-          "temperature_2m_min": 5.3,
+          "temperature_2m_max": 19.0,
+          "temperature_2m_min": 5.2,
           "soil_temperature_0_to_7cm_mean": 10.8,
-          "relative_humidity_2m_mean": 81,
+          "relative_humidity_2m_mean": 82,
           "soil_moisture_0_to_7cm_mean": 0.263,
           "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
@@ -109917,13 +109917,13 @@
         {
           "date": "2026-10-17",
           "source": "forecast",
-          "precipitation_sum": 0.1,
-          "temperature_2m_max": 13.1,
-          "temperature_2m_min": 8.2,
+          "precipitation_sum": 0.0,
+          "temperature_2m_max": 13.3,
+          "temperature_2m_min": 8.3,
           "soil_temperature_0_to_7cm_mean": 10.6,
           "relative_humidity_2m_mean": 93,
           "soil_moisture_0_to_7cm_mean": 0.26,
-          "precip_peak_2h_mm": 0.1,
+          "precip_peak_2h_mm": 0.0,
           "precip_peak_basis": "hourly"
         },
         {
@@ -109931,7 +109931,7 @@
           "source": "forecast",
           "precipitation_sum": 0.0,
           "temperature_2m_max": 12.8,
-          "temperature_2m_min": 8.8,
+          "temperature_2m_min": 9.5,
           "soil_temperature_0_to_7cm_mean": 11.0,
           "relative_humidity_2m_mean": 89,
           "soil_moisture_0_to_7cm_mean": 0.266,
@@ -109942,8 +109942,8 @@
           "date": "2026-10-19",
           "source": "forecast",
           "precipitation_sum": 0.0,
-          "temperature_2m_max": 11.6,
-          "temperature_2m_min": 0.0,
+          "temperature_2m_max": 11.7,
+          "temperature_2m_min": 0.6,
           "soil_temperature_0_to_7cm_mean": 9.7,
           "relative_humidity_2m_mean": 71,
           "soil_moisture_0_to_7cm_mean": 0.259,
@@ -109954,8 +109954,8 @@
           "date": "2026-10-20",
           "source": "forecast",
           "precipitation_sum": 0.0,
-          "temperature_2m_max": 10.1,
-          "temperature_2m_min": -0.1,
+          "temperature_2m_max": 10.2,
+          "temperature_2m_min": 0.1,
           "soil_temperature_0_to_7cm_mean": 8.1,
           "relative_humidity_2m_mean": 83,
           "soil_moisture_0_to_7cm_mean": 0.258,
@@ -109967,7 +109967,7 @@
           "source": "forecast",
           "precipitation_sum": 0.0,
           "temperature_2m_max": 12.3,
-          "temperature_2m_min": 6.8,
+          "temperature_2m_min": 7.0,
           "soil_temperature_0_to_7cm_mean": 8.2,
           "relative_humidity_2m_mean": 86,
           "soil_moisture_0_to_7cm_mean": 0.291,
@@ -109977,11 +109977,11 @@
         {
           "date": "2026-10-22",
           "source": "forecast",
-          "precipitation_sum": 3.0,
-          "temperature_2m_max": 14.6,
-          "temperature_2m_min": 6.4,
+          "precipitation_sum": 2.9,
+          "temperature_2m_max": 14.7,
+          "temperature_2m_min": 6.5,
           "soil_temperature_0_to_7cm_mean": 9.7,
-          "relative_humidity_2m_mean": 87,
+          "relative_humidity_2m_mean": 86,
           "soil_moisture_0_to_7cm_mean": 0.37,
           "precip_peak_2h_mm": 0.8,
           "precip_peak_basis": "hourly"
@@ -109989,13 +109989,13 @@
         {
           "date": "2026-10-23",
           "source": "forecast",
-          "precipitation_sum": 0.0,
-          "temperature_2m_max": 13.6,
-          "temperature_2m_min": 4.8,
+          "precipitation_sum": 0.1,
+          "temperature_2m_max": 14.0,
+          "temperature_2m_min": 4.7,
           "soil_temperature_0_to_7cm_mean": 9.1,
-          "relative_humidity_2m_mean": 84,
+          "relative_humidity_2m_mean": 82,
           "soil_moisture_0_to_7cm_mean": 0.307,
-          "precip_peak_2h_mm": 0.2,
+          "precip_peak_2h_mm": 0.1,
           "precip_peak_basis": "hourly"
         }
       ],
@@ -131965,7 +131965,7 @@
         "2026-10-19": {
           "score": 45,
           "status": "✅ Viable conditions",
-          "quality": "Cool week: firm caps likely",
+          "quality": "",
           "source": "forecast"
         },
         "2026-10-20": {
@@ -131975,19 +131975,19 @@
           "source": "forecast"
         },
         "2026-10-21": {
-          "score": 47,
+          "score": 49,
           "status": "✅ Viable conditions",
           "quality": "Cool week: firm caps likely",
           "source": "forecast"
         },
         "2026-10-22": {
-          "score": 50,
+          "score": 52,
           "status": "✅ Viable conditions",
           "quality": "Cool week: firm caps likely",
           "source": "forecast"
         },
         "2026-10-23": {
-          "score": 47,
+          "score": 49,
           "status": "✅ Viable conditions",
           "quality": "Cool week: firm caps likely",
           "source": "forecast"
@@ -132569,19 +132569,19 @@
           ],
           [
             "2026-10-20",
-            48
+            52
           ],
           [
             "2026-10-21",
-            46
+            52
           ],
           [
             "2026-10-22",
-            48
+            54
           ],
           [
             "2026-10-23",
-            47
+            53
           ]
         ],
         "Location 2": [
@@ -132603,22 +132603,22 @@
           ],
           [
             "2026-10-21",
-            47
+            49
           ],
           [
             "2026-10-22",
-            50
+            52
           ],
           [
             "2026-10-23",
-            47
+            49
           ]
         ]
       }
     }
   ],
   "meta": {
-    "last_run_utc": "2026-10-17T15:24:19Z",
+    "last_run_utc": "2026-10-17T15:32:04Z",
     "last_run_mode": "default",
     "model_version": 18
   }

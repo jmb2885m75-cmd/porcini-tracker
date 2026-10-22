@@ -66079,7 +66079,7 @@
         "no_finds_above_threshold": 1,
         "find_hit_rate": 1.0,
         "no_find_above_threshold_rate": 0.5,
-        "mean_score_on_find_days": 74.1,
+        "mean_score_on_find_days": 74.2,
         "mean_score_on_no_find_days": 52.5,
         "suggested_threshold": 70,
         "true_false_negatives": 0,
@@ -133123,7 +133123,7 @@
     }
   ],
   "meta": {
-    "last_run_utc": "2026-10-22T11:42:06Z",
+    "last_run_utc": "2026-10-22T11:43:35Z",
     "last_run_mode": "default",
     "model_version": 18
   }

@@ -94,6 +94,13 @@
       "notes": "hallimasch, krauseglucke",
       "submitted_at": "2026-10-11T12:39:33Z",
       "reporter": "jmb2885m75-cmd"
+    },
+    {
+      "location": "Fangschleuse",
+      "date": "2026-10-23",
+      "observation_type": "no_mushrooms",
+      "submitted_at": "2026-10-26T10:37:28Z",
+      "reporter": "jmb2885m75-cmd"
     }
   ]
 }

@@ -51,6 +51,14 @@ class ElevationTests(unittest.TestCase):
         self.assertIsNone(soil.resolve_elevation(None, None, 1, 2, fetch=lambda *a: None))
 
 
+class StatusTests(unittest.TestCase):
+    def test_status_follows_configured_threshold(self):
+        import report
+        self.assertEqual(report.display_status(47, "✅ Viable conditions", 55), "⚠️ Watch closely")
+        self.assertEqual(report.display_status(58, "⚠️ Watch closely", 55), "✅ Viable conditions")
+        self.assertEqual(report.display_status(10, "💧 Too dry – low soil moisture", 55), "💧 Too dry – low soil moisture")
+
+
 class InsightTests(unittest.TestCase):
     def test_factors_sum_to_score(self):
         recs = series(date(2025, 9, 1), 30, precipitation_sum=4.0)

@@ -367,16 +367,16 @@ class ScoringTests(unittest.TestCase):
         target = date(2025, 10, 18)
         records = series(target - timedelta(days=7), 7, soil_temperature_0_to_7cm_mean=10.0)
         hist = p.History(records)
-        # v18: soil temperature is a primary signal (up to +20, down to -10) instead of +3/-5.
-        self.assertEqual(p.soil_temperature_score(hist, target), 20)
-        self.assertEqual(p.score_breakdown(LOC, rec(target.isoformat()), hist)["soil_temperature"], 20)
+        # soil temperature contributes up to +12 and down to -6.
+        self.assertEqual(p.soil_temperature_score(hist, target), 12)
+        self.assertEqual(p.score_breakdown(LOC, rec(target.isoformat()), hist)["soil_temperature"], 12)
 
         for record in records:
             record["soil_temperature_0_to_7cm_mean"] = 6.0
-        self.assertEqual(p.soil_temperature_score(hist, target), 14)
+        self.assertEqual(p.soil_temperature_score(hist, target), 8)
         for record in records:
             record["soil_temperature_0_to_7cm_mean"] = 20.0
-        self.assertEqual(p.soil_temperature_score(hist, target), 5)
+        self.assertEqual(p.soil_temperature_score(hist, target), 2)
         for record in records:
             record["soil_temperature_0_to_7cm_mean"] = 35.0
         self.assertEqual(p.soil_temperature_score(hist, target), -p.SOIL_TEMPERATURE_PENALTY_MAX)
@@ -386,8 +386,8 @@ class ScoringTests(unittest.TestCase):
         target = date(2025, 10, 18)
         hist = p.History(series(target - timedelta(days=7), 7, soil_temperature_0_to_7cm_mean=20.0))
         loc = dict(LOC, soil_temperature_optimal_range=[18, 22])
-        self.assertEqual(p.soil_temperature_score(hist, target, loc), 20)
-        self.assertEqual(p.soil_temperature_score(hist, target, dict(LOC, soil_temperature_optimal_range="bad")), 5)
+        self.assertEqual(p.soil_temperature_score(hist, target, loc), 12)
+        self.assertEqual(p.soil_temperature_score(hist, target, dict(LOC, soil_temperature_optimal_range="bad")), 2)
         self.assertNotEqual(p.location_signature(loc), p.location_signature(LOC))
 
     def test_model_thresholds_host_tree_removal_and_weather_fields(self):
@@ -409,7 +409,7 @@ class ScoringTests(unittest.TestCase):
             p.calculate_score_for_day({"tree_species": ["Birch", "Spruce"]}, day, hist, [])[0],
             baseline,
         )
-        self.assertEqual(p.MODEL_VERSION, 19)
+        self.assertEqual(p.MODEL_VERSION, 20)
 
     def test_depletion_tiers_and_recovery_periods(self):
         self.assertEqual(p.FLUSH_DEPLETION_TIERS, ((1, 35), (3, 25), (6, 12)))
@@ -496,7 +496,7 @@ class ScoringTests(unittest.TestCase):
     def test_hard_freeze_threshold_and_season_termination(self):
         self.assertFalse(hasattr(p, "severe_freeze_recent"))
         target = date(2025, 11, 28)
-        records = series(target - timedelta(days=30), 31)
+        records = series(target - timedelta(days=30), 31, temperature_2m_max=3.0, temperature_2m_min=0.0)
         hist = p.History(records)
         records[-2]["temperature_2m_min"] = -4.0
         self.assertTrue(p.hard_freeze_recent(hist, target))
@@ -790,17 +790,20 @@ class ScoringTests(unittest.TestCase):
 
     def test_hard_freeze_in_late_season_ends_season_but_not_in_mild_autumn(self):
         recs = series(date(2024, 9, 1), 90, precipitation_sum=4.0)
-        for r in recs:
-            r["temperature_2m_min"] = -1.9 if r["date"] == "2024-11-26" else 4.0
-        hist = p.History(recs)
+        cold = [dict(r, temperature_2m_max=4.0, temperature_2m_min=-1.9 if r["date"] == "2024-11-26" else 1.0) for r in recs]
+        hist = p.History(cold)
         late = p.calculate_score_for_day(LOC, hist.get(date(2024, 11, 28)), hist, [])
         self.assertEqual(p.score_verdict_tag(late[0], late[1]), p.VERDICT_SPECIAL_TAGS["terminated"])
         early = p.calculate_score_for_day(LOC, hist.get(date(2024, 11, 10)), hist, [])
         self.assertNotEqual(p.status_category(early[1]), "terminated")
-        recs2 = [dict(r, temperature_2m_min=-1.9 if r["date"] == "2024-10-20" else 4.0) for r in recs]
-        hist2 = p.History(recs2)
+        # a single hard freeze after a mild spell (20-day mean above the season-end threshold) does not end the season
+        mild = [dict(r, temperature_2m_min=-1.9 if r["date"] == "2024-10-20" else 4.0) for r in recs]
+        hist2 = p.History(mild)
         mid = p.calculate_score_for_day(LOC, hist2.get(date(2024, 10, 22)), hist2, [])
         self.assertNotEqual(p.status_category(mid[1]), "terminated")
+        # sustained cold ends the season even before the late-season decay date
+        hist3 = p.History([dict(r, temperature_2m_max=4.0, temperature_2m_min=-1.9 if r["date"] == "2024-10-20" else 1.0) for r in recs])
+        self.assertEqual(p.status_category(p.calculate_score_for_day(LOC, hist3.get(date(2024, 10, 22)), hist3, [])[1]), "terminated")
 
     def test_mild_early_season_score_unchanged_by_decay(self):
         recs = series(date(2024, 9, 1), 90, precipitation_sum=4.0)

@@ -85,7 +85,7 @@ SMALL_HARVEST_DEPLETION_RECOVERY_DAYS = 5
 DEFAULT_EARLY_HARVEST_PENALTY_FACTOR = 0.5
 
 
-MODEL_VERSION = 19  # 19: per-day factor breakdown, geodata soil pH (calcareous soil_pH penalty); 18: lagged rain trigger/background windows, warmer early-season optimum, soil temperature as primary signal, limiting-factor score gates, softer frost/heat/humidity terms; 17: frost termination zeroes score, sparse weather windows give 'insufficient data'; 16: C1–C7 scoring updates (host-tree removal, depletion tiers, drought percentile, rain cap, frost/season, soil temp, utcnow fix)
+MODEL_VERSION = 20  # 20: season ends on sustained cold (20-day mean air temp) plus hard freeze instead of date plus freeze, lower soil temperature weight; 19: per-day factor breakdown, geodata soil pH (calcareous soil_pH penalty); 18: lagged rain trigger/background windows, warmer early-season optimum, soil temperature as primary signal, limiting-factor score gates, softer frost/heat/humidity terms; 17: frost termination zeroes score, sparse weather windows give 'insufficient data'; 16: C1–C7 scoring updates (host-tree removal, depletion tiers, drought percentile, rain cap, frost/season, soil temp, utcnow fix)
 
 
 ARCHIVE_LAG_DAYS = 5
@@ -238,6 +238,9 @@ FROST_REPEAT_PENALTY_PER_NIGHT = 2
 FROST_REPEAT_PENALTY_MAX = 8
 
 
+SEASON_END_MEAN_TEMP_C = 5.0  # a 20-day mean air temperature below this ends the season once a hard freeze has hit
+
+
 LATE_SEASON_DECAY_START = (11, 15)
 
 
@@ -247,13 +250,13 @@ LATE_SEASON_DECAY_END = (12, 1)
 LATE_SEASON_DECAY_MAX = 15
 
 
-SOIL_TEMPERATURE_SCORE_MAX = 20
+SOIL_TEMPERATURE_SCORE_MAX = 12
 
 
-SOIL_TEMPERATURE_PENALTY_MAX = 10
+SOIL_TEMPERATURE_PENALTY_MAX = 6
 
 
-SOIL_TEMPERATURE_SLOPE_PER_DEGREE = 3
+SOIL_TEMPERATURE_SLOPE_PER_DEGREE = 2
 
 
 DEFAULT_SOIL_TEMPERATURE_RANGE = (8.0, 15.0)
@@ -902,7 +905,7 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
         breakdown["soil"] += moisture_points
         if soil_moisture <= SOIL_DRY:
             status = "💧 Too dry – low soil moisture"
-    terminated = decay > 0 and hard_freeze_recent(hist, d)
+    terminated = average_temperature < SEASON_END_MEAN_TEMP_C and hard_freeze_recent(hist, d)
     if terminated:
         status = "❄️ Season terminated by frost"
 
@@ -1291,12 +1294,12 @@ def estimate_days_until_threshold(records: List[Dict[str, Any]], scores: Dict[st
 
 
 SIGNIFICANT_RAIN_MM = 5.0
-FLUSH_LAG_MIN_DAYS = 5
-FLUSH_LAG_MAX_DAYS = 10
+FLUSH_LAG_MIN_DAYS = 7
+FLUSH_LAG_MAX_DAYS = 14
 
 
 def rain_flush_hint(records: List[Dict[str, Any]], today: date) -> Dict[str, Any]:
-    """Days since the last significant rain and the typical flush window (5-10 days after a wet spell)."""
+    """Days since the last significant rain and the typical flush window (7-14 days after a wet spell)."""
     rainy = sorted(
         parse_date(r["date"]) for r in records
         if valid_date_string(r.get("date")) and _precip(r) >= SIGNIFICANT_RAIN_MM
@@ -1309,12 +1312,12 @@ def rain_flush_hint(records: List[Dict[str, Any]], today: date) -> Dict[str, Any
         start, end = last + timedelta(days=FLUSH_LAG_MIN_DAYS), last + timedelta(days=FLUSH_LAG_MAX_DAYS)
         ago = "today" if since == 0 else f"{since} day{'s' if since != 1 else ''} ago"
         if today < start:
-            text = f"Last significant rain {ago}. Mushrooms typically follow 5–10 days later: expect a flush around {format_display_date(start)} – {format_display_date(end)}."
+            text = f"Last significant rain {ago}. Mushrooms typically follow 7–14 days later: expect a flush around {format_display_date(start)} – {format_display_date(end)}."
         else:
-            text = f"Last significant rain {ago}: inside the typical 5–10 day flush window (until {format_display_date(end)})."
+            text = f"Last significant rain {ago}: inside the typical 7–14 day flush window (until {format_display_date(end)})."
     elif upcoming:
         first = upcoming[0]
-        text = (f"Rain is forecast for {format_display_date(first)}. Mushrooms typically follow 5–10 days later "
+        text = (f"Rain is forecast for {format_display_date(first)}. Mushrooms typically follow 7–14 days later "
                 f"({format_display_date(first + timedelta(days=FLUSH_LAG_MIN_DAYS))} – {format_display_date(first + timedelta(days=FLUSH_LAG_MAX_DAYS))}).")
     elif since is not None:
         text = f"Last significant rain {since} days ago: the usual flush window has passed, so new rain is needed."

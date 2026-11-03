@@ -217,7 +217,10 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]],
         )
         recommendation = f"<div class='recommendation'>{html.escape(item['recommendation'])}</div>" if item.get("recommendation") else ""
         hint = f"<div class='meta flush-hint'>🌧 {html.escape(item['flush_hint'])}</div>" if item.get("flush_hint") else ""
-        soil_line = f"<div class='meta soil-info'>🌱 {html.escape(item['soil'])}</div>" if item.get("soil") else ""
+        soil_text = item.get("soil") or ""
+        if item.get("elevation_m") is not None:
+            soil_text = f"{soil_text} · {item['elevation_m']} m a.s.l." if soil_text else f"{item['elevation_m']} m a.s.l."
+        soil_line = f"<div class='meta soil-info'>🌱 {html.escape(soil_text)}</div>" if soil_text else ""
         cards.append(
             f"<div class='card'><div class='score-line'>{score_display}</div><div class='name'>{html.escape(public_location_alias(index))}</div>{verdict}{recommendation}{hint}{soil_line}"
             f"<div class='meta best-day'>Best day<strong>{html.escape(str(item['best_day']))}</strong></div><div class='meta'>Status: {html.escape(str(item['status']))}</div>{explanation}{quality}{timing}"

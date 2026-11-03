@@ -10,6 +10,7 @@ SOILGRIDS_URL = "https://rest.isric.org/soilgrids/v2.0/properties/query"
 SOIL_PROPERTIES = ("clay", "sand", "silt", "phh2o")
 SOIL_DEPTHS = ("0-5cm", "5-15cm")
 CALCAREOUS_PH = 7.5
+ELEVATION_URL = "https://api.open-meteo.com/v1/elevation"
 
 
 def usda_texture(clay: float, sand: float, silt: float) -> str:
@@ -131,3 +132,23 @@ def describe_soil(profile: Optional[Dict[str, Any]]) -> str:
     if profile.get("ph") is not None:
         text += f", pH {profile['ph']:.1f} ({profile['ph_class']})"
     return text[0].upper() + text[1:]
+
+
+def fetch_elevation(latitude: float, longitude: float, timeout: int = 20) -> Optional[int]:
+    """Terrain height in metres from the Open-Meteo elevation API (Copernicus DEM); None on any failure."""
+    try:
+        response = requests.get(ELEVATION_URL, params={"latitude": latitude, "longitude": longitude}, timeout=timeout)
+        response.raise_for_status()
+        value = response.json()["elevation"][0]
+        return round(float(value)) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+    except Exception as exc:
+        print(f"[WARN] Elevation lookup failed: {type(exc).__name__}")
+        return None
+
+
+def resolve_elevation(configured: Any, cached: Any, latitude: float, longitude: float, fetch: Any = fetch_elevation) -> Optional[int]:
+    """Elevation from config if given, else the cached geodata value, else a fresh lookup (None if unavailable)."""
+    for value in (configured, cached):
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return int(value)
+    return fetch(latitude, longitude)

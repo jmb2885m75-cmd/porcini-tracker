@@ -22,7 +22,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from dates import BERLIN_TZ, berlin_today, format_display_date, parse_user_date
-from soil import describe_soil, ensure_soil_profile
+from soil import describe_soil, ensure_soil_profile, resolve_elevation
 from harvest import HarvestError, build_observation_log, entry_id, load_harvest_log, merge_harvests, summarize_observations
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", "."))
@@ -615,7 +615,9 @@ def main() -> int:
         storage_name = public_location_alias(location_index)
         latitude = float(location.get("latitude"))
         longitude = float(location.get("longitude"))
-        elevation = int(location.get("elevation_m", 0))
+        cached_elevation = (db["locations"].get(storage_name) or {}).get("elevation_geo_m")
+        resolved_elevation = resolve_elevation(location.get("elevation_m"), cached_elevation, latitude, longitude)
+        elevation = resolved_elevation if resolved_elevation is not None else 0
         harvests = merge_harvests(location.get("past_harvests", []), harvest_log, name)
         if storage_name not in db["locations"] and name in db["locations"]:
             db["locations"][storage_name] = db["locations"].pop(name)
@@ -625,6 +627,8 @@ def main() -> int:
             notify_sync_failure(cfg, f"{storage_name}: {exc}")
             return 1
         loc_store = db["locations"][storage_name]
+        if resolved_elevation is not None and location.get("elevation_m") is None:
+            loc_store["elevation_geo_m"] = resolved_elevation
         soil = ensure_soil_profile(loc_store, latitude, longitude)
         # Geodata fills in calcareous soil only when no soil_pH is configured.
         if soil and soil.get("calcareous") and not location.get("soil_pH"):
@@ -662,6 +666,7 @@ def main() -> int:
             "recommendation": build_recommendation(best_score, status, threshold, flush_days, best_day != "N/A"),
             "flush_hint": rain_flush_hint(records, today)["text"],
             "soil": describe_soil(soil),
+            "elevation_m": resolved_elevation,
         })
 
         available = best_day != "N/A"

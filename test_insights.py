@@ -42,6 +42,15 @@ class SoilTests(unittest.TestCase):
         self.assertEqual(soil.ensure_soil_profile(store, 1, 2, fetch=lambda *a: self.fail("refetched")), profile)
 
 
+class ElevationTests(unittest.TestCase):
+    def test_resolution_order_and_fail_soft(self):
+        boom = lambda *a: self.fail("fetched")
+        self.assertEqual(soil.resolve_elevation(120, 40, 1, 2, fetch=boom), 120)
+        self.assertEqual(soil.resolve_elevation(None, 40, 1, 2, fetch=boom), 40)
+        self.assertEqual(soil.resolve_elevation(None, None, 1, 2, fetch=lambda *a: 35), 35)
+        self.assertIsNone(soil.resolve_elevation(None, None, 1, 2, fetch=lambda *a: None))
+
+
 class InsightTests(unittest.TestCase):
     def test_factors_sum_to_score(self):
         recs = series(date(2025, 9, 1), 30, precipitation_sum=4.0)
@@ -61,7 +70,7 @@ class InsightTests(unittest.TestCase):
         recs[6]["precipitation_sum"] = 12.0
         hint = p.rain_flush_hint(recs, date(2025, 9, 10))
         self.assertEqual(hint["days_since_rain"], 3)
-        self.assertIn("5–10 days", hint["text"])
+        self.assertIn("7–14 days", hint["text"])
 
     def test_recommendation(self):
         self.assertTrue(p.build_recommendation(90, "Viable conditions", 60, None).startswith("Go"))

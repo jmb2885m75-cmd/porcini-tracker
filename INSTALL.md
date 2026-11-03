@@ -31,7 +31,7 @@ and writes `porcini_report.html`. A separate GitHub issue workflow validates har
 
 1. Fork/clone the repository. Python 3.10+ and `pip install -r requirements.txt` are required for local runs. The season window, frost and late-season decay logic assume the northern hemisphere.
 2. Configure `LOCATIONS` (name, `latitude`, `longitude`, `elevation_m`, `tree_species`, `tree_density`, `aspect`,
-   `soil_pH`, `past_harvests`, `last_seen_fly_agaric`) and `ALERT_THRESHOLD` (default 55) in the JSON configuration.
+   `soil_pH`, `past_harvests`, `last_seen_fly_agaric`) and `ALERT_THRESHOLD` (default 52) in the JSON configuration.
    `aspect` and `canopy` are accepted configuration fields but currently unused by the scoring model.
    The default scoring season is Aug 15–Dec 10, aligned with the late-season decay ramp; `season_end` can override it.
    Optional `MIN_ALERT_GAP_DAYS` controls the minimum interval between alerts (default 5; zero disables the gap).

@@ -100,6 +100,9 @@ The first run downloads ~2 years of history per location. A corrupt `porcini_db.
 - **Forecast uncertainty** is shown on timeline days when at least 20% of the preceding seasonal rain window comes from forecast data; focus or hover for the forecast/archive day counts. Spot cards show estimated days until the alert threshold is crossed only when a crossing appears in the forecast, explicitly as a heuristic.
 - **Runoff penalty** uses hourly rain intensity over the three complete days before the scored date and applies only to days fetched after this feature was added.
 - The 26-day rain and 20-day air-temperature windows end the day before the scored date. The soil-temperature signal uses that day's `soil_temperature_0_to_7cm_mean` field and defaults to a 25% weight; a location can override its weight (0–1) and optimal range. Seasonally matched 90-day rainfall comparisons use prior-year archive data only and are omitted when fewer than 20 valid comparison windows are available. Aspect/canopy adjustments are not currently applied.
+- **Score breakdown:** each daily score stores per-factor points (rain, soil, temperature, humidity, observations & limits) that sum to the score; the dashboard shows them for the selected day (last 45 days and forecast).
+- **Recommendation and flush timing:** each spot card shows plain-language advice (Go now / Go / Wait / Maybe / Skip) and days since significant rain (≥ 5 mm) with the typical 5–10 day flush window.
+- **Soil from geodata:** soil texture and pH are looked up once per spot from ISRIC SoilGrids (https://rest.isric.org) and cached in the database; a failed lookup is retried next run. If the soil pH is calcareous (≥ 7.5) and `soil_pH` is not configured, the alkaline penalty is applied automatically. Only the soil class is shown publicly, never coordinates.
 - Size: roughly 365 records per location per year; there is no automatic pruning.
 
 ## Submitting observations from the report (GitHub only)

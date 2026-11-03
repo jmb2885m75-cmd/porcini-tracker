@@ -409,7 +409,7 @@ class ScoringTests(unittest.TestCase):
             p.calculate_score_for_day({"tree_species": ["Birch", "Spruce"]}, day, hist, [])[0],
             baseline,
         )
-        self.assertEqual(p.MODEL_VERSION, 18)
+        self.assertEqual(p.MODEL_VERSION, 19)
 
     def test_depletion_tiers_and_recovery_periods(self):
         self.assertEqual(p.FLUSH_DEPLETION_TIERS, ((1, 35), (3, 25), (6, 12)))

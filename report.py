@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import html
@@ -6,14 +6,16 @@ import json
 import os
 import secrets
 
-from dates import berlin_now, format_display_date, parse_user_date
+from dates import berlin_now, berlin_today, format_display_date, parse_user_date
 from harvest import build_observation_log, entry_id, summarize_observations
 from notify import DEFAULT_ALERT_THRESHOLD
 from scoring import (
-    HEAVY_FORECAST_RAIN_SHARE, MAX_FORECAST_SNAPSHOTS, SOURCE_FORECAST,
+    FACTOR_KEYS, HEAVY_FORECAST_RAIN_SHARE, MAX_FORECAST_SNAPSHOTS, SOURCE_FORECAST,
     forecast_rain_window_mix, iso_date, parse_date, score_color, score_verdict_tag,
 )
 
+FACTOR_HISTORY_DAYS = 45  # factor breakdowns are embedded only for recent days to keep the page small
+FACTOR_LABELS = {"rain": "Rain", "soil": "Soil", "temperature": "Temperature", "humidity": "Humidity", "other": "Observations & limits"}
 TEMPLATE_PATH = Path(__file__).with_name("index.template.html")
 DASHBOARD_TEMPLATE = TEMPLATE_PATH.read_text(encoding="utf-8")
 
@@ -84,6 +86,7 @@ def dashboard_payload(cfg: Dict[str, Any], analysis: List[Dict[str, Any]], mode:
         return round(value, 2) if isinstance(value, float) else value
 
     threshold = alert_threshold(cfg)
+    factor_cutoff = iso_date(berlin_today() - timedelta(days=FACTOR_HISTORY_DAYS))
     locations = []
     for index, item in enumerate(analysis):
         records = item.get("records", [])
@@ -104,6 +107,7 @@ def dashboard_payload(cfg: Dict[str, Any], analysis: List[Dict[str, Any]], mode:
             "name": alias,
             "scores": [[d, v["score"], v["status"], v.get("quality", ""),
                         score_verdict_tag(v["score"], v["status"], threshold), score_color(v["score"])]
+                       + ([v["factors"]] if d >= factor_cutoff and isinstance(v.get("factors"), list) else [])
                        for d, v in sorted(scores.items())],
             # [date, tmax, tmin, rain, wind, soil_temp, rh, soil_moisture, source]
             "records": [[r["date"]] + [rnd(r.get(k)) for k in ("temperature_2m_max", "temperature_2m_min", "precipitation_sum", "wind_speed_10m_max", "soil_temperature_0_to_7cm_mean", "relative_humidity_2m_mean", "soil_moisture_0_to_7cm_mean")] + [r.get("source", "")] for r in records],
@@ -117,7 +121,7 @@ def dashboard_payload(cfg: Dict[str, Any], analysis: List[Dict[str, Any]], mode:
             "auc_display": auc_display,
         })
     repo = os.environ.get("GITHUB_REPOSITORY") or cfg.get("GITHUB_REPOSITORY") or "jmb2885m75-cmd/porcini-tracker"
-    return {"mode": mode, "threshold": threshold, "repo": repo, "branch": str(cfg.get("GITHUB_BRANCH", "main")), "locations": locations}
+    return {"mode": mode, "threshold": threshold, "factor_keys": list(FACTOR_KEYS), "factor_labels": FACTOR_LABELS, "repo": repo, "branch": str(cfg.get("GITHUB_BRANCH", "main")), "locations": locations}
 
 
 _TIER_LABELS = {"small": "Small", "medium": "Medium", "large": "Large"}
@@ -211,8 +215,11 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]],
             f"<div class='meta flush-timing'>Estimated days until score crosses ALERT_THRESHOLD: {timing_days} (heuristic)</div>"
             if isinstance(timing_days, int) else ""
         )
+        recommendation = f"<div class='recommendation'>{html.escape(item['recommendation'])}</div>" if item.get("recommendation") else ""
+        hint = f"<div class='meta flush-hint'>🌧 {html.escape(item['flush_hint'])}</div>" if item.get("flush_hint") else ""
+        soil_line = f"<div class='meta soil-info'>🌱 {html.escape(item['soil'])}</div>" if item.get("soil") else ""
         cards.append(
-            f"<div class='card'><div class='score-line'>{score_display}</div><div class='name'>{html.escape(public_location_alias(index))}</div>{verdict}"
+            f"<div class='card'><div class='score-line'>{score_display}</div><div class='name'>{html.escape(public_location_alias(index))}</div>{verdict}{recommendation}{hint}{soil_line}"
             f"<div class='meta best-day'>Best day<strong>{html.escape(str(item['best_day']))}</strong></div><div class='meta'>Status: {html.escape(str(item['status']))}</div>{explanation}{quality}{timing}"
             f"<div class='meta'>Moisture: {item['soil_moisture']:.2f} m³/m³</div></div>"
         )

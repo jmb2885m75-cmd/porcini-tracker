@@ -73,6 +73,13 @@ def store_forecast_snapshot(db: Dict[str, Any], run_date: date, forecast_scores:
     db["forecast_snapshots"] = snapshots[-MAX_FORECAST_SNAPSHOTS:]
 
 
+def display_status(score: int, status: str, threshold: int) -> str:
+    """Viable/Watch labels follow the configured alert threshold so they agree with the verdict and recommendation."""
+    if status in ("✅ Viable conditions", "⚠️ Watch closely"):
+        return "✅ Viable conditions" if score >= threshold else "⚠️ Watch closely"
+    return status
+
+
 def alert_threshold(cfg: Dict[str, Any]) -> int:
     """ALERT_THRESHOLD as an int in 0–100; invalid values fall back to the default."""
     try:
@@ -105,7 +112,7 @@ def dashboard_payload(cfg: Dict[str, Any], analysis: List[Dict[str, Any]], mode:
                 auc_display = f"not enough visits yet ({finds_n}/{no_finds_n})"
         locations.append({
             "name": alias,
-            "scores": [[d, v["score"], v["status"], v.get("quality", ""),
+            "scores": [[d, v["score"], display_status(v["score"], v["status"], threshold), v.get("quality", ""),
                         score_verdict_tag(v["score"], v["status"], threshold), score_color(v["score"])]
                        + ([v["factors"]] if d >= factor_cutoff and isinstance(v.get("factors"), list) else [])
                        for d, v in sorted(scores.items())],
@@ -223,7 +230,7 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]],
         soil_line = f"<div class='meta soil-info'>🌱 {html.escape(soil_text)}</div>" if soil_text else ""
         cards.append(
             f"<div class='card'><div class='score-line'>{score_display}</div><div class='name'>{html.escape(public_location_alias(index))}</div>{verdict}{recommendation}{hint}{soil_line}"
-            f"<div class='meta best-day'>Best day<strong>{html.escape(str(item['best_day']))}</strong></div><div class='meta'>Status: {html.escape(str(item['status']))}</div>{explanation}{quality}{timing}"
+            f"<div class='meta best-day'>Best day<strong>{html.escape(str(item['best_day']))}</strong></div><div class='meta'>Status: {html.escape(display_status(score, str(item['status']), threshold))}</div>{explanation}{quality}{timing}"
             f"<div class='meta'>Moisture: {item['soil_moisture']:.2f} m³/m³</div></div>"
         )
     alert_status = "This message will be sent with this run." if alert_will_send else "Preview only: no alert is triggered by this run."

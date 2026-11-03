@@ -8,7 +8,7 @@ import json
 import math
 import re
 
-from dates import format_display_date, parse_user_date
+from dates import berlin_today, format_display_date, parse_user_date
 from harvest import merge_harvests
 from notify import DEFAULT_ALERT_THRESHOLD
 
@@ -382,7 +382,7 @@ def fetch_archive_day_range(latitude: float, longitude: float, elevation: int, s
             "temperature_unit": "celsius",
             "wind_speed_unit": "kmh",
             "precipitation_unit": "mm",
-            "timezone": "UTC",
+            "timezone": "Europe/Berlin",
         },
     )
     return parse_open_meteo_payload(payload, SOURCE_ARCHIVE)
@@ -400,7 +400,7 @@ def fetch_archive_hourly_precip(latitude: float, longitude: float, elevation: in
             "end_date": iso_date(end),
             "hourly": "precipitation",
             "precipitation_unit": "mm",
-            "timezone": "UTC",
+            "timezone": "Europe/Berlin",
         },
     )
 
@@ -412,7 +412,7 @@ def needs_runoff_backfill(rec: Dict[str, Any]) -> bool:
         return False
     try:
         rec_date = parse_date(rec["date"])
-        cutoff = datetime.now(timezone.utc).date() - timedelta(days=400)
+        cutoff = berlin_today() - timedelta(days=400)
         return rec_date >= cutoff
     except (KeyError, TypeError, ValueError):
         return False
@@ -469,7 +469,7 @@ def fetch_forecast_day_range(latitude: float, longitude: float, elevation: int) 
             "temperature_unit": "celsius",
             "wind_speed_unit": "kmh",
             "precipitation_unit": "mm",
-            "timezone": "UTC",
+            "timezone": "Europe/Berlin",
         },
     )
     return parse_open_meteo_payload(payload, SOURCE_FORECAST)
@@ -1220,7 +1220,7 @@ def calibration_messages(name: str, backtest: Dict[str, Any], location: Optional
 
 def find_weekend_best(location: Dict[str, Any], records: List[Dict[str, Any]], harvests: List[Dict[str, Any]], scores: Optional[Dict[str, Any]] = None, today: Optional[date] = None) -> Tuple[int, str, str, str]:
     """Best Fri/Sat/Sun score within the coming 7 days (today..today+6)."""
-    today = today or datetime.now(timezone.utc).date()
+    today = today or berlin_today()
     hist = History(records)
     valid_days = []
     for record in records:

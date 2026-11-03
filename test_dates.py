@@ -13,7 +13,7 @@ class DateUtilTests(unittest.TestCase):
     def test_display_format(self):
         self.assertEqual(dates.format_display_date(date(2026, 10, 2)), "Fri. 02 Oct. 2026")
         self.assertEqual(dates.format_display_date("2026-10-02"), "Fri. 02 Oct. 2026")
-        self.assertEqual(dates.format_display_date(datetime(2026, 10, 2, 23, 59, tzinfo=timezone.utc)), "Fri. 02 Oct. 2026")
+        self.assertEqual(dates.format_display_date(datetime(2026, 10, 2, 23, 59, tzinfo=timezone.utc)), "Sat. 03 Oct. 2026")
         self.assertEqual(dates.format_display_date(date(2026, 10, 3)), "Sat. 03 Oct. 2026")
         self.assertEqual(dates.format_display_date(date(2026, 9, 30)), "Wed. 30 Sep. 2026")
         self.assertEqual(dates.format_display_date(date(2026, 10, 1)), "Thu. 01 Oct. 2026")
@@ -29,10 +29,22 @@ class DateUtilTests(unittest.TestCase):
             with self.assertRaises(ValueError, msg=repr(bad)):
                 dates.normalize_to_iso(bad)
 
-    def test_date_only_has_no_timezone_shift(self):
-        for tz in (timezone(timedelta(hours=-11)), timezone(timedelta(hours=13))):
-            self.assertEqual(dates.format_display_date(datetime(2026, 10, 1, 0, 30, tzinfo=tz)), "Thu. 01 Oct. 2026")
+    def test_aware_datetime_displays_in_berlin_but_date_only_does_not_shift(self):
+        self.assertEqual(
+            dates.format_display_date(datetime(2026, 10, 1, 0, 30, tzinfo=timezone(timedelta(hours=-11)))),
+            "Thu. 01 Oct. 2026",
+        )
+        self.assertEqual(
+            dates.format_display_date(datetime(2026, 10, 1, 0, 30, tzinfo=timezone(timedelta(hours=13)))),
+            "Wed. 30 Sep. 2026",
+        )
         self.assertEqual(dates.parse_user_date("2026-10-01"), date(2026, 10, 1))
+
+    def test_berlin_timezone_applies_summer_and_winter_offsets(self):
+        summer = datetime(2026, 7, 1, 12, tzinfo=dates.BERLIN_TZ)
+        winter = datetime(2026, 1, 1, 12, tzinfo=dates.BERLIN_TZ)
+        self.assertEqual(summer.strftime("%z"), "+0200")
+        self.assertEqual(winter.strftime("%z"), "+0100")
 
     def test_weekend_best_uses_display_format(self):
         recs = series(date(2026, 9, 25), 10, precipitation_sum=5.0)
@@ -43,6 +55,10 @@ class DateUtilTests(unittest.TestCase):
         for text in ("2026-09-15", "15.09.2026", "15 September 2026", "Tue. 15 Sep. 2026", "15 Sep. 2026"):
             raw = {"location": "A", "date": text, "observation_type": "no_mushrooms"}
             self.assertEqual(h.validate_harvest(raw, None, date(2026, 10, 1))["date"], "2026-09-15")
+        self.assertEqual(
+            h.validate_harvest({"location": "A", "date": "", "observation_type": "no_mushrooms"})["date"],
+            dates.berlin_today().isoformat(),
+        )
         with self.assertRaises(h.HarvestError):
             h.validate_harvest({"location": "A", "date": "31.02.2026", "observation_type": "no_mushrooms"}, None, date(2026, 10, 1))
 

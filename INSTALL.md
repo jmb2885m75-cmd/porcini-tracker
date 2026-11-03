@@ -16,7 +16,8 @@ and writes `porcini_report.html`. A separate GitHub issue workflow validates har
   Existing harvests can also be configured in `past_harvests` in the private `CONFIG_JSON` secret.
 - **Observation form:** the issue form uses friendly dropdowns (Found mushrooms / No mushrooms found, Small–Large, Buttons / young – Prime – Old / overripe). Date may be left empty (today) or `today`/`yesterday`; weight accepts `450`, `450 g` or `1.2 kg`. The intake workflow refreshes the location list and checks issues when opened, edited or labeled. Issues titled `Observation: ...` are processed even if the `harvest` label is missing; intake attempts to add that label automatically. Untrusted authors, unavailable config, or invalid fields get an explanatory issue comment; correcting and editing the issue retries intake. The dashboard saves a local draft and provides a link to the prefilled issue; the observation is not shared until you submit that issue on GitHub and intake succeeds.
 - **Observation Log:** the dashboard has an Observation Log section listing every config `past_harvests` and accepted `harvest_log.json` entry (newest first) with source, reporter and issue link, per-location counts and filters. Browser-local drafts are intentionally not presented as shared observations. Run the Harvest Intake workflow manually after changing `CONFIG_JSON` to refresh the issue form's location dropdown.
-- **Dates:** stored and exchanged as ISO `yyyy-MM-dd` (database, `harvest_log.json`, issue payloads); every
+- **Dates:** stored and exchanged as ISO `yyyy-MM-dd` (database, `harvest_log.json`, issue payloads), using the
+  `Europe/Berlin` calendar for today and date defaults; every
   user-facing date is displayed as `Ddd. dd Mon. yyyy` (e.g. `Sat. 03 Oct. 2026`; May has no period). Accepted input formats (issue form,
   `past_harvests`): `yyyy-MM-dd`, `dd.MM.yyyy`, `dd MMMM yyyy`, and the abbreviated display format with or without
   its matching weekday; they are normalised to ISO
@@ -57,7 +58,7 @@ the `CONFIG_JSON` environment variable or create a local `config.json` (ignored 
 
 Three workflows live in `.github/workflows/`:
 
-- `porcini_tracker.yml` – the scheduled engine. Cron (UTC): daily 08:00 (default mode), Thursday 18:00 (weekend outlook), Friday 06:00 (final go/no-go). Needs `contents: write`, set in the file.
+- `porcini_tracker.yml` – the scheduled engine. It runs daily at 08:00, Thursday at 18:00 (weekend outlook) and Friday at 07:00 in `Europe/Berlin`. Paired UTC cron entries, an offset check and explicit run modes keep those local times stable through CET/CEST changes. Needs `contents: write`, set in the file.
 - `update_report.yml` – re-runs the engine when `porcini.py`, `porcini_db.json` or `harvest_log.json` changes, or
   when manually dispatched. Changes to the `CONFIG_JSON` secret do not trigger GitHub Actions automatically; run
   the workflow manually after updating it.
@@ -69,14 +70,14 @@ harvest intake commits `harvest_log.json` and the rebuilt dashboard.
 
 Check: Actions tab → "Porcini Intelligence Daily Engine" → *Run workflow*; confirm the run is green and a
 "🍄 Auto-update Porcini weather DB & report" commit appears. If the push is rejected, enable
-Settings → Actions → General → Workflow permissions → *Read and write*. GitHub may start scheduled runs late; the script's
-time windows (Thu 17:00–20:59, Fri 05:00–07:59 UTC) absorb that. Manual runs outside the windows use the default mode, or force one with `--mode`.
+Settings → Actions → General → Workflow permissions → *Read and write*. Scheduled runs use explicit modes; manual runs in
+auto mode use Berlin time windows (Thu 17:00–20:59, Fri 05:00–08:59). Manual runs outside the windows use the default mode, or force one with `--mode`.
 
 ## 4. Running locally
 
 ```bash
 pip install -r requirements.txt
-python porcini.py                         # auto-detects mode from UTC time
+python porcini.py                         # auto-detects mode from Europe/Berlin time
 python porcini.py --mode weekend_outlook  # or final_confirmation / default
 python porcini.py --test-alert            # send a test notification
 python porcini.py --check-db              # archive integrity check (exit code 1 if problems)

@@ -1,8 +1,8 @@
-from datetime import date, datetime, timezone
+from datetime import date
 from typing import Any, Dict, List, Optional, Tuple
 import requests
 
-from dates import format_display_date, parse_user_date
+from dates import berlin_today, format_display_date, parse_user_date
 
 
 def iso_date(value: date) -> str:
@@ -80,7 +80,7 @@ def should_alert_for_location(location_name: str, current_score: int, status: st
     last_score = loc_state.get("last_score")
     last_score = -1 if last_score is None else last_score
     last_date = loc_state.get("last_alert_date")
-    today = today or datetime.now(timezone.utc).date()
+    today = today or berlin_today()
     days_since = (today - parse_date(last_date)).days if last_date and valid_date_string(last_date) else 999
     crossed = last_score < threshold <= current_score
     status_changed = status_category(loc_state.get("last_status")) != status_category(status)
@@ -119,7 +119,7 @@ def should_confirm_for_location(location_name: str, state: Dict[str, Any], today
     all_above_threshold:   every spot whose best weekend score is >= threshold.
     """
     loc_state = state["locations"].get(location_name, {})
-    today = today or datetime.now(timezone.utc).date()
+    today = today or berlin_today()
     if loc_state.get("last_confirmation_date") == iso_date(today):
         return False
     if policy == FRIDAY_POLICY_ALL_ABOVE:

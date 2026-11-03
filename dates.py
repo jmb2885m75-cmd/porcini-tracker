@@ -4,8 +4,10 @@ Dates are date-only values (no time zone), so no conversion can shift them by a 
 """
 import re
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 from typing import Any
 
+BERLIN_TZ = ZoneInfo("Europe/Berlin")
 MONTHS = ("Jan.", "Feb.", "Mar.", "Apr.", "May", "Jun.", "Jul.", "Aug.", "Sep.", "Oct.", "Nov.", "Dec.")
 WEEKDAYS = ("Mon.", "Tue.", "Wed.", "Thu.", "Fri.", "Sat.", "Sun.")
 _FULL_MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
@@ -19,9 +21,22 @@ _DOTTED_RE = re.compile(r"^(\d{1,2})\.(\d{1,2})\.(\d{4})$")
 _LONG_RE = re.compile(r"^(?:(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\.?\s+)?(\d{1,2})\.?\s+([A-Za-z]+)\.?\s+(\d{4})$", re.IGNORECASE)
 
 
+def berlin_now() -> datetime:
+    """Return the current time in Berlin, with CET/CEST handled by the IANA time-zone database."""
+    return datetime.now(BERLIN_TZ)
+
+
+def berlin_today() -> date:
+    """Return today's calendar date in Berlin."""
+    return berlin_now().date()
+
+
 def format_display_date(value: Any) -> str:
     """Render a date (or any accepted input string) as 'Ddd. dd Mon. yyyy', independent of locale."""
-    day = value if isinstance(value, date) and not isinstance(value, datetime) else (value.date() if isinstance(value, datetime) else parse_user_date(value))
+    if isinstance(value, datetime):
+        day = value.astimezone(BERLIN_TZ).date() if value.tzinfo else value.date()
+    else:
+        day = value if isinstance(value, date) else parse_user_date(value)
     return f"{WEEKDAYS[day.weekday()]} {day.day:02d} {MONTHS[day.month - 1]} {day.year}"
 
 

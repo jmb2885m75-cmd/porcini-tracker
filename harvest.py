@@ -13,7 +13,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from dates import parse_user_date
+from dates import berlin_today, parse_user_date
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", "."))
 HARVEST_LOG_PATH = DATA_DIR / "harvest_log.json"
@@ -118,7 +118,7 @@ def _clean_text(value: str) -> str:
 
 def validate_harvest(raw: Dict[str, str], known_locations: Optional[Iterable[str]] = None, today: Optional[date] = None) -> Dict[str, Any]:
     """Return a clean harvest record or raise HarvestError listing every problem found."""
-    today = today or date.today()
+    today = today or berlin_today()
     problems: List[str] = []
     hints: List[str] = []
 

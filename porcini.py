@@ -21,7 +21,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from dates import format_display_date, parse_user_date
+from dates import BERLIN_TZ, berlin_today, format_display_date, parse_user_date
 from harvest import HarvestError, build_observation_log, entry_id, load_harvest_log, merge_harvests, summarize_observations
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", "."))
@@ -316,7 +316,7 @@ def normalize_records(records: Any, today: date) -> Tuple[List[Dict[str, Any]], 
 
 def check_db_integrity(db: Dict[str, Any], today: Optional[date] = None) -> List[str]:
     """Minimal health check. Returns a list of human-readable problems (empty list = healthy)."""
-    today = today or datetime.now(timezone.utc).date()
+    today = today or berlin_today()
     issues: List[str] = []
     if not isinstance(db, dict) or not isinstance(db.get("locations"), dict):
         return ["database has no 'locations' mapping"]
@@ -358,7 +358,7 @@ def check_db_integrity(db: Dict[str, Any], today: Optional[date] = None) -> List
 
 
 def ensure_location_history(location_name: str, db: Dict[str, Any], latitude: float, longitude: float, elevation: int, today: Optional[date] = None) -> List[Dict[str, Any]]:
-    today = today or datetime.now(timezone.utc).date()
+    today = today or berlin_today()
     loc_data = db["locations"].get(location_name)
     if not isinstance(loc_data, dict):
         loc_data = {}
@@ -488,15 +488,18 @@ def ensure_location_history(location_name: str, db: Dict[str, Any], latitude: fl
 
 
 def detect_run_mode(now: Optional[datetime] = None) -> str:
-    """UTC schedule awareness. Windows tolerate GitHub's cron start delays.
+    """Berlin-time mode detection for manual runs using --mode auto.
 
-    Thursday 17:00-20:59 UTC -> weekend outlook (cron 18:00); Friday 05:00-07:59 UTC -> final confirmation
-    (cron 06:00). The regular 08:00 daily run and manual runs outside those windows use the default mode.
+    Thursday 17:00-20:59 -> weekend outlook; Friday 05:00-08:59 -> final confirmation.
+    Scheduled workflow runs select a mode directly from the cron event.
     """
     now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    now = now.astimezone(BERLIN_TZ)
     if now.weekday() == 3 and 17 <= now.hour <= 20:
         return MODE_OUTLOOK
-    if now.weekday() == 4 and 5 <= now.hour <= 7:
+    if now.weekday() == 4 and 5 <= now.hour <= 8:
         return MODE_FINAL
     return MODE_DEFAULT
 
@@ -552,7 +555,7 @@ def main() -> int:
     parser.add_argument("--test-alert", action="store_true", help="Send a test alert using current notification config")
     parser.add_argument("--check-db", action="store_true", help="Run the archive integrity check and exit (non-zero if problems found)")
     parser.add_argument("--backtest", action="store_true", help="Compare stored forecast snapshots with later field observations")
-    parser.add_argument("--mode", choices=["auto", MODE_DEFAULT, MODE_OUTLOOK, MODE_FINAL], default="auto", help="Run mode; 'auto' detects it from the current UTC day/time")
+    parser.add_argument("--mode", choices=["auto", MODE_DEFAULT, MODE_OUTLOOK, MODE_FINAL], default="auto", help="Run mode; 'auto' detects it from the current Berlin day/time")
     args = parser.parse_args()
 
     if args.check_db:
@@ -587,7 +590,7 @@ def main() -> int:
         return 1
 
     now = datetime.now(timezone.utc)
-    today = now.date()
+    today = berlin_today()
     mode = detect_run_mode(now) if args.mode == "auto" else args.mode
     print(f"[INFO] Run mode: {mode}")
 

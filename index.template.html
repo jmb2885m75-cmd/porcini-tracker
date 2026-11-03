@@ -97,7 +97,7 @@
 <body>
   <div class="wrap">
     <h1>🍄 Porcini Tracker Dashboard</h1>
-    <div class="meta"><span class="badge">__MODE_LABEL__</span> Generated __GENERATED__ UTC</div>
+    <div class="meta"><span class="badge">__MODE_LABEL__</span> Generated __GENERATED__ Europe/Berlin</div>
     <div class="grid">__CARDS__</div>{{ALERT_PREVIEW}}
     <h2>🌦 Rain &amp; Temperature Overview <button class="info-button" type="button" data-info="weather" aria-label="How to read the weather factors" aria-haspopup="dialog" aria-controls="info-dialog">ⓘ</button></h2>
     <div class="card">
@@ -188,16 +188,24 @@ __OBSERVATION_LOG__
     function saveSynced(l) { try { localStorage.setItem(SYNCED_KEY, JSON.stringify(l)); } catch (e) { /* display cache only */ } }
     var MONTHS = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'Jun.', 'Jul.', 'Aug.', 'Sep.', 'Oct.', 'Nov.', 'Dec.'];
     var WEEKDAYS = ['Sun.', 'Mon.', 'Tue.', 'Wed.', 'Thu.', 'Fri.', 'Sat.'];
-    function todayStr() { var n = new Date(); return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0'); }
+    function berlinParts(date) {
+      var parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date);
+      var values = {};
+      parts.forEach(function (part) { if (part.type !== 'literal') values[part.type] = part.value; });
+      return values;
+    }
+    function todayStr() { var p = berlinParts(new Date()); return p.year + '-' + p.month + '-' + p.day; }
     function fmtDate(s) {
       var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || '');
       if (!m) return s;
       var day = new Date(s + 'T00:00:00Z');
       return isNaN(day.getTime()) ? s : WEEKDAYS[day.getUTCDay()] + ' ' + m[3] + ' ' + MONTHS[+m[2] - 1] + ' ' + m[1];
     }
-    function localToday() {
-      var d = new Date();
-      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    function localToday() { return todayStr(); }
+    function addDays(s, amount) {
+      var d = new Date(s + 'T00:00:00Z');
+      d.setUTCDate(d.getUTCDate() + amount);
+      return d.toISOString().slice(0, 10);
     }
     var INFO = {
       weather: ['Weather indicators', [
@@ -244,14 +252,14 @@ __OBSERVATION_LOG__
     var loc = D.locations[0], pinned = [], page = 0, selectedDate = '', activeTimelineDates = [];
     if (!loc) { $('chart').replaceWith(document.createTextNode('No locations configured.')); return; }
     D.locations.forEach(function (l, i) { var o = document.createElement('option'); o.value = i; o.textContent = l.name; $('loc').appendChild(o); });
-    function years() { var s = {}; s[new Date().getFullYear()] = 1; loc.scores.forEach(function (r) { s[r[0].slice(0, 4)] = 1; }); return Object.keys(s).sort(); }
+    function years() { var s = {}; s[berlinParts(new Date()).year] = 1; loc.scores.forEach(function (r) { s[r[0].slice(0, 4)] = 1; }); return Object.keys(s).sort(); }
     function fillRange() {
       var cur = $('range').value; $('range').textContent = '';
       ['all', '365'].concat(years()).forEach(function (v) { var o = document.createElement('option'); o.value = v; o.textContent = v === 'all' ? 'All years' : v === '365' ? 'Last 365 days' : v; $('range').appendChild(o); });
-      $('range').value = cur || String(new Date().getFullYear());
+      $('range').value = cur || berlinParts(new Date()).year;
     }
     function inSeason(d) { var md = d.slice(5, 10); return md >= '08-15' && md <= '12-10'; }
-    function inRange(d) { if ($('seasonOnly').getAttribute('aria-pressed') === 'true' && !inSeason(d)) return false; var r = $('range').value || 'all'; if (r === 'all') return true; if (r === '365') return Date.parse(d) >= Date.now() - 365 * 864e5; return d.slice(0, 4) === r; }
+    function inRange(d) { if ($('seasonOnly').getAttribute('aria-pressed') === 'true' && !inSeason(d)) return false; var r = $('range').value || 'all'; if (r === 'all') return true; if (r === '365') return Date.parse(d) >= Date.parse(addDays(todayStr(), -365) + 'T00:00:00Z'); return d.slice(0, 4) === r; }
     function harvestsFor() {
       var h = (loc.harvests || []).map(function (x) { return Object.assign({}, x, { origin: x.origin === 'log' ? 'harvest_log.json' : 'config' }); });
       loadSynced().filter(function (x) { return x.location === loc.name; }).forEach(function (x) { h.push(Object.assign({ origin: 'synced' }, x)); });
@@ -305,7 +313,7 @@ __OBSERVATION_LOG__
       dates.forEach(function (d) { var delta = Math.abs(Date.parse(d + 'T00:00:00Z') - time); if (delta < distance) { best = d; distance = delta; } });
       return best;
     }
-    function initialDate() { return nearestDate(new Date().toISOString().slice(0, 10), loc.scores.map(function (r) { return r[0]; })); }
+    function initialDate() { return nearestDate(todayStr(), loc.scores.map(function (r) { return r[0]; })); }
     function renderSelectedDay() {
       var sm = scoreMap()[selectedDate], rm = recMap()[selectedDate], hs = harvestsFor().filter(function (h) { return h.date === selectedDate; });
       $('selected-label').textContent = selectedDate ? 'Selected: ' + fmtDate(selectedDate) : 'No score dates available';
@@ -342,7 +350,7 @@ __OBSERVATION_LOG__
         if (d === todayStr()) day.classList.add('today');
         day.setAttribute('aria-pressed', d === selectedDate ? 'true' : 'false');
         var previous = activeTimelineDates[i - 1], dateParts = d.split('-');
-        if ((dateParts[2] === '01' || !previous || previous.slice(0, 7) !== d.slice(0, 7)) && d !== new Date().toISOString().slice(0, 10)) {
+        if ((dateParts[2] === '01' || !previous || previous.slice(0, 7) !== d.slice(0, 7)) && d !== todayStr()) {
           var month = document.createElement('span'); month.className = 'month'; month.textContent = MONTHS[+dateParts[1] - 1].slice(0, 3); day.appendChild(month);
         }
         var tick = document.createElement('span'); tick.className = 'tick'; tick.setAttribute('aria-hidden', 'true'); day.appendChild(tick);

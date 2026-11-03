@@ -74021,12 +74021,12 @@
           ]
         },
         "2026-11-09": {
-          "score": 47,
+          "score": 46,
           "status": "✅ Viable conditions",
           "quality": "Cool week: firm caps likely",
           "source": "forecast",
           "factors": [
-            7,
+            6,
             18,
             17,
             0,
@@ -74044,7 +74044,7 @@
         "no_finds_above_threshold": 1,
         "find_hit_rate": 1.0,
         "no_find_above_threshold_rate": 0.333,
-        "mean_score_on_find_days": 74.2,
+        "mean_score_on_find_days": 74.1,
         "mean_score_on_no_find_days": 53.0,
         "suggested_threshold": 70,
         "true_false_negatives": 0,
@@ -149825,7 +149825,7 @@
           ],
           [
             "2026-11-09",
-            47
+            46
           ]
         ],
         "Location 2": [
@@ -149862,7 +149862,7 @@
     }
   ],
   "meta": {
-    "last_run_utc": "2026-11-03T16:51:01Z",
+    "last_run_utc": "2026-11-03T16:52:22Z",
     "last_run_mode": "default",
     "model_version": 19
   }

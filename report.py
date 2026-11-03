@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import html
@@ -6,7 +6,7 @@ import json
 import os
 import secrets
 
-from dates import format_display_date, parse_user_date
+from dates import berlin_now, format_display_date, parse_user_date
 from harvest import build_observation_log, entry_id, summarize_observations
 from notify import DEFAULT_ALERT_THRESHOLD
 from scoring import (
@@ -243,7 +243,7 @@ def generate_dashboard_html(cfg: Dict[str, Any], analysis: List[Dict[str, Any]],
         .replace("__CSP_NONCE__", nonce)
         .replace("__HEAVY_FORECAST_RAIN_SHARE__", str(HEAVY_FORECAST_RAIN_SHARE))
         .replace("__MODE_LABEL__", html.escape(MODE_LABELS.get(mode, MODE_LABELS[MODE_DEFAULT])))
-        .replace("__GENERATED__", (lambda n: f"{format_display_date(n)} {n:%H:%M}")(datetime.now(timezone.utc)))
+        .replace("__GENERATED__", (lambda n: f"{format_display_date(n)} {n:%H:%M}")(berlin_now()))
         .replace("__CARDS__", "".join(cards))
         .replace("{{ALERT_PREVIEW}}", alert_section)
         .replace("__DATA__", data)

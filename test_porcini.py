@@ -279,10 +279,12 @@ class VerdictTests(unittest.TestCase):
 
 
 class ModeTests(unittest.TestCase):
-    def test_modes(self):
+    def test_modes_follow_berlin_summer_and_winter_time(self):
         utc = timezone.utc
-        self.assertEqual(p.detect_run_mode(datetime(2025, 10, 2, 18, 5, tzinfo=utc)), p.MODE_OUTLOOK)
-        self.assertEqual(p.detect_run_mode(datetime(2025, 10, 3, 6, 5, tzinfo=utc)), p.MODE_FINAL)
+        self.assertEqual(p.detect_run_mode(datetime(2025, 1, 2, 18, 5, tzinfo=utc)), p.MODE_OUTLOOK)
+        self.assertEqual(p.detect_run_mode(datetime(2025, 6, 5, 18, 5, tzinfo=utc)), p.MODE_OUTLOOK)
+        self.assertEqual(p.detect_run_mode(datetime(2025, 1, 3, 6, 5, tzinfo=utc)), p.MODE_FINAL)
+        self.assertEqual(p.detect_run_mode(datetime(2025, 6, 6, 6, 5, tzinfo=utc)), p.MODE_FINAL)
         self.assertEqual(p.detect_run_mode(datetime(2025, 10, 3, 8, 0, tzinfo=utc)), p.MODE_DEFAULT)
         self.assertEqual(p.detect_run_mode(datetime(2025, 10, 4, 6, 0, tzinfo=utc)), p.MODE_DEFAULT)
 
@@ -484,7 +486,7 @@ class ScoringTests(unittest.TestCase):
         )
 
     def test_runoff_backfill_is_limited_to_four_hundred_days(self):
-        today = datetime.now(timezone.utc).date()
+        today = p.berlin_today()
         current = rec((today - timedelta(days=400)).isoformat())
         old = rec((today - timedelta(days=401)).isoformat())
         self.assertTrue(p.needs_runoff_backfill(current))
@@ -1122,7 +1124,7 @@ class RunoffBackfillTests(unittest.TestCase):
         return {"hourly": {"time": [f"{day}T{h:02d}:00" for h in range(24)], "precipitation": vals}}
 
     def test_backfill_fills_and_marks_basis(self):
-        today = datetime.now(timezone.utc).date()
+        today = p.berlin_today()
         first_day, second_day = p.iso_date(today), p.iso_date(today + timedelta(days=1))
         records = [rec(first_day, precip_peak_2h_mm=None, precipitation_sum=20.0), rec(second_day, source=p.SOURCE_FORECAST)]
         changed = p.backfill_runoff_data(records, 0, 0, 0, fetch_hourly=lambda *a: self.hourly(first_day, 14.0))
@@ -1133,7 +1135,7 @@ class RunoffBackfillTests(unittest.TestCase):
         self.assertTrue(p.has_runoff(p.History(records), today + timedelta(days=1)))
 
     def test_failure_is_soft_and_retried(self):
-        records = [rec(p.iso_date(datetime.now(timezone.utc).date()))]
+        records = [rec(p.iso_date(p.berlin_today()))]
         self.assertEqual(p.backfill_runoff_data(records, 0, 0, 0, fetch_hourly=lambda *a: None), [])
         def boom(*a):
             raise RuntimeError("down")
@@ -1142,7 +1144,7 @@ class RunoffBackfillTests(unittest.TestCase):
 
     def test_backfill_forces_rescore(self):
         loc = {"name": "A", "aspect": "N"}
-        today = datetime.now(timezone.utc).date()
+        today = p.berlin_today()
         records = [rec(p.iso_date(today + timedelta(days=i)), precipitation_sum=20.0) for i in range(3)]
         store = {}
         p.update_daily_scores(loc, records, store)
@@ -1180,7 +1182,7 @@ class WeatherFailureTests(unittest.TestCase):
 
     def test_main_notifies_and_fails_when_configured_data_is_stale(self):
         cfg = {"LOCATIONS": [{"name": "Private spot", "latitude": 1, "longitude": 2}]}
-        today = datetime.now(timezone.utc).date()
+        today = p.berlin_today()
         records = [rec(p.iso_date(today), p.SOURCE_FORECAST)]
 
         def update_scores(location, daily_records, store):
@@ -1211,7 +1213,7 @@ class WeatherFailureTests(unittest.TestCase):
             "MIN_ALERT_GAP_DAYS": 2,
             "LOCATIONS": [{"name": "Synthetic spot", "latitude": 1, "longitude": 2}],
         }
-        today = datetime.now(timezone.utc).date()
+        today = p.berlin_today()
         records = [rec(p.iso_date(today), p.SOURCE_FORECAST)]
         db = {"locations": {"Location 1": {}}}
 
@@ -1288,8 +1290,8 @@ class WeatherFailureTests(unittest.TestCase):
         self.assertIn("bar.style.background = row ? row[5]", report)
         self.assertIn("seasonOnly", report)
         self.assertIn('id="seasonOnly" class="season-toggle" aria-pressed="true"', report)
-        self.assertIn("s[new Date().getFullYear()] = 1", report)
-        self.assertIn("$('range').value = cur || String(new Date().getFullYear())", report)
+        self.assertIn("s[berlinParts(new Date()).year] = 1", report)
+        self.assertIn("$('range').value = cur || berlinParts(new Date()).year", report)
 
 
 class LegacyMigrationTests(unittest.TestCase):

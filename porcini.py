@@ -22,6 +22,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from dates import BERLIN_TZ, berlin_today, format_display_date, parse_user_date
+from soil import describe_soil, ensure_soil_profile
 from harvest import HarvestError, build_observation_log, entry_id, load_harvest_log, merge_harvests, summarize_observations
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", "."))
@@ -624,6 +625,10 @@ def main() -> int:
             notify_sync_failure(cfg, f"{storage_name}: {exc}")
             return 1
         loc_store = db["locations"][storage_name]
+        soil = ensure_soil_profile(loc_store, latitude, longitude)
+        # Geodata fills in calcareous soil only when no soil_pH is configured.
+        if soil and soil.get("calcareous") and not location.get("soil_pH"):
+            location = dict(location, soil_pH="alkaline")
         update_daily_scores(dict(location, past_harvests=harvests), records, loc_store)
         forecast_scores[storage_name] = [
             [record["date"], loc_store["daily_scores"][record["date"]]["score"]]
@@ -640,6 +645,7 @@ def main() -> int:
         if records:
             moisture = float(records[-1].get("soil_moisture_0_to_7cm_mean") or 0.0)
 
+        flush_days = estimate_days_until_threshold(records, loc_store["daily_scores"], today, threshold)
         analyses.append({
             "name": name,
             "best_score": best_score,
@@ -652,9 +658,10 @@ def main() -> int:
             "scores": loc_store["daily_scores"],
             "harvests": harvests,
             "backtest": loc_store["backtest"],
-            "flush_timing_days": estimate_days_until_threshold(
-                records, loc_store["daily_scores"], today, threshold
-            ),
+            "flush_timing_days": flush_days,
+            "recommendation": build_recommendation(best_score, status, threshold, flush_days, best_day != "N/A"),
+            "flush_hint": rain_flush_hint(records, today)["text"],
+            "soil": describe_soil(soil),
         })
 
         available = best_day != "N/A"
@@ -754,6 +761,7 @@ from scoring import (
     location_signature, update_daily_scores, backtest_accuracy, compute_auc, _binary_auc, forecast_snapshot_backtest,
     format_forecast_backtest, find_weekday_counts, calibration_messages, find_weekend_best,
     estimate_days_until_threshold, explain_score, score_verdict_tag, score_color,
+    rain_flush_hint, build_recommendation, FACTOR_KEYS,
 )
 from report import (
     MODE_DEFAULT, MODE_OUTLOOK, MODE_FINAL, MODE_LABELS, _TIER_LABELS, _STAGE_LABELS,

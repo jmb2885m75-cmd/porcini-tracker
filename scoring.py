@@ -85,7 +85,7 @@ SMALL_HARVEST_DEPLETION_RECOVERY_DAYS = 5
 DEFAULT_EARLY_HARVEST_PENALTY_FACTOR = 0.5
 
 
-MODEL_VERSION = 18  # 18: lagged rain trigger/background windows, warmer early-season optimum, soil temperature as primary signal, limiting-factor score gates, softer frost/heat/humidity terms; 17: frost termination zeroes score, sparse weather windows give 'insufficient data'; 16: C1–C7 scoring updates (host-tree removal, depletion tiers, drought percentile, rain cap, frost/season, soil temp, utcnow fix)
+MODEL_VERSION = 19  # 19: per-day factor breakdown, geodata soil pH (calcareous soil_pH penalty); 18: lagged rain trigger/background windows, warmer early-season optimum, soil temperature as primary signal, limiting-factor score gates, softer frost/heat/humidity terms; 17: frost termination zeroes score, sparse weather windows give 'insufficient data'; 16: C1–C7 scoring updates (host-tree removal, depletion tiers, drought percentile, rain cap, frost/season, soil temp, utcnow fix)
 
 
 ARCHIVE_LAG_DAYS = 5
@@ -829,8 +829,15 @@ def soil_moisture_points(moisture: float) -> int:
     return round(5 * (moisture - SOIL_MID) / (SOIL_WET - SOIL_MID))
 
 
-def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], historical: Any, past_harvests: List[Dict[str, Any]]) -> Tuple[int, str, str]:
-    """Return a 0–100 favourability index, not a calibrated probability."""
+FACTOR_KEYS = ("rain", "soil", "temperature", "humidity", "other")
+
+
+def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], historical: Any, past_harvests: List[Dict[str, Any]],
+                            parts: Optional[Dict[str, int]] = None) -> Tuple[int, str, str]:
+    """Return a 0–100 favourability index, not a calibrated probability.
+
+    If `parts` is given it receives the points per factor group (FACTOR_KEYS); they add up to the returned score."""
+    breakdown: Dict[str, int] = {"rain": 0, "soil": 0, "temperature": 0, "humidity": 0}
     hist = historical if isinstance(historical, History) else History(historical)
     score = 0
     status = "🟡 Monitoring"
@@ -851,33 +858,48 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
     if rain_points is None or average_temperature is None:
         return 0, "❔ Insufficient weather data", ""
     score += rain_points
-    score += rainfall_distribution_score(hist, d, rain_window)
+    breakdown["rain"] += rain_points
+    distribution_points = rainfall_distribution_score(hist, d, rain_window)
+    score += distribution_points
+    breakdown["rain"] += distribution_points
 
     long_term_rainfall_percentile = historical_rainfall_percentile(hist, d)
     if long_term_rainfall_percentile is not None and long_term_rainfall_percentile < 0.5:
-        score -= round(
-            DROUGHT_SCORE_PENALTY_MAX * (0.5 - long_term_rainfall_percentile) / 0.5
-        )
+        drought = round(DROUGHT_SCORE_PENALTY_MAX * (0.5 - long_term_rainfall_percentile) / 0.5)
+        score -= drought
+        breakdown["rain"] -= drought
 
     temperature_points = temperature_score(average_temperature, seasonal["optimal_temp_range"])
     score += temperature_points
-    score += soil_temperature_score(hist, d, location)
+    breakdown["temperature"] += temperature_points
+    soil_temp_points = soil_temperature_score(hist, d, location)
+    score += soil_temp_points
+    breakdown["soil"] += soil_temp_points
 
     if has_runoff(hist, d):
         score -= 5
+        breakdown["rain"] -= 5
 
-    score -= frost_penalty(hist, d)
+    frost = frost_penalty(hist, d)
+    score -= frost
+    breakdown["temperature"] -= frost
     decay = late_season_decay_penalty(d, location)
     score -= decay
+    breakdown["temperature"] -= decay
     recent_days = hist.window(d - timedelta(days=1), 3)
     if any(r.get("temperature_2m_max") is not None and float(r["temperature_2m_max"]) > HEAT_TMAX_C for r in recent_days):
         score -= HEAT_PENALTY
+        breakdown["temperature"] -= HEAT_PENALTY
 
-    score += humidity_adjustment(hist, d)
+    humidity_points = humidity_adjustment(hist, d)
+    score += humidity_points
+    breakdown["humidity"] += humidity_points
 
     soil_moisture = daily.get("soil_moisture_0_to_7cm_mean")
     if soil_moisture is not None:
-        score += soil_moisture_points(float(soil_moisture))
+        moisture_points = soil_moisture_points(float(soil_moisture))
+        score += moisture_points
+        breakdown["soil"] += moisture_points
         if soil_moisture <= SOIL_DRY:
             status = "💧 Too dry – low soil moisture"
     terminated = decay > 0 and hard_freeze_recent(hist, d)
@@ -890,6 +912,7 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
 
     if str(location.get("soil_pH") or "").strip().lower() in ("alkaline", "basic", "calcareous"):
         score -= 5
+        breakdown["soil"] -= 5
 
     no_find_penalty = 0
     for harvest in past_harvests:
@@ -950,6 +973,10 @@ def calculate_score_for_day(location: Dict[str, Any], daily: Dict[str, Any], his
     score = max(0, min(100, score))
     if terminated:
         return 0, "❄️ Season terminated by frost", quality
+    if parts is not None:
+        parts.update(breakdown)
+        # Field observations, caps and clamping make up the rest so the groups always add up to the score.
+        parts["other"] = int(score) - sum(breakdown.values())
     if not status or status == "🟡 Monitoring":
         status = "✅ Viable conditions" if score >= DEFAULT_ALERT_THRESHOLD else "⚠️ Watch closely"
     return int(score), status, quality
@@ -1005,8 +1032,11 @@ def update_daily_scores(location: Dict[str, Any], records: List[Dict[str, Any]],
                 and rec["source"] in (SOURCE_ARCHIVE, SOURCE_SAMPLE)):
             result[d] = prev
             continue
-        score, status, quality = calculate_score_for_day(location, rec, hist, harvests)
+        parts: Dict[str, int] = {}
+        score, status, quality = calculate_score_for_day(location, rec, hist, harvests, parts)
         result[d] = {"score": score, "status": status, "quality": quality, "source": rec["source"]}
+        if parts:
+            result[d]["factors"] = [parts[key] for key in FACTOR_KEYS]
         updated += 1
     loc_store["daily_scores"] = result
     loc_store["scores_signature"] = signature
@@ -1258,6 +1288,67 @@ def estimate_days_until_threshold(records: List[Dict[str, Any]], scores: Dict[st
             return (parse_date(day) - today).days
         previous = current_score
     return None
+
+
+SIGNIFICANT_RAIN_MM = 5.0
+FLUSH_LAG_MIN_DAYS = 5
+FLUSH_LAG_MAX_DAYS = 10
+
+
+def rain_flush_hint(records: List[Dict[str, Any]], today: date) -> Dict[str, Any]:
+    """Days since the last significant rain and the typical flush window (5-10 days after a wet spell)."""
+    rainy = sorted(
+        parse_date(r["date"]) for r in records
+        if valid_date_string(r.get("date")) and _precip(r) >= SIGNIFICANT_RAIN_MM
+    )
+    past = [d for d in rainy if d <= today]
+    upcoming = [d for d in rainy if d > today]
+    last = past[-1] if past else None
+    since = (today - last).days if last else None
+    if since is not None and since <= FLUSH_LAG_MAX_DAYS:
+        start, end = last + timedelta(days=FLUSH_LAG_MIN_DAYS), last + timedelta(days=FLUSH_LAG_MAX_DAYS)
+        ago = "today" if since == 0 else f"{since} day{'s' if since != 1 else ''} ago"
+        if today < start:
+            text = f"Last significant rain {ago}. Mushrooms typically follow 5–10 days later: expect a flush around {format_display_date(start)} – {format_display_date(end)}."
+        else:
+            text = f"Last significant rain {ago}: inside the typical 5–10 day flush window (until {format_display_date(end)})."
+    elif upcoming:
+        first = upcoming[0]
+        text = (f"Rain is forecast for {format_display_date(first)}. Mushrooms typically follow 5–10 days later "
+                f"({format_display_date(first + timedelta(days=FLUSH_LAG_MIN_DAYS))} – {format_display_date(first + timedelta(days=FLUSH_LAG_MAX_DAYS))}).")
+    elif since is not None:
+        text = f"Last significant rain {since} days ago: the usual flush window has passed, so new rain is needed."
+    else:
+        text = "No significant rain (5 mm or more) in the available weather data."
+    return {"days_since_rain": since, "text": text}
+
+
+def build_recommendation(score: int, status: Optional[str], threshold: int, flush_days: Optional[int], available: bool = True) -> str:
+    """Plain-language advice for the best upcoming day."""
+    if not available:
+        return "No recommendation: weather data is unavailable."
+    category = status_category(status)
+    if category == "off_season":
+        return "Skip: outside the mushroom season."
+    if category == "terminated":
+        return "Skip: the season has been ended by frost."
+    if category == "insufficient":
+        return "No recommendation yet: not enough weather data."
+    if category == "dry":
+        return "Wait: the soil is too dry. Come back after a good soaking rain."
+    if category == "delayed":
+        return "Wait: it is too warm for a flush."
+    if category == "exhausted":
+        return "Wait: the flush is over for now."
+    if score >= max(VERY_FAVOURABLE_THRESHOLD, threshold):
+        return "Go now: conditions are very favourable."
+    if score >= threshold:
+        return "Go: conditions are favourable."
+    if flush_days is not None and flush_days > 0:
+        return f"Wait: conditions should reach the alert threshold in about {flush_days} day{'s' if flush_days != 1 else ''}."
+    if score >= 45:
+        return "Maybe: only worth it if you are nearby. A good find is a long shot."
+    return "Wait: conditions are poor right now."
 
 
 def explain_score(location: Dict[str, Any], records: List[Dict[str, Any]], best_day: str, status: str) -> str:

@@ -25,6 +25,12 @@
     .verdict-tag { display: inline-block; background: var(--surface-raised); border: 1px solid var(--border); border-radius: 999px; padding: .25rem .65rem; font-size: var(--small); font-weight: 700; }
     .name { font-size: 1.12rem; margin-top: var(--space-2); font-weight: 700; }
     .meta { color: var(--muted); margin-top: var(--space-2); font-size: var(--small); }
+    .recommendation { font-weight: 700; margin-top: var(--space-2); }
+    .factor-row { display: flex; align-items: center; gap: .5rem; font-size: var(--small); }
+    .factor-row .factor-name { flex: 0 0 9.5rem; }
+    .factor-bar { flex: 1; height: 8px; background: var(--border); border-radius: 4px; position: relative; max-width: 14rem; }
+    .factor-bar span { position: absolute; top: 0; bottom: 0; border-radius: 4px; }
+    .factor-pos { background: #34d399; } .factor-neg { background: #f87171; }
     .best-day strong { color: var(--text); margin-left: .3rem; }
     .badge { display: inline-block; background: #065f46; border-radius: 999px; padding: 2px 10px; font-size: var(--small); }
     .go { background: #065f46; } .nogo { background: #7f1d1d; }
@@ -132,6 +138,7 @@
         <div id="timeline"></div>
       </div>
       <div id="selected-day" class="meta" aria-live="polite"></div>
+      <div id="selected-factors" class="meta"></div>
       <div id="pins" class="meta"></div>
       <div id="backtest" class="meta"></div>
     </div>
@@ -314,6 +321,21 @@ __OBSERVATION_LOG__
       return best;
     }
     function initialDate() { return nearestDate(todayStr(), loc.scores.map(function (r) { return r[0]; })); }
+    function renderFactors(sm) {
+      var box = $('selected-factors'); box.textContent = '';
+      var f = sm && sm[6];
+      if (!f) return;
+      var title = document.createElement('div'); title.style.fontWeight = 'bold'; title.textContent = 'What drives this score (points)'; box.appendChild(title);
+      var max = Math.max(10, Math.max.apply(null, f.map(Math.abs)));
+      D.factor_keys.forEach(function (key, i) {
+        var v = f[i], row = document.createElement('div'); row.className = 'factor-row';
+        var name = document.createElement('span'); name.className = 'factor-name'; name.textContent = D.factor_labels[key] + ': ' + (v > 0 ? '+' : '') + v; row.appendChild(name);
+        var bar = document.createElement('span'); bar.className = 'factor-bar'; bar.setAttribute('aria-hidden', 'true');
+        var fill = document.createElement('span'), width = Math.abs(v) / max * 50;
+        fill.className = v >= 0 ? 'factor-pos' : 'factor-neg'; fill.style.width = width + '%'; fill.style.left = v >= 0 ? '50%' : (50 - width) + '%';
+        bar.appendChild(fill); row.appendChild(bar); box.appendChild(row);
+      });
+    }
     function renderSelectedDay() {
       var sm = scoreMap()[selectedDate], rm = recMap()[selectedDate], hs = harvestsFor().filter(function (h) { return h.date === selectedDate; });
       $('selected-label').textContent = selectedDate ? 'Selected: ' + fmtDate(selectedDate) : 'No score dates available';
@@ -323,6 +345,7 @@ __OBSERVATION_LOG__
       else if (selectedDate) lines.push('No score is available for this day.');
       hs.forEach(function (h) { lines.push((h.observation_type === 'no_mushrooms' ? '❌ Visited, no mushrooms found' : '🍄 Mushrooms found') + (h.origin === 'draft (unsynced)' ? ' (unsynced draft)' : h.origin === 'synced' ? ' (synced)' : '')); });
       setLines($('selected-day'), lines);
+      renderFactors(sm);
     }
     function renderTimeline() {
       var days = loc.scores;

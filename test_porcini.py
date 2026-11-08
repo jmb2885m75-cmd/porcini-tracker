@@ -393,7 +393,7 @@ class ScoringTests(unittest.TestCase):
     def test_model_thresholds_host_tree_removal_and_weather_fields(self):
         self.assertFalse(hasattr(p, "HOST_TREES"))
         self.assertFalse(hasattr(p, "is_host_tree"))
-        self.assertEqual(p.DEFAULT_ALERT_THRESHOLD, 45)
+        self.assertEqual(p.DEFAULT_ALERT_THRESHOLD, 52)
         self.assertEqual(p.VERY_FAVOURABLE_THRESHOLD, 65)
         self.assertEqual(tuple(tier[0] for tier in p.VERDICT_LOW_TIERS), (15, 35, 50))
         self.assertEqual((p.SCORE_COLOR_MIN, p.SCORE_COLOR_MAX), (30, 60))

@@ -29,7 +29,7 @@ def _dispatch_notification(cfg: Dict[str, Any], message: str) -> bool:
     from porcini import dispatch_notification
     return dispatch_notification(cfg, message)
 
-DEFAULT_ALERT_THRESHOLD = 45
+DEFAULT_ALERT_THRESHOLD = 52  # separates recorded finds from empty visits in the harvest-log backtest
 
 
 FRIDAY_POLICY_THURSDAY_ONLY = "thursday_alerted_only"
